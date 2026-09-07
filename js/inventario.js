@@ -251,13 +251,16 @@ function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
 }
 
 /** Si el <select> de insumo trae `data-filtrar-por-almacen`, devuelve el
- * valor actual del <select> de almacén que lo acompaña en el mismo
- * formulario (o "" si no aplica ese filtro). */
+ * valor actual del campo de almacén que lo acompaña (o "" si no aplica ese
+ * filtro). El campo se busca primero por `name` dentro del mismo
+ * formulario, y si no está en un formulario (p. ej. "Insumos utilizados
+ * el día de hoy", que vive dentro de un <details>), por su `id`. */
 function getAlmacenFiltroDeSelect(sel) {
   const campo = sel.dataset.filtrarPorAlmacen;
   if (!campo) return "";
   const form = sel.closest("form");
-  return form?.elements[campo]?.value || "";
+  const campoEl = form?.elements[campo] || document.getElementById(campo);
+  return campoEl?.value || "";
 }
 
 function populateInsumoSelects() {
@@ -285,7 +288,7 @@ function setupInsumoSearchInputs() {
 function setupAlmacenFiltroInsumo() {
   document.querySelectorAll("select.select-insumo[data-filtrar-por-almacen]").forEach((sel) => {
     const campo = sel.dataset.filtrarPorAlmacen;
-    const almacenSelect = sel.closest("form")?.elements[campo];
+    const almacenSelect = sel.closest("form")?.elements[campo] || document.getElementById(campo);
     if (!almacenSelect) return;
     almacenSelect.addEventListener("change", () => {
       const searchInput = sel.parentElement?.querySelector(".insumo-search");

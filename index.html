@@ -197,7 +197,11 @@
 
             <div class="form-grid">
               <div><label class="form-label">Fecha</label><input required type="date" id="insumo-usado-fecha" class="form-input" /></div>
-              <div><label class="form-label">Almacén</label><select required id="insumo-usado-almacen" class="form-input select-almacen"></select></div>
+              <div>
+                <label class="form-label">Almacén</label>
+                <select id="insumo-usado-almacen" class="form-input" disabled><option value="Módulo" selected>Módulo</option></select>
+                <p class="text-xs text-slate-400 mt-1">Los insumos utilizados el día siempre se descuentan del almacén Módulo.</p>
+              </div>
               <div><label class="form-label">Responsable</label><input required type="text" id="insumo-usado-responsable" class="form-input" /></div>
             </div>
 
@@ -205,7 +209,7 @@
               <div class="md:col-span-2">
                 <label class="form-label">Insumo</label>
                 <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
-                <select id="insumo-usado-select" class="form-input select-insumo"></select>
+                <select id="insumo-usado-select" class="form-input select-insumo" data-filtrar-por-almacen="insumo-usado-almacen"></select>
               </div>
               <div><label class="form-label">Cantidad</label><input type="number" min="1" id="insumo-usado-cantidad" class="form-input" /></div>
             </div>
