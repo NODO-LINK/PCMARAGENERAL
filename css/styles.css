@@ -7,6 +7,39 @@
  * -----------------------------------------------------------------------
  */
 
+/* ------------------------------- Íconos ---------------------------------- */
+/* Íconos vectoriales (js/icons.js) en lugar de emojis: heredan el color del
+   texto que los rodea y se alinean con la línea base. */
+.icon-svg {
+  display: inline-block;
+  vertical-align: -3px;
+  margin-right: 0.4rem;
+  flex-shrink: 0;
+}
+.icon-svg.icon-only {
+  margin-right: 0;
+}
+
+/* Buscadores con lupa vectorial de fondo (evita repetir markup en cada
+   input): agregar la clase .input-search y quitar cualquier emoji del
+   placeholder. */
+.input-search {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  padding-left: 2.25rem !important;
+}
+
+/* Punto de estado de conectividad (reemplaza los emojis 🟢/🔴). */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+  margin-right: 0.4rem;
+}
+
 /* --------------------------- Desplegables (details) ---------------------- */
 /* display:flex en <summary> quita la flechita nativa del navegador; se */
 /* reemplaza por un chevron propio que rota al abrir. */

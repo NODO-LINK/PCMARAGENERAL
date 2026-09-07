@@ -18,6 +18,7 @@ const APP_SHELL = [
   "./js/firebase.js",
   "./js/auth.js",
   "./js/ui.js",
+  "./js/icons.js",
   "./js/router.js",
   "./js/data.js",
   "./js/moduleFactory.js",

@@ -40,6 +40,7 @@ import { COLLECTIONS, ALMACENES, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { subscribeCollection, createRecord, deleteRecord } from "./data.js";
 import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js";
 import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, escapeHTML } from "./ui.js";
+import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 
 let insumos = [];
@@ -343,7 +344,7 @@ function renderStockTable() {
         <td class="px-4 py-2">
           ${admin ? `<input type="number" min="0" value="${s.minimo ?? 0}" data-id="${s.id}" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm input-minimo" />` : (s.minimo ?? 0)}
         </td>
-        <td class="px-4 py-2">${critico ? '<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">⚠ Bajo mínimo</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">OK</span>'}</td>
+        <td class="px-4 py-2">${critico ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">${getIcon("alerta")}Bajo mínimo</span>` : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">OK</span>'}</td>
       </tr>`;
       })
       .join("") ||

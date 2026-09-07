@@ -11,6 +11,7 @@
 import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile } from "./auth.js";
 import { initRouter, registerView, navigateTo } from "./router.js";
 import { toast } from "./ui.js";
+import { renderIcons } from "./icons.js";
 
 import { initCatalogos } from "./catalogos.js";
 import { initDashboard, refreshDashboard } from "./dashboard.js";
@@ -117,11 +118,11 @@ function updateConnStatus(isOnline) {
   if (isOnline) {
     // Vuelve a un estado neutro/oculto tras avisar brevemente que sincronizó.
     el.className = "flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-100";
-    el.textContent = "🟢 En línea";
+    el.innerHTML = '<span class="status-dot"></span>En línea';
     setTimeout(() => el.classList.add("hidden"), 4000);
   } else {
     el.className = "flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-500/90 text-white animate-pulse";
-    el.textContent = "🔴 Sin conexión — guardando localmente";
+    el.innerHTML = '<span class="status-dot"></span>Sin conexión — guardando localmente';
   }
 }
 
@@ -138,6 +139,7 @@ function wireConnectivity() {
 }
 
 function boot() {
+  renderIcons(); // reemplaza los <span data-icon="..."> del HTML estático (nav, botones) por SVG
   wireLoginForm();
   wireLogout();
   wireConnectivity();

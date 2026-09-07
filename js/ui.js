@@ -11,6 +11,7 @@
  * -----------------------------------------------------------------------
  */
 import { INSTITUCION } from "./config.js";
+import { getIcon } from "./icons.js";
 
 /* ---------------------------------------------------------------------- */
 /* Toasts                                                                  */
@@ -142,9 +143,9 @@ export function createHistorial(opts) {
             <label class="block text-xs text-slate-500">Buscar</label>
             <input type="text" id="${uid}-q" placeholder="Texto..." class="border border-slate-300 rounded-md px-2 py-1 text-sm" />
           </div>
-          <button id="${uid}-print" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900">🖨️ Imprimir</button>
-          <button id="${uid}-xlsx" class="px-3 py-1.5 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800">⬇ Excel</button>
-          <button id="${uid}-pdf" class="px-3 py-1.5 text-xs rounded-md bg-red-700 text-white hover:bg-red-800">⬇ PDF</button>
+          <button id="${uid}-print" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900">${getIcon("impresora")}Imprimir</button>
+          <button id="${uid}-xlsx" class="px-3 py-1.5 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800">${getIcon("descargar")}Excel</button>
+          <button id="${uid}-pdf" class="px-3 py-1.5 text-xs rounded-md bg-red-700 text-white hover:bg-red-800">${getIcon("descargar")}PDF</button>
         </div>
       </div>
       <div class="print-header hidden">${printHeaderHTML(title)}</div>
