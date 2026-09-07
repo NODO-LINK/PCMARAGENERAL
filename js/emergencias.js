@@ -20,9 +20,10 @@
 import { COLLECTIONS } from "./config.js";
 import { createCrudModule } from "./moduleFactory.js";
 import { formatDate, toDate, escapeHTML, printAdHoc, toast } from "./ui.js";
-import { subscribeCollection } from "./data.js";
+import { subscribeCollection, createRecord } from "./data.js";
 import { registrarDebito, deleteDebito } from "./inventario.js";
 import { isAdmin, getResponsableLabel } from "./auth.js";
+import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
 
 let modules = null;
 
@@ -117,6 +118,7 @@ export function initEmergencias() {
   modules = { pacientes, traslados, fallecidos };
   setupListaDiaria(pacientes);
   setupInsumosUsados();
+  setupImportacionTraslados();
   return modules;
 }
 
@@ -428,4 +430,207 @@ function renderInsumosUsadosTable() {
       btn.onclick = () => deleteDebito(rows.find((r) => r.id === btn.dataset.id));
     });
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Importación masiva de traslados desde Excel/CSV                         */
+/* ---------------------------------------------------------------------- */
+// Encabezados aceptados por columna (sin distinguir tildes/mayúsculas).
+const TRASLADO_ALIAS = {
+  fecha: ["fecha", "fechahora", "fecha/hora", "fecha y hora"],
+  tipo: ["tipo", "tipodetraslado", "tipo de traslado"],
+  centroDestino: ["centrodestino", "centro", "destino", "centrodesalud", "centro de salud de destino"],
+  nombrePaciente: ["nombre", "paciente", "nombrepaciente", "nombre del paciente"],
+  cedulaPaciente: ["cedula", "ci", "cedulapaciente", "cedula del paciente"],
+  edadPaciente: ["edad", "edadpaciente"],
+  unidad: ["unidad", "unidadvehicular", "vehiculo", "unidad vehicular asignada"],
+  responsable: ["responsable"],
+  observaciones: ["observaciones", "observacion", "notas"],
+};
+
+function mapearFilaTraslado(rawRow) {
+  const found = mapearFila(rawRow, TRASLADO_ALIAS);
+  return {
+    fecha: found.fecha,
+    tipo: String(found.tipo ?? "").trim(),
+    centroDestino: String(found.centroDestino ?? "").trim(),
+    nombrePaciente: String(found.nombrePaciente ?? "").trim(),
+    cedulaPaciente: String(found.cedulaPaciente ?? "").trim(),
+    edadPaciente: found.edadPaciente === undefined || found.edadPaciente === "" ? "" : Number(found.edadPaciente),
+    unidad: String(found.unidad ?? "").trim(),
+    responsable: String(found.responsable ?? "").trim(),
+    observaciones: String(found.observaciones ?? "").trim(),
+  };
+}
+
+function formatFechaHoraLocal(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function validarFilaTraslado(fila, responsableDefecto) {
+  const errores = [];
+  if (!fila.nombrePaciente) errores.push("falta el nombre del paciente");
+  if (!fila.cedulaPaciente) errores.push("falta la cédula");
+  if (fila.edadPaciente === "" || isNaN(fila.edadPaciente) || fila.edadPaciente < 0) errores.push("edad inválida");
+  if (!fila.unidad) errores.push("falta la unidad");
+
+  let tipoResuelto = "";
+  if (fila.tipo) {
+    const norm = quitarAcentos(fila.tipo).trim().toLowerCase();
+    if (norm === "apoyo") tipoResuelto = "Apoyo";
+    else if (norm === "interhospitalario") tipoResuelto = "Interhospitalario";
+    else errores.push(`tipo "${fila.tipo}" no reconocido (use Apoyo o Interhospitalario)`);
+  } else {
+    errores.push("falta el tipo");
+  }
+
+  let fechaResuelta = null;
+  if (fila.fecha instanceof Date && !isNaN(fila.fecha.getTime())) {
+    fechaResuelta = fila.fecha;
+  } else if (fila.fecha) {
+    const d = new Date(fila.fecha);
+    if (!isNaN(d.getTime())) fechaResuelta = d;
+  }
+  if (!fechaResuelta) errores.push("fecha inválida");
+
+  const responsableResuelto = fila.responsable || responsableDefecto;
+  if (!responsableResuelto) errores.push("falta el responsable");
+
+  return {
+    ...fila,
+    tipoResuelto,
+    fechaResuelta,
+    fechaTexto: fechaResuelta ? formatFechaHoraLocal(fechaResuelta) : "",
+    responsableResuelto,
+    errores,
+  };
+}
+
+let filasImportacionTrasladosValidas = [];
+
+function renderPreviewImportacionTraslados(filas) {
+  const root = document.getElementById("importar-traslados-preview");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-traslados");
+  if (!root) return;
+
+  if (!filas.length) {
+    root.innerHTML = `<p class="text-xs text-slate-400 italic">Seleccione un archivo para ver la vista previa.</p>`;
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    filasImportacionTrasladosValidas = [];
+    return;
+  }
+
+  const validas = filas.filter((f) => f.errores.length === 0);
+  filasImportacionTrasladosValidas = validas;
+
+  root.innerHTML = `
+    <p class="text-xs text-slate-500 mb-2">${validas.length} de ${filas.length} fila(s) lista(s) para importar.</p>
+    <div class="max-h-72 overflow-y-auto border border-slate-200 rounded-md">
+      <table class="min-w-full text-xs">
+        <thead class="bg-slate-50 text-slate-600 sticky top-0">
+          <tr>
+            <th class="text-left px-2 py-1.5">Fecha/Hora</th>
+            <th class="text-left px-2 py-1.5">Tipo</th>
+            <th class="text-left px-2 py-1.5">Paciente</th>
+            <th class="text-left px-2 py-1.5">Cédula</th>
+            <th class="text-left px-2 py-1.5">Edad</th>
+            <th class="text-left px-2 py-1.5">Unidad</th>
+            <th class="text-left px-2 py-1.5">Responsable</th>
+            <th class="text-left px-2 py-1.5">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filas
+            .map(
+              (f) => `
+          <tr class="border-t border-slate-100 ${f.errores.length ? "bg-red-50" : ""}">
+            <td class="px-2 py-1.5">${f.fechaResuelta ? escapeHTML(formatDate(f.fechaTexto, true)) : "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.tipoResuelto || f.tipo) || "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.nombrePaciente) || "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.cedulaPaciente) || "—"}</td>
+            <td class="px-2 py-1.5">${f.edadPaciente === "" ? "—" : f.edadPaciente}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.unidad) || "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.responsableResuelto) || "—"}</td>
+            <td class="px-2 py-1.5">${f.errores.length ? `<span class="text-red-700">${escapeHTML(f.errores.join(", "))}</span>` : '<span class="text-emerald-700">OK</span>'}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  if (btnConfirmar) btnConfirmar.disabled = validas.length === 0;
+}
+
+function setupImportacionTraslados() {
+  const fileInput = document.getElementById("importar-traslados-archivo");
+  const respField = document.getElementById("importar-traslados-responsable");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-traslados");
+  if (!fileInput || !btnConfirmar) return;
+
+  if (respField) respField.value = getResponsableLabel();
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      renderPreviewImportacionTraslados([]);
+      return;
+    }
+    try {
+      const { filas: rows } = await leerArchivoTabular(file, TRASLADO_ALIAS);
+      const mapeadas = rows.map((r) => mapearFilaTraslado(r)).filter((f) => f.nombrePaciente || f.cedulaPaciente || f.unidad);
+      const validadas = mapeadas.map((f) => validarFilaTraslado(f, respField?.value || ""));
+      renderPreviewImportacionTraslados(validadas);
+      if (!mapeadas.length) {
+        toast("No se encontraron filas reconocibles. Verifique los encabezados de las columnas.", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      toast("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx/.xls) o CSV válido.", "error");
+      renderPreviewImportacionTraslados([]);
+    }
+  });
+
+  btnConfirmar.addEventListener("click", async () => {
+    if (!filasImportacionTrasladosValidas.length) return;
+
+    btnConfirmar.disabled = true;
+    const textoOriginal = btnConfirmar.textContent;
+    btnConfirmar.textContent = "Importando...";
+
+    let registrados = 0;
+    let fallidos = 0;
+
+    for (const fila of filasImportacionTrasladosValidas) {
+      try {
+        await createRecord(COLLECTIONS.TRASLADOS, {
+          fecha: fila.fechaTexto,
+          tipo: fila.tipoResuelto,
+          centroDestino: fila.centroDestino,
+          nombrePaciente: fila.nombrePaciente,
+          cedulaPaciente: fila.cedulaPaciente,
+          edadPaciente: fila.edadPaciente,
+          unidad: fila.unidad,
+          responsable: fila.responsableResuelto,
+          observaciones: fila.observaciones,
+        });
+        registrados++;
+      } catch (err) {
+        console.error("Error importando traslado", fila, err);
+        fallidos++;
+      }
+    }
+
+    toast(
+      `Importación completa: ${registrados} traslado(s) registrado(s)${fallidos ? `, ${fallidos} fila(s) con error` : ""}.`,
+      fallidos ? "warning" : "success"
+    );
+
+    btnConfirmar.textContent = textoOriginal;
+    btnConfirmar.disabled = true;
+    filasImportacionTrasladosValidas = [];
+    fileInput.value = "";
+    renderPreviewImportacionTraslados([]);
+  });
 }

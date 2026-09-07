@@ -22,6 +22,7 @@ const APP_SHELL = [
   "./js/router.js",
   "./js/data.js",
   "./js/moduleFactory.js",
+  "./js/importUtils.js",
   "./js/dashboard.js",
   "./js/emergencias.js",
   "./js/guardias.js",

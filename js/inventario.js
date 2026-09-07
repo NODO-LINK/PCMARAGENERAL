@@ -42,6 +42,7 @@ import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js"
 import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, escapeHTML } from "./ui.js";
 import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
+import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
 
 let insumos = [];
 let stock = []; // filas de insumoStock
@@ -743,20 +744,8 @@ const IMPORT_ALIAS = {
   minimo: ["minimo", "minimocritico", "min"],
 };
 
-function quitarAcentos(s) {
-  return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
-
 function mapearFilaImportada(rawRow) {
-  const found = {};
-  for (const key of Object.keys(rawRow)) {
-    const norm = quitarAcentos(key).trim().toLowerCase();
-    for (const [campo, aliases] of Object.entries(IMPORT_ALIAS)) {
-      if (aliases.includes(norm) && found[campo] === undefined) {
-        found[campo] = rawRow[key];
-      }
-    }
-  }
+  const found = mapearFila(rawRow, IMPORT_ALIAS);
   return {
     nombre: String(found.nombre ?? "").trim(),
     categoria: String(found.categoria ?? "").trim(),
@@ -767,133 +756,32 @@ function mapearFilaImportada(rawRow) {
 }
 
 /**
- * Lee un .csv como texto y detecta si el separador de columnas es coma o
- * punto y coma (muy común en exportes en español/configuración regional
- * latinoamericana) contando cuál aparece más veces en la línea de
- * encabezado, en vez de asumir siempre coma.
+ * Intenta detectar el almacén desde alguna fila de título anterior al
+ * encabezado real (ej. "...UBICACIÓN: OFICINA" o "...ALMACÉN: DEPÓSITO"),
+ * para reportes de un solo almacén que no traen columna Ubicación/Almacén
+ * por fila.
  */
-
-/**
- * A partir de la hoja en crudo (filas como arreglos, sin asumir que la fila
- * 1 es el encabezado) busca la fila que realmente contiene los nombres de
- * columna de la tabla — muchos reportes traen 1-2 filas de título/subtítulo
- * arriba, del estilo "REPORTE DE INVENTARIO - UBICACIÓN: OFICINA" — y de
- * paso intenta extraer el almacén desde esas filas de título si el reporte
- * es de un solo almacén (sin columna Ubicación/Almacén propia).
- *
- * También cubre el caso de un CSV con ";" que Excel no llegó a separar en
- * columnas (todo el texto quedó en una sola celda por fila): si detecta esa
- * situación, separa el texto a mano antes de buscar el encabezado real.
- */
-function extraerFilasDeHoja(hoja) {
-  let filasCrudas = window.XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "" });
-  if (!filasCrudas.length) return { filas: [], almacenDetectado: "" };
-
-  // Caso: cada fila viene como una sola celda con texto delimitado.
-  if (filasCrudas[0].length === 1) {
-    const primeraCelda = String(filasCrudas[0][0] || "");
-    const nComas = (primeraCelda.match(/,/g) || []).length;
-    const nPuntoYComa = (primeraCelda.match(/;/g) || []).length;
-    if (nComas || nPuntoYComa) {
-      const FS = nPuntoYComa > nComas ? ";" : ",";
-      filasCrudas = filasCrudas.map((fila) => String(fila[0] ?? "").split(FS));
-    }
-  }
-
-  // Busca la primera fila con al menos 2 celdas que coincidan con algún
-  // alias de columna conocido: esa es la fila de encabezados real de la
-  // tabla (las filas de título antes no van a coincidir con nada).
-  let indiceEncabezado = -1;
-  for (let i = 0; i < filasCrudas.length; i++) {
-    const celdas = filasCrudas[i].map((c) => quitarAcentos(String(c)).trim().toLowerCase());
-    const coincidencias = celdas.filter((c) => Object.values(IMPORT_ALIAS).some((aliases) => aliases.includes(c))).length;
-    if (coincidencias >= 2) {
-      indiceEncabezado = i;
-      break;
-    }
-  }
-  if (indiceEncabezado === -1) return { filas: [], almacenDetectado: "" };
-
-  // Intenta detectar el almacén desde alguna fila de título anterior al
-  // encabezado (ej. "...UBICACIÓN: OFICINA" o "...ALMACÉN: DEPÓSITO").
-  let almacenDetectado = "";
-  for (let i = 0; i < indiceEncabezado; i++) {
-    const texto = quitarAcentos(filasCrudas[i].join(" ")).toLowerCase();
+function detectarAlmacenDesdeTitulo(filasTitulo) {
+  for (const textoOriginal of filasTitulo) {
+    const texto = quitarAcentos(textoOriginal).toLowerCase();
     const m = /(?:ubicacion|almacen)\s*:?\s*([a-z]+)/.exec(texto);
     if (m) {
       const candidato = ALMACENES.find((a) => quitarAcentos(a).toLowerCase() === m[1]);
-      if (candidato) {
-        almacenDetectado = candidato;
-        break;
-      }
+      if (candidato) return candidato;
     }
   }
-
-  const encabezados = filasCrudas[indiceEncabezado].map((h) => String(h).trim());
-  const filas = filasCrudas
-    .slice(indiceEncabezado + 1)
-    .filter((fila) => fila.some((c) => String(c).trim() !== "")) // descarta filas vacías al final
-    .map((fila) => {
-      const obj = {};
-      encabezados.forEach((h, i) => {
-        if (h) obj[h] = fila[i] ?? "";
-      });
-      return obj;
-    });
-
-  return { filas, almacenDetectado };
+  return "";
 }
 
-function leerCSV(file) {
-  return new Promise((resolve, reject) => {
-    if (!window.XLSX) {
-      reject(new Error("La librería para leer Excel no está disponible."));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const texto = e.target.result;
-        const primeraLinea = texto.split(/\r?\n/)[0] || "";
-        const nComas = (primeraLinea.match(/,/g) || []).length;
-        const nPuntoYComa = (primeraLinea.match(/;/g) || []).length;
-        const FS = nPuntoYComa > nComas ? ";" : ",";
-        const wb = window.XLSX.read(texto, { type: "string", FS });
-        const hoja = wb.Sheets[wb.SheetNames[0]];
-        resolve(extraerFilasDeHoja(hoja));
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
-    reader.readAsText(file, "utf-8");
-  });
-}
-
-function leerBinario(file) {
-  return new Promise((resolve, reject) => {
-    if (!window.XLSX) {
-      reject(new Error("La librería para leer Excel no está disponible."));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const wb = window.XLSX.read(data, { type: "array" });
-        const hoja = wb.Sheets[wb.SheetNames[0]];
-        resolve(extraerFilasDeHoja(hoja));
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function leerArchivoImportacion(file) {
-  return /\.csv$/i.test(file.name) ? leerCSV(file) : leerBinario(file);
+/**
+ * Lee un .csv/.xlsx/.xls (usando la lectura compartida de importUtils.js) y
+ * de paso intenta detectar el almacén desde las filas de título, si el
+ * reporte trae la ubicación en un encabezado descriptivo en vez de una
+ * columna propia por fila.
+ */
+async function leerArchivoImportacion(file) {
+  const { filas, filasTitulo } = await leerArchivoTabular(file, IMPORT_ALIAS);
+  return { filas, almacenDetectado: detectarAlmacenDesdeTitulo(filasTitulo) };
 }
 
 let filasImportacionValidas = []; // filas listas para procesar tras la vista previa
