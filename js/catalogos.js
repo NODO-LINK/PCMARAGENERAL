@@ -45,17 +45,21 @@ export function initCatalogos() {
     listeners.instituciones.forEach((cb) => cb(rows));
     renderInstitucionesTable();
     renderInstitucionesSelects();
+    renderInstitucionesCharts();
   });
 
   // Solo para calcular la columna de conteo por institución en la tabla del
-  // catálogo (cuántos despachos de combustible y traslados se le hicieron).
+  // catálogo (cuántos despachos de combustible y traslados se le hicieron)
+  // y las gráficas de barras debajo de la tabla.
   subscribeCollection(COLLECTIONS.DESPACHOS_COMBUSTIBLE, "fecha", (rows) => {
     despachosCombustible = rows;
     renderInstitucionesTable();
+    renderInstitucionesCharts();
   });
   subscribeCollection(COLLECTIONS.TRASLADOS, "fecha", (rows) => {
     trasladosInstitucion = rows;
     renderInstitucionesTable();
+    renderInstitucionesCharts();
   });
 
   subscribeCollection(COLLECTIONS.CATEGORIAS_INSUMOS, "nombre", (rows) => {
@@ -109,13 +113,15 @@ function renderInstitucionesTable() {
   tbody.innerHTML =
     instituciones
       .map((i) => {
-        const cantCombustible = despachosCombustible.filter((d) => d.institucionId === i.id).length;
+        const litrosCombustible = despachosCombustible
+          .filter((d) => d.institucionId === i.id)
+          .reduce((s, d) => s + (Number(d.litros) || 0), 0);
         const cantTraslados = trasladosInstitucion.filter((t) => t.institucionId === i.id).length;
         return `
       <tr class="border-t border-slate-100">
         <td class="px-4 py-2">${i.nombre}</td>
         <td class="px-4 py-2">${i.categoria}</td>
-        <td class="px-4 py-2 text-center">${cantCombustible}</td>
+        <td class="px-4 py-2 text-center">${litrosCombustible} L</td>
         <td class="px-4 py-2 text-center">${cantTraslados}</td>
         <td class="px-4 py-2">${i.activo === false ? '<span class="text-red-600">Inactiva</span>' : '<span class="text-emerald-600">Activa</span>'}</td>
         <td class="px-4 py-2">
@@ -142,6 +148,67 @@ function renderInstitucionesTable() {
         const ok = await confirmDialog({ title: "Eliminar institución", message: "¿Eliminar esta institución del catálogo?" });
         if (ok) deleteRecord(COLLECTIONS.INSTITUCIONES, btn.dataset.id);
       };
+    });
+  }
+}
+
+// Gráficas de barras con los mismos datos de la tabla (litros de
+// combustible y cantidad de traslados por institución registrada), para
+// verlos de un vistazo en vez de solo como números en la tabla. Solo se
+// grafican las instituciones con algún movimiento (evita una lista larga
+// de barras en cero), ordenadas de mayor a menor.
+let chartCombustibleInst = null;
+let chartTrasladosInst = null;
+
+function renderInstitucionesCharts() {
+  if (!window.Chart) return;
+
+  const litrosPorInstitucion = instituciones
+    .map((i) => ({
+      nombre: i.nombre,
+      litros: despachosCombustible.filter((d) => d.institucionId === i.id).reduce((s, d) => s + (Number(d.litros) || 0), 0),
+    }))
+    .filter((r) => r.litros > 0)
+    .sort((a, b) => b.litros - a.litros);
+
+  const trasladosPorInstitucion = instituciones
+    .map((i) => ({ nombre: i.nombre, cantidad: trasladosInstitucion.filter((t) => t.institucionId === i.id).length }))
+    .filter((r) => r.cantidad > 0)
+    .sort((a, b) => b.cantidad - a.cantidad);
+
+  const canvasCombustible = document.getElementById("chart-institucion-combustible");
+  if (canvasCombustible) {
+    chartCombustibleInst?.destroy();
+    chartCombustibleInst = new window.Chart(canvasCombustible.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: litrosPorInstitucion.map((r) => r.nombre),
+        datasets: [{ label: "Litros despachados", data: litrosPorInstitucion.map((r) => r.litros), backgroundColor: "#1D4E89" }],
+      },
+      options: {
+        responsive: true,
+        indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, title: { display: true, text: "Litros" } } },
+      },
+    });
+  }
+
+  const canvasTraslados = document.getElementById("chart-institucion-traslados");
+  if (canvasTraslados) {
+    chartTrasladosInst?.destroy();
+    chartTrasladosInst = new window.Chart(canvasTraslados.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: trasladosPorInstitucion.map((r) => r.nombre),
+        datasets: [{ label: "Traslados", data: trasladosPorInstitucion.map((r) => r.cantidad), backgroundColor: "#64748B" }],
+      },
+      options: {
+        responsive: true,
+        indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
     });
   }
 }

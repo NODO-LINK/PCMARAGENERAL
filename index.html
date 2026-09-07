@@ -631,9 +631,20 @@
           <p class="text-xs text-slate-500">Las columnas <strong>Combustible</strong> y <strong>Traslados</strong> muestran cuántos despachos de combustible y cuántos traslados se le han hecho a cada institución registrada.</p>
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
             <table class="min-w-full text-sm">
-              <thead class="bg-slate-50 text-slate-600"><tr><th class="text-left font-medium px-4 py-2">Nombre</th><th class="text-left font-medium px-4 py-2">Categoría</th><th class="text-center font-medium px-4 py-2">Combustible</th><th class="text-center font-medium px-4 py-2">Traslados</th><th class="text-left font-medium px-4 py-2">Estado</th><th class="text-left font-medium px-4 py-2">Acciones</th></tr></thead>
+              <thead class="bg-slate-50 text-slate-600"><tr><th class="text-left font-medium px-4 py-2">Nombre</th><th class="text-left font-medium px-4 py-2">Categoría</th><th class="text-center font-medium px-4 py-2">Combustible (L)</th><th class="text-center font-medium px-4 py-2">Traslados</th><th class="text-left font-medium px-4 py-2">Estado</th><th class="text-left font-medium px-4 py-2">Acciones</th></tr></thead>
               <tbody id="tabla-instituciones-body"></tbody>
             </table>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+              <h4 class="font-semibold text-slate-700 mb-3">Litros de Combustible por Institución</h4>
+              <canvas id="chart-institucion-combustible" height="220"></canvas>
+            </div>
+            <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+              <h4 class="font-semibold text-slate-700 mb-3">Traslados por Institución</h4>
+              <canvas id="chart-institucion-traslados" height="220"></canvas>
+            </div>
           </div>
         </div>
 
