@@ -21,7 +21,9 @@ manifest.json               Manifiesto PWA
 service-worker.js           Cache del app shell para instalación/offline
 firestore.rules             Reglas de seguridad (RBAC) de Firestore
 css/styles.css               Componentes UI + reglas @media print
-icons/icon.svg               Icono institucional (reemplazar por el oficial)
+icons/icon-192.png            Escudo oficial de Protección Civil (192x192)
+icons/icon-512.png            Escudo oficial de Protección Civil (512x512)
+icons/escudo_original.png     Imagen original del escudo (fuente de icon-*.png)
 js/
   config.js                  Configuración Firebase, colecciones, catálogos fijos
   firebase.js                 Inicialización de Firebase (App/Auth/Firestore)
@@ -165,7 +167,6 @@ solo sin caché offline.
 
 ## 10. Personalización pendiente antes de producción
 
-- Reemplazar `icons/icon.svg` por el escudo oficial de Protección Civil (y opcionalmente generar PNGs 192x192/512x512 si su plataforma de instalación lo requiere).
 - Ajustar `INSTITUCION` en `js/config.js` (nombre exacto del organismo/regional).
 - Configurar `firebaseConfig` en `js/config.js` con las credenciales reales.
 - Definir el endpoint real de la API de nivel del Río Limón, si existe.

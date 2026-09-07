@@ -343,7 +343,7 @@ export function printHeaderHTML(subtitle) {
   const fecha = new Date().toLocaleString("es-VE");
   return `
     <div class="print-letterhead">
-      <img class="print-letterhead-crest" src="./icons/icon.svg" alt="Escudo de Protección Civil" />
+      <img class="print-letterhead-crest" src="./icons/icon-512.png" alt="Escudo de Protección Civil" />
       <div>
         <div class="print-letterhead-title">${INSTITUCION.nombre}</div>
         <div class="print-letterhead-sub">${INSTITUCION.sistema}</div>
