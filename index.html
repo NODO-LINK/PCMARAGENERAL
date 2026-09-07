@@ -551,21 +551,36 @@
         <div id="panel-debitos" class="subtab-panel hidden space-y-4">
           <form id="form-debito" class="form-card">
             <h3 class="font-semibold text-slate-700 mb-2">Registrar débito (salida / consumo)</h3>
+            <p class="text-xs text-slate-500 mb-3">Agregue todos los insumos que necesite a la lista (uno por uno) y regístrelos <strong>todos juntos</strong> con un clic, para el mismo almacén, motivo y responsable.</p>
             <div class="form-grid">
               <div><label class="form-label">Fecha</label><input required type="date" name="fecha" class="form-input" /></div>
-              <div>
-                <label class="form-label">Insumo</label>
-                <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
-                <select required name="insumoId" class="form-input select-insumo" data-filtrar-por-almacen="almacenOrigen"></select>
-                <p class="text-xs text-slate-400 mt-1">Solo se muestran insumos con existencia en el almacén elegido.</p>
-              </div>
               <div><label class="form-label">Almacén</label><select required name="almacenOrigen" class="form-input select-almacen"></select></div>
-              <div><label class="form-label">Cantidad</label><input required type="number" min="1" name="cantidad" class="form-input" /></div>
               <div><label class="form-label">Motivo</label><select required name="motivo" class="form-input select-motivo-debito"></select></div>
               <div><label class="form-label">Responsable</label><input required type="text" name="responsable" class="form-input" /></div>
               <div class="md:col-span-3"><label class="form-label">Observaciones</label><textarea name="observaciones" class="form-input" rows="2"></textarea></div>
             </div>
-            <div class="form-actions"><button type="submit" class="btn-primary">Registrar débito</button></div>
+            <p class="text-xs text-slate-400 mt-1" id="debito-campos-bloqueados-aviso" hidden>Fecha, Almacén y Motivo quedan fijos mientras haya insumos en la lista. Vacíela para cambiarlos.</p>
+
+            <hr class="my-4 border-slate-200" />
+
+            <div class="form-grid">
+              <div class="md:col-span-2">
+                <label class="form-label">Insumo</label>
+                <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
+                <select id="debito-insumo-select" class="form-input select-insumo" data-filtrar-por-almacen="almacenOrigen"></select>
+                <p class="text-xs text-slate-400 mt-1">Solo se muestran insumos con existencia en el almacén elegido.</p>
+              </div>
+              <div><label class="form-label">Cantidad</label><input type="number" min="1" id="debito-cantidad" class="form-input" /></div>
+            </div>
+            <div class="form-actions !mt-3">
+              <button type="button" id="btn-agregar-debito" class="btn-secondary"><span class="icon" data-icon="mas"></span>Agregar a la lista</button>
+            </div>
+
+            <div id="carrito-debitos" class="mt-3"></div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-primary"><span class="icon" data-icon="check"></span>Registrar todos los débitos</button>
+            </div>
           </form>
           <div id="historial-debitos"></div>
         </div>

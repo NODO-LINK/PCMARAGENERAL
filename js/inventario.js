@@ -683,47 +683,181 @@ async function deleteTransferencia(row) {
 /* Salida/consumo de un insumo: el insumo sale del sistema (no se mueve a    */
 /* otro almacén, a diferencia de una transferencia).                        */
 
+// Lista temporal ("carrito") de insumos a debitar, todos del mismo
+// almacén/motivo/fecha/responsable — así se pueden sacar varios productos
+// de una vez sin repetir esos campos comunes por cada uno.
+let carritoDebitos = []; // [{ insumoId, insumoNombre, cantidad }]
+
 function setupDebitoForm() {
   const form = document.getElementById("form-debito");
   if (!form) return;
   const respField = form.elements["responsable"];
   if (respField) respField.value = getResponsableLabel();
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const insumoSelect = form.elements["insumoId"];
-    const insumoOpt = insumoSelect.options[insumoSelect.selectedIndex];
-    const almacen = form.elements["almacenOrigen"].value;
-    const cantidad = Number(form.elements["cantidad"].value);
-    const motivo = form.elements["motivo"].value;
-    const responsable = form.elements["responsable"].value.trim();
-    const observaciones = form.elements["observaciones"]?.value || "";
-    const fecha = form.elements["fecha"].value;
+  const fechaField = form.elements["fecha"];
+  const almacenSelect = form.elements["almacenOrigen"];
+  const motivoSelect = form.elements["motivo"];
+  const insumoSelect = document.getElementById("debito-insumo-select");
+  const cantidadField = document.getElementById("debito-cantidad");
+  const btnAgregar = document.getElementById("btn-agregar-debito");
+  const avisoBloqueo = document.getElementById("debito-campos-bloqueados-aviso");
+  if (!insumoSelect || !cantidadField || !btnAgregar) return;
 
-    if (!insumoOpt?.value || !almacen || !motivo || !cantidad || cantidad <= 0) {
-      toast("Complete insumo, almacén, motivo y una cantidad válida.", "error");
+  // Fecha, Almacén y Motivo aplican a TODOS los insumos de la lista: se
+  // bloquean mientras haya algo pendiente para que no se pueda cambiar el
+  // almacén (o el motivo) a medio armar la lista y terminar registrando un
+  // insumo agregado bajo un contexto distinto al que se ve al confirmar —
+  // el mismo riesgo que ya se corrigió para la edición de registros.
+  function actualizarBloqueoCamposComunes() {
+    const bloquear = carritoDebitos.length > 0;
+    [fechaField, almacenSelect, motivoSelect].forEach((f) => {
+      if (f) f.disabled = bloquear;
+    });
+    if (avisoBloqueo) avisoBloqueo.hidden = !bloquear;
+  }
+
+  function renderCarritoDebitos() {
+    const root = document.getElementById("carrito-debitos");
+    if (!root) return;
+    if (!carritoDebitos.length) {
+      root.innerHTML = `<p class="text-xs text-slate-400 italic">Aún no ha agregado insumos a la lista.</p>`;
+      actualizarBloqueoCamposComunes();
+      return;
+    }
+    root.innerHTML = `
+      <table class="min-w-full text-sm border border-slate-200 rounded-md overflow-hidden">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="text-left font-medium px-3 py-1.5">Insumo</th>
+            <th class="text-left font-medium px-3 py-1.5">Cantidad</th>
+            <th class="px-3 py-1.5"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${carritoDebitos
+            .map(
+              (item, i) => `
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-1.5">${escapeHTML(item.insumoNombre)}</td>
+            <td class="px-3 py-1.5">${item.cantidad}</td>
+            <td class="px-3 py-1.5 text-right"><button type="button" data-idx="${i}" class="text-red-700 hover:underline text-xs">Quitar</button></td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    root.querySelectorAll("[data-idx]").forEach((btn) => {
+      btn.onclick = () => {
+        carritoDebitos.splice(Number(btn.dataset.idx), 1);
+        renderCarritoDebitos();
+      };
+    });
+    actualizarBloqueoCamposComunes();
+  }
+
+  // Agrega el insumo seleccionado a la lista pendiente (no toca Firestore
+  // todavía). Si el insumo ya estaba en la lista, suma la cantidad en vez
+  // de duplicar la fila.
+  btnAgregar.addEventListener("click", () => {
+    if (!almacenSelect.value) {
+      toast("Seleccione el almacén.", "error");
+      return;
+    }
+    const opt = insumoSelect.options[insumoSelect.selectedIndex];
+    const cantidad = Number(cantidadField.value);
+    if (!opt?.value) {
+      toast("Seleccione un insumo.", "error");
+      return;
+    }
+    if (!cantidad || cantidad <= 0) {
+      toast("Ingrese una cantidad válida.", "error");
       return;
     }
 
+    const existente = carritoDebitos.find((it) => it.insumoId === opt.value);
+    if (existente) {
+      existente.cantidad += cantidad;
+    } else {
+      carritoDebitos.push({ insumoId: opt.value, insumoNombre: opt.dataset.nombre, cantidad });
+    }
+    renderCarritoDebitos();
+
+    cantidadField.value = "";
+    const searchInput = insumoSelect.parentElement?.querySelector(".insumo-search");
+    if (searchInput) {
+      searchInput.value = "";
+      searchInput.dispatchEvent(new Event("input"));
+    }
+    insumoSelect.value = "";
+    (searchInput || insumoSelect).focus();
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!carritoDebitos.length) {
+      toast("Agregue al menos un insumo a la lista antes de registrar.", "error");
+      return;
+    }
+    const almacen = almacenSelect.value;
+    const motivo = motivoSelect.value;
+    const responsable = form.elements["responsable"].value.trim();
+    const observaciones = form.elements["observaciones"]?.value || "";
+    const fecha = fechaField.value;
+
+    if (!almacen || !motivo) {
+      toast("Complete almacén y motivo.", "error");
+      return;
+    }
+    if (!responsable) {
+      toast("Escriba el responsable.", "error");
+      return;
+    }
+
+    const submitBtn = form.querySelector('[type="submit"]');
+    const defaultLabel = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Registrando...";
+
+    let registrados = 0;
     try {
-      await registrarDebito({
-        insumoId: insumoOpt.value,
-        insumoNombre: insumoOpt.dataset.nombre,
-        almacen,
-        cantidad,
-        motivo,
-        responsable,
-        observaciones,
-        fecha,
-      });
-      toast("Débito registrado y existencia actualizada.", "success");
+      // Va sacando de la lista cada insumo YA registrado (no solo al final):
+      // si uno falla a medio camino, un reintento solo procesa los que
+      // quedan pendientes, sin volver a debitar los que ya se aplicaron.
+      while (carritoDebitos.length) {
+        const item = carritoDebitos[0];
+        await registrarDebito({
+          insumoId: item.insumoId,
+          insumoNombre: item.insumoNombre,
+          almacen,
+          cantidad: item.cantidad,
+          motivo,
+          responsable,
+          observaciones,
+          fecha,
+        });
+        registrados++;
+        carritoDebitos.shift();
+      }
+      toast(`${registrados} débito(s) registrado(s) y existencias actualizadas.`, "success");
+      renderCarritoDebitos();
       form.reset();
       if (respField) respField.value = getResponsableLabel();
+      form.querySelectorAll("select").forEach((s) => s.dispatchEvent(new Event("change")));
     } catch (err) {
-      console.error(err);
-      toast(err.message || "No se pudo registrar el débito.", "error");
+      console.error("Error registrando débito", err);
+      renderCarritoDebitos();
+      toast(
+        `${registrados ? `${registrados} débito(s) registrados. ` : ""}${err.message || "Ocurrió un error registrando un insumo."} Revise la lista e intente de nuevo.`,
+        "error"
+      );
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = defaultLabel;
+      actualizarBloqueoCamposComunes();
     }
   });
+
+  renderCarritoDebitos();
 }
 
 // Exportado para que otros módulos (p. ej. la Lista Diaria de Pacientes en
