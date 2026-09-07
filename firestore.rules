@@ -154,21 +154,23 @@ service cloud.firestore {
     match /entradasInventario/{docId} {
       allow read: if isSignedIn();
       allow create: if isKnownUser() && isOwnCreation();
-      allow update: if false; // movimientos inmutables; solo se permite eliminar (con reversión) por admin
+      // Editar o eliminar (con reversión/reajuste de insumoStock) es solo
+      // para el administrador; el operador únicamente crea y consulta.
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /transferenciasInventario/{docId} {
       allow read: if isSignedIn();
       allow create: if isKnownUser() && isOwnCreation();
-      allow update: if false;
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /debitosInventario/{docId} {
       allow read: if isSignedIn();
       allow create: if isKnownUser() && isOwnCreation();
-      allow update: if false; // movimiento inmutable; solo se permite eliminar (con reversión) por admin
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

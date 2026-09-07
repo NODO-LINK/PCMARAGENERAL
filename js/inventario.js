@@ -19,12 +19,17 @@
  * atómica mediante transacciones de Firestore para evitar condiciones de
  * carrera cuando varios operadores registran movimientos simultáneamente.
  *
- * Nota de diseño: por tratarse de movimientos de existencias (no de datos
- * descriptivos), la edición de un movimiento ya registrado no está
- * disponible ni para el administrador, ya que alteraría el historial de
- * trazabilidad de las cantidades. El administrador sí puede ELIMINAR un
- * movimiento; al hacerlo, el sistema revierte automáticamente el efecto
- * sobre las existencias para mantener la consistencia del stock.
+ * Edición y eliminación (solo administrador): por tratarse de movimientos
+ * de existencias, editar o eliminar un registro no solo cambia el
+ * documento sino que además ajusta `insumoStock` para mantenerlo
+ * consistente — al eliminar, revierte el efecto original; al editar,
+ * revierte el efecto viejo y aplica el nuevo en la misma transacción (para
+ * no dejar el stock a medio actualizar si algo falla a mitad de camino).
+ * Para simplificar esa aritmética y evitar ambigüedad, el INSUMO de un
+ * movimiento ya registrado no se puede cambiar al editarlo (solo cantidad,
+ * almacén(es), motivo, fecha, responsable u observaciones, según el tipo de
+ * movimiento) — si el insumo estaba equivocado, se elimina y se registra
+ * de nuevo con el insumo correcto.
  * -----------------------------------------------------------------------
  */
 import {
@@ -37,9 +42,9 @@ import {
   updateDoc,
 } from "./firebase.js";
 import { COLLECTIONS, ALMACENES, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
-import { subscribeCollection, createRecord, deleteRecord } from "./data.js";
+import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
 import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js";
-import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, escapeHTML } from "./ui.js";
+import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML } from "./ui.js";
 import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
@@ -77,9 +82,9 @@ export function initInventario() {
   setupInsumoSearchInputs();
   setupAlmacenFiltroInsumo();
   setupInsumoForm();
-  setupEntradaForm();
-  setupTransferenciaForm();
-  setupDebitoForm();
+  const entradaFormApi = setupEntradaForm();
+  const transferenciaFormApi = setupTransferenciaForm();
+  const debitoFormApi = setupDebitoForm();
   setupImportacion();
 
   document.getElementById("stock-buscar")?.addEventListener("input", renderStockTable);
@@ -130,6 +135,7 @@ export function initInventario() {
     getRows: () => entradas,
     isAdmin,
     exportFileName: "Entradas_Inventario",
+    onEdit: (row) => entradaFormApi?.startEdit(row),
     onDelete: (row) => deleteEntrada(row),
   });
 
@@ -148,6 +154,7 @@ export function initInventario() {
     getRows: () => transferencias,
     isAdmin,
     exportFileName: "Transferencias_Inventario",
+    onEdit: (row) => transferenciaFormApi?.startEdit(row),
     onDelete: (row) => deleteTransferencia(row),
   });
 
@@ -166,6 +173,7 @@ export function initInventario() {
     getRows: () => debitos,
     isAdmin,
     exportFileName: "Debitos_Inventario",
+    onEdit: (row) => debitoFormApi?.startEdit(row),
     onDelete: (row) => deleteDebito(row),
   });
 
@@ -268,6 +276,30 @@ function populateInsumoSelects() {
     const searchInput = sel.parentElement?.querySelector(".insumo-search");
     sel.innerHTML = buildInsumoOptionsHTML(searchInput ? searchInput.value : "", getAlmacenFiltroDeSelect(sel));
   });
+}
+
+/**
+ * Garantiza que el <select> de insumo tenga una <option> para el insumo
+ * indicado, aunque el filtro por almacén lo hubiera excluido (p. ej. al
+ * editar un débito que dejó la existencia en 0 en ese almacén) — así al
+ * entrar en modo edición el insumo del registro se sigue viendo, aunque el
+ * campo quede deshabilitado (no se puede cambiar el insumo al editar).
+ */
+function asegurarOpcionInsumo(sel, insumoId, insumoNombre) {
+  if (![...sel.options].some((o) => o.value === insumoId)) {
+    const opt = document.createElement("option");
+    opt.value = insumoId;
+    opt.textContent = insumoNombre;
+    opt.dataset.nombre = insumoNombre;
+    sel.appendChild(opt);
+  }
+}
+
+/** Convierte un valor de fecha (Timestamp de Firestore, Date o string) al
+ * formato "YYYY-MM-DD" que espera un <input type="date">. */
+function formatFechaInput(value) {
+  const d = toDate(value);
+  return d ? d.toLocaleDateString("en-CA") : "";
 }
 
 /** Conecta cada buscador de insumo con el <select> que le sigue. */
@@ -425,9 +457,38 @@ function setupEntradaForm() {
   const respField = form.elements["responsable"];
   if (respField) respField.value = getResponsableLabel();
 
+  const insumoSelect = form.elements["insumoId"];
+  const cancelBtn = form.querySelector('[data-role="cancel-edit"]');
+  const submitBtn = form.querySelector('[type="submit"]');
+  const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Registrar entrada";
+
+  const editBanner = document.createElement("div");
+  editBanner.className = "hidden mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-sm";
+  editBanner.textContent = 'Editando una entrada existente: el insumo no se puede cambiar (si era otro insumo, elimine este registro y cree uno nuevo). Pulse "Cancelar edición" para registrar una entrada nueva en su lugar.';
+  form.prepend(editBanner);
+
+  let editingRow = null;
+
+  function exitEditMode() {
+    editingRow = null;
+    form.reset();
+    insumoSelect.disabled = false;
+    if (respField) respField.value = getResponsableLabel();
+    if (submitBtn) submitBtn.textContent = defaultSubmitLabel;
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+    editBanner.classList.add("hidden");
+  }
+
+  if (cancelBtn) {
+    cancelBtn.classList.add("hidden");
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      exitEditMode();
+    });
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const insumoSelect = form.elements["insumoId"];
     const insumoOpt = insumoSelect.options[insumoSelect.selectedIndex];
     const almacen = form.elements["almacenDestino"].value;
     const cantidad = Number(form.elements["cantidad"].value);
@@ -441,23 +502,49 @@ function setupEntradaForm() {
     }
 
     try {
-      await registrarEntrada({
-        insumoId: insumoOpt.value,
-        insumoNombre: insumoOpt.dataset.nombre,
-        almacen,
-        cantidad,
-        responsable,
-        observaciones,
-        fecha,
-      });
-      toast("Entrada registrada y existencia actualizada.", "success");
-      form.reset();
-      if (respField) respField.value = getResponsableLabel();
+      if (editingRow) {
+        await editarEntrada(editingRow, { almacen, cantidad, responsable, observaciones, fecha });
+        toast("Entrada actualizada y existencia ajustada.", "success");
+        exitEditMode();
+      } else {
+        await registrarEntrada({
+          insumoId: insumoOpt.value,
+          insumoNombre: insumoOpt.dataset.nombre,
+          almacen,
+          cantidad,
+          responsable,
+          observaciones,
+          fecha,
+        });
+        toast("Entrada registrada y existencia actualizada.", "success");
+        form.reset();
+        if (respField) respField.value = getResponsableLabel();
+      }
     } catch (err) {
       console.error(err);
-      toast("No se pudo registrar la entrada.", "error");
+      toast(err.message || "No se pudo registrar la entrada.", "error");
     }
   });
+
+  function startEdit(row) {
+    if (!row) return;
+    editingRow = row;
+    asegurarOpcionInsumo(insumoSelect, row.insumoId, row.insumoNombre);
+    insumoSelect.value = row.insumoId;
+    insumoSelect.disabled = true;
+    form.elements["fecha"].value = formatFechaInput(row.fecha);
+    form.elements["almacenDestino"].value = row.almacenDestino;
+    form.elements["cantidad"].value = row.cantidad;
+    form.elements["responsable"].value = row.responsable || "";
+    if (form.elements["observaciones"]) form.elements["observaciones"].value = row.observaciones || "";
+    if (submitBtn) submitBtn.textContent = "Guardar cambios";
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
+    editBanner.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    toast("Editando registro. Realice los cambios y guarde.", "info");
+  }
+
+  return { startEdit };
 }
 
 async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, responsable, observaciones, fecha, minimo }) {
@@ -499,6 +586,63 @@ async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, res
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
     createdByEmail: user?.email || null,
+  });
+}
+
+/**
+ * Edita una entrada ya registrada. El insumo no cambia (ver nota de diseño
+ * al inicio del archivo); solo almacén, cantidad, responsable,
+ * observaciones y fecha. Revierte el efecto viejo sobre `insumoStock` y
+ * aplica el nuevo en la misma transacción (un solo documento si el
+ * almacén no cambió, o dos si cambió) antes de actualizar el registro.
+ */
+async function editarEntrada(row, { almacen, cantidad, responsable, observaciones, fecha }) {
+  const insumoId = row.insumoId;
+  const insumoNombre = row.insumoNombre;
+  const insumo = insumos.find((i) => i.id === insumoId);
+  const stockIdViejo = stockDocId(insumoId, row.almacenDestino);
+  const stockIdNuevo = stockDocId(insumoId, almacen);
+
+  await runTransaction(db, async (tx) => {
+    if (stockIdViejo === stockIdNuevo) {
+      const stockRef = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdViejo);
+      const snap = await tx.get(stockRef);
+      const existenciaActual = snap.exists() ? Number(snap.data().existencia) || 0 : 0;
+      const nuevaExistencia = existenciaActual - Number(row.cantidad) + cantidad;
+      if (nuevaExistencia < 0) {
+        throw new Error(`La existencia resultante en ${almacen} sería negativa (${nuevaExistencia}).`);
+      }
+      tx.set(stockRef, { existencia: nuevaExistencia, updatedAt: serverTimestamp() }, { merge: true });
+    } else {
+      const stockRefViejo = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdViejo);
+      const stockRefNuevo = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdNuevo);
+      const [snapViejo, snapNuevo] = await Promise.all([tx.get(stockRefViejo), tx.get(stockRefNuevo)]);
+      const existenciaViejaActual = snapViejo.exists() ? Number(snapViejo.data().existencia) || 0 : 0;
+      const existenciaNuevaActual = snapNuevo.exists() ? Number(snapNuevo.data().existencia) || 0 : 0;
+      tx.set(stockRefViejo, { existencia: Math.max(0, existenciaViejaActual - Number(row.cantidad)), updatedAt: serverTimestamp() }, { merge: true });
+      tx.set(
+        stockRefNuevo,
+        {
+          insumoId,
+          insumoNombre,
+          categoriaId: insumo?.categoriaId || "",
+          categoriaNombre: insumo?.categoriaNombre || "",
+          almacen,
+          existencia: existenciaNuevaActual + cantidad,
+          minimo: snapNuevo.exists() ? snapNuevo.data().minimo ?? 0 : 0,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  });
+
+  await updateRecord(COLLECTIONS.ENTRADAS_INVENTARIO, row.id, {
+    almacenDestino: almacen,
+    cantidad,
+    responsable,
+    observaciones,
+    fecha: fecha ? parseLocalDate(fecha) : new Date(),
   });
 }
 
@@ -565,9 +709,38 @@ function setupTransferenciaForm() {
   const respField = form.elements["responsable"];
   if (respField) respField.value = getResponsableLabel();
 
+  const insumoSelect = form.elements["insumoId"];
+  const cancelBtn = form.querySelector('[data-role="cancel-edit"]');
+  const submitBtn = form.querySelector('[type="submit"]');
+  const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Registrar transferencia";
+
+  const editBanner = document.createElement("div");
+  editBanner.className = "hidden mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-sm";
+  editBanner.textContent = 'Editando una transferencia existente: el insumo no se puede cambiar. Pulse "Cancelar edición" para registrar una transferencia nueva en su lugar.';
+  form.prepend(editBanner);
+
+  let editingRow = null;
+
+  function exitEditMode() {
+    editingRow = null;
+    form.reset();
+    insumoSelect.disabled = false;
+    if (respField) respField.value = getResponsableLabel();
+    if (submitBtn) submitBtn.textContent = defaultSubmitLabel;
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+    editBanner.classList.add("hidden");
+  }
+
+  if (cancelBtn) {
+    cancelBtn.classList.add("hidden");
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      exitEditMode();
+    });
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const insumoSelect = form.elements["insumoId"];
     const insumoOpt = insumoSelect.options[insumoSelect.selectedIndex];
     const origen = form.elements["stockOrigen"].value;
     const destino = form.elements["stockDestino"].value;
@@ -585,23 +758,49 @@ function setupTransferenciaForm() {
     }
 
     try {
-      await registrarTransferencia({
-        insumoId: insumoOpt.value,
-        insumoNombre: insumoOpt.dataset.nombre,
-        origen,
-        destino,
-        cantidad,
-        responsable,
-        fecha,
-      });
-      toast("Transferencia registrada correctamente.", "success");
-      form.reset();
-      if (respField) respField.value = getResponsableLabel();
+      if (editingRow) {
+        await editarTransferencia(editingRow, { origen, destino, cantidad, responsable, fecha });
+        toast("Transferencia actualizada y existencias ajustadas.", "success");
+        exitEditMode();
+      } else {
+        await registrarTransferencia({
+          insumoId: insumoOpt.value,
+          insumoNombre: insumoOpt.dataset.nombre,
+          origen,
+          destino,
+          cantidad,
+          responsable,
+          fecha,
+        });
+        toast("Transferencia registrada correctamente.", "success");
+        form.reset();
+        if (respField) respField.value = getResponsableLabel();
+      }
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo registrar la transferencia.", "error");
     }
   });
+
+  function startEdit(row) {
+    if (!row) return;
+    editingRow = row;
+    asegurarOpcionInsumo(insumoSelect, row.insumoId, row.insumoNombre);
+    insumoSelect.value = row.insumoId;
+    insumoSelect.disabled = true;
+    form.elements["fecha"].value = formatFechaInput(row.fecha);
+    form.elements["stockOrigen"].value = row.stockOrigen;
+    form.elements["stockDestino"].value = row.stockDestino;
+    form.elements["cantidad"].value = row.cantidad;
+    form.elements["responsable"].value = row.responsable || "";
+    if (submitBtn) submitBtn.textContent = "Guardar cambios";
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
+    editBanner.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    toast("Editando registro. Realice los cambios y guarde.", "info");
+  }
+
+  return { startEdit };
 }
 
 async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha }) {
@@ -649,6 +848,75 @@ async function registrarTransferencia({ insumoId, insumoNombre, origen, destino,
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
     createdByEmail: user?.email || null,
+  });
+}
+
+/**
+ * Edita una transferencia ya registrada. El insumo no cambia; origen,
+ * destino, cantidad, responsable y fecha sí. Como origen/destino pueden
+ * cambiar de forma independiente, se calcula el delta neto por cada
+ * documento de stock afectado (hasta 4: origen/destino viejos y nuevos,
+ * que pueden coincidir entre sí) y se aplican todos en una sola
+ * transacción — revierte el movimiento viejo y aplica el nuevo a la vez,
+ * sin dejar el stock a medio actualizar si algo falla.
+ */
+async function editarTransferencia(row, { origen, destino, cantidad, responsable, fecha }) {
+  if (origen === destino) throw new Error("El stock de origen y destino no pueden ser el mismo.");
+  const insumoId = row.insumoId;
+  const insumoNombre = row.insumoNombre;
+  const insumo = insumos.find((i) => i.id === insumoId);
+
+  const idOrigenViejo = stockDocId(insumoId, row.stockOrigen);
+  const idDestinoViejo = stockDocId(insumoId, row.stockDestino);
+  const idOrigenNuevo = stockDocId(insumoId, origen);
+  const idDestinoNuevo = stockDocId(insumoId, destino);
+
+  const deltas = new Map(); // stockId -> { delta, almacen }
+  const addDelta = (id, almacen, monto) => {
+    const previo = deltas.get(id) || { delta: 0, almacen };
+    previo.delta += monto;
+    deltas.set(id, previo);
+  };
+  addDelta(idOrigenViejo, row.stockOrigen, Number(row.cantidad)); // revertir: vuelve al origen viejo
+  addDelta(idDestinoViejo, row.stockDestino, -Number(row.cantidad)); // revertir: sale del destino viejo
+  addDelta(idOrigenNuevo, origen, -cantidad); // aplicar: sale del nuevo origen
+  addDelta(idDestinoNuevo, destino, cantidad); // aplicar: entra al nuevo destino
+
+  await runTransaction(db, async (tx) => {
+    const ids = [...deltas.keys()];
+    const refs = ids.map((id) => doc(db, COLLECTIONS.INSUMO_STOCK, id));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    ids.forEach((id, i) => {
+      const { delta, almacen } = deltas.get(id);
+      const snap = snaps[i];
+      const existenciaActual = snap.exists() ? Number(snap.data().existencia) || 0 : 0;
+      const nuevaExistencia = existenciaActual + delta;
+      if (nuevaExistencia < 0) {
+        throw new Error(`Existencia insuficiente en ${almacen} para aplicar este cambio.`);
+      }
+      tx.set(
+        refs[i],
+        {
+          insumoId,
+          insumoNombre,
+          categoriaId: insumo?.categoriaId || "",
+          categoriaNombre: insumo?.categoriaNombre || "",
+          almacen,
+          existencia: nuevaExistencia,
+          minimo: snap.exists() ? snap.data().minimo ?? 0 : 0,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
+  });
+
+  await updateRecord(COLLECTIONS.TRANSFERENCIAS_INVENTARIO, row.id, {
+    stockOrigen: origen,
+    stockDestino: destino,
+    cantidad,
+    responsable,
+    fecha: fecha ? parseLocalDate(fecha) : new Date(),
   });
 }
 
@@ -701,7 +969,17 @@ function setupDebitoForm() {
   const cantidadField = document.getElementById("debito-cantidad");
   const btnAgregar = document.getElementById("btn-agregar-debito");
   const avisoBloqueo = document.getElementById("debito-campos-bloqueados-aviso");
+  const cancelBtn = form.querySelector('[data-role="cancel-edit"]');
+  const submitBtn = form.querySelector('[type="submit"]');
+  const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Registrar todos los débitos";
   if (!insumoSelect || !cantidadField || !btnAgregar) return;
+
+  const editBanner = document.createElement("div");
+  editBanner.className = "hidden mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-sm";
+  editBanner.textContent = 'Editando un débito existente: el insumo no se puede cambiar. Pulse "Cancelar edición" para volver a la lista de insumos pendientes.';
+  form.prepend(editBanner);
+
+  let editingRow = null;
 
   // Fecha, Almacén y Motivo aplican a TODOS los insumos de la lista: se
   // bloquean mientras haya algo pendiente para que no se pueda cambiar el
@@ -714,6 +992,26 @@ function setupDebitoForm() {
       if (f) f.disabled = bloquear;
     });
     if (avisoBloqueo) avisoBloqueo.hidden = !bloquear;
+  }
+
+  function exitEditMode() {
+    editingRow = null;
+    insumoSelect.disabled = false;
+    insumoSelect.value = "";
+    cantidadField.value = "";
+    if (submitBtn) submitBtn.textContent = defaultSubmitLabel;
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+    editBanner.classList.add("hidden");
+    btnAgregar.classList.remove("hidden");
+    actualizarBloqueoCamposComunes();
+  }
+
+  if (cancelBtn) {
+    cancelBtn.classList.add("hidden");
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      exitEditMode();
+    });
   }
 
   function renderCarritoDebitos() {
@@ -794,6 +1092,44 @@ function setupDebitoForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    // Modo edición: el formulario representa UN solo débito ya registrado
+    // (no la lista pendiente), así que se actualiza directo en vez de
+    // procesar el carrito.
+    if (editingRow) {
+      const almacen = almacenSelect.value;
+      const motivo = motivoSelect.value;
+      const cantidad = Number(cantidadField.value);
+      const responsable = form.elements["responsable"].value.trim();
+      const observaciones = form.elements["observaciones"]?.value || "";
+      const fecha = fechaField.value;
+
+      if (!almacen || !motivo || !cantidad || cantidad <= 0) {
+        toast("Complete almacén, motivo y una cantidad válida.", "error");
+        return;
+      }
+      if (!responsable) {
+        toast("Escriba el responsable.", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const textoOriginal = submitBtn.textContent;
+      submitBtn.textContent = "Guardando...";
+      try {
+        await editarDebito(editingRow, { almacen, cantidad, motivo, responsable, observaciones, fecha });
+        toast("Débito actualizado y existencia ajustada.", "success");
+        exitEditMode();
+      } catch (err) {
+        console.error("Error editando débito", err);
+        toast(err.message || "No se pudo actualizar el débito.", "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = textoOriginal;
+      }
+      return;
+    }
+
     if (!carritoDebitos.length) {
       toast("Agregue al menos un insumo a la lista antes de registrar.", "error");
       return;
@@ -813,9 +1149,8 @@ function setupDebitoForm() {
       return;
     }
 
-    const submitBtn = form.querySelector('[type="submit"]');
-    const defaultLabel = submitBtn.textContent;
     submitBtn.disabled = true;
+    const defaultLabel = submitBtn.textContent;
     submitBtn.textContent = "Registrando...";
 
     let registrados = 0;
@@ -857,7 +1192,32 @@ function setupDebitoForm() {
     }
   });
 
+  function startEdit(row) {
+    if (!row) return;
+    if (carritoDebitos.length) {
+      toast("Termine de registrar los insumos pendientes en la lista antes de editar otro registro.", "error");
+      return;
+    }
+    editingRow = row;
+    fechaField.value = formatFechaInput(row.fecha);
+    almacenSelect.value = row.almacenOrigen;
+    motivoSelect.value = row.motivo;
+    form.elements["responsable"].value = row.responsable || "";
+    if (form.elements["observaciones"]) form.elements["observaciones"].value = row.observaciones || "";
+    asegurarOpcionInsumo(insumoSelect, row.insumoId, row.insumoNombre);
+    insumoSelect.value = row.insumoId;
+    insumoSelect.disabled = true;
+    cantidadField.value = row.cantidad;
+    if (submitBtn) submitBtn.textContent = "Guardar cambios";
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
+    editBanner.classList.remove("hidden");
+    btnAgregar.classList.add("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    toast("Editando registro. Realice los cambios y guarde.", "info");
+  }
+
   renderCarritoDebitos();
+  return { startEdit };
 }
 
 // Exportado para que otros módulos (p. ej. la Lista Diaria de Pacientes en
@@ -889,6 +1249,52 @@ export async function registrarDebito({ insumoId, insumoNombre, almacen, cantida
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
     createdByEmail: user?.email || null,
+  });
+}
+
+/**
+ * Edita un débito ya registrado. El insumo no cambia; almacén, cantidad,
+ * motivo, responsable, observaciones y fecha sí. Revierte el efecto viejo
+ * sobre `insumoStock` y aplica el nuevo en la misma transacción.
+ */
+async function editarDebito(row, { almacen, cantidad, motivo, responsable, observaciones, fecha }) {
+  const insumoId = row.insumoId;
+  const stockIdViejo = stockDocId(insumoId, row.almacenOrigen);
+  const stockIdNuevo = stockDocId(insumoId, almacen);
+
+  await runTransaction(db, async (tx) => {
+    if (stockIdViejo === stockIdNuevo) {
+      const stockRef = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdViejo);
+      const snap = await tx.get(stockRef);
+      const existenciaActual = snap.exists() ? Number(snap.data().existencia) || 0 : 0;
+      // Revierte la salida vieja (+row.cantidad) y aplica la nueva (-cantidad).
+      const nuevaExistencia = existenciaActual + Number(row.cantidad) - cantidad;
+      if (nuevaExistencia < 0) {
+        throw new Error(`Existencia insuficiente en ${almacen}. Disponible tras revertir el original: ${existenciaActual + Number(row.cantidad)}.`);
+      }
+      tx.set(stockRef, { existencia: nuevaExistencia, updatedAt: serverTimestamp() }, { merge: true });
+    } else {
+      const stockRefViejo = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdViejo);
+      const stockRefNuevo = doc(db, COLLECTIONS.INSUMO_STOCK, stockIdNuevo);
+      const [snapViejo, snapNuevo] = await Promise.all([tx.get(stockRefViejo), tx.get(stockRefNuevo)]);
+      const existenciaViejaActual = snapViejo.exists() ? Number(snapViejo.data().existencia) || 0 : 0;
+      const existenciaNuevaActual = snapNuevo.exists() ? Number(snapNuevo.data().existencia) || 0 : 0;
+      const existenciaNuevaFinal = existenciaNuevaActual - cantidad;
+      if (existenciaNuevaFinal < 0) {
+        throw new Error(`Existencia insuficiente en ${almacen}. Disponible: ${existenciaNuevaActual}.`);
+      }
+      tx.set(stockRefViejo, { existencia: existenciaViejaActual + Number(row.cantidad), updatedAt: serverTimestamp() }, { merge: true });
+      tx.set(stockRefNuevo, { existencia: existenciaNuevaFinal, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  });
+
+  await updateRecord(COLLECTIONS.DEBITOS_INVENTARIO, row.id, {
+    almacenOrigen: almacen,
+    cantidad,
+    motivo,
+    responsable,
+    observaciones,
+    fecha: fecha ? parseLocalDate(fecha) : new Date(),
   });
 }
 

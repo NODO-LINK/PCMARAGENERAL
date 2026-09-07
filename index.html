@@ -523,7 +523,10 @@
               <div><label class="form-label">Responsable</label><input required type="text" name="responsable" class="form-input" /></div>
               <div class="md:col-span-3"><label class="form-label">Observaciones</label><textarea name="observaciones" class="form-input" rows="2"></textarea></div>
             </div>
-            <div class="form-actions"><button type="submit" class="btn-primary">Registrar entrada</button></div>
+            <div class="form-actions">
+              <button type="button" data-role="cancel-edit" class="btn-secondary">Cancelar edición</button>
+              <button type="submit" class="btn-primary">Registrar entrada</button>
+            </div>
           </form>
           <div id="historial-entradas"></div>
         </div>
@@ -543,7 +546,10 @@
               <div><label class="form-label">Cantidad transferida</label><input required type="number" min="1" name="cantidad" class="form-input" /></div>
               <div><label class="form-label">Responsable</label><input required type="text" name="responsable" class="form-input" /></div>
             </div>
-            <div class="form-actions"><button type="submit" class="btn-primary">Registrar transferencia</button></div>
+            <div class="form-actions">
+              <button type="button" data-role="cancel-edit" class="btn-secondary">Cancelar edición</button>
+              <button type="submit" class="btn-primary">Registrar transferencia</button>
+            </div>
           </form>
           <div id="historial-transferencias"></div>
         </div>
@@ -579,6 +585,7 @@
             <div id="carrito-debitos" class="mt-3"></div>
 
             <div class="form-actions">
+              <button type="button" data-role="cancel-edit" class="btn-secondary">Cancelar edición</button>
               <button type="submit" class="btn-primary"><span class="icon" data-icon="check"></span>Registrar todos los débitos</button>
             </div>
           </form>
