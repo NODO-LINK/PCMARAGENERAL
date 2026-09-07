@@ -185,6 +185,29 @@ export function createHistorial(opts) {
     });
   }
 
+  // Imprime UN solo registro como documento institucional (cintillo + una
+  // ficha con todos sus campos + firmas), reutilizando printAdHoc — así,
+  // además de imprimir la tabla completa, cualquier registro puede
+  // imprimirse individualmente (disponible para Operador y Administrador).
+  function printRegistro(row) {
+    if (!row) return;
+    const bodyHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+        <tbody>
+          ${columns
+            .map(
+              (c) => `
+          <tr>
+            <td style="padding:7px 10px;font-weight:bold;width:220px;border:1px solid #cbd5e1;background:#f8fafc;">${escapeHTML(c.label)}</td>
+            <td style="padding:7px 10px;border:1px solid #cbd5e1;">${escapeHTML(c.format ? c.format(row) : row[c.key] ?? "—")}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    printAdHoc(`${title} — Registro Individual`, bodyHTML, firmas);
+  }
+
   function render() {
     const rows = filteredRows();
     const admin = isAdmin();
@@ -194,11 +217,12 @@ export function createHistorial(opts) {
       <tr class="border-t border-slate-100 hover:bg-slate-50">
         ${columns.map((c) => `<td class="px-4 py-2 align-top">${escapeHTML(c.format ? c.format(row) : row[c.key] ?? "—")}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
+          <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
           ${
             admin
               ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>
                  <button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>`
-              : `<span class="text-slate-300">—</span>`
+              : ""
           }
         </td>
       </tr>`
@@ -206,6 +230,12 @@ export function createHistorial(opts) {
       .join("") || `<tr><td colspan="${columns.length + 1}" class="px-4 py-6 text-center text-slate-400">Sin registros para los filtros aplicados.</td></tr>`;
 
     el(`#${uid}-count`).textContent = `${rows.length} registro(s) mostrados de ${getRows().length} total(es).`;
+
+    el(`#${uid}-body`)
+      .querySelectorAll('[data-act="print"]')
+      .forEach((btn) => {
+        btn.onclick = () => printRegistro(rows.find((r) => r.id === btn.dataset.id));
+      });
 
     if (admin) {
       el(`#${uid}-body`)
