@@ -774,34 +774,74 @@ function mapearFilaImportada(rawRow) {
  */
 
 /**
- * Si el archivo (aunque se llame .xlsx) en realidad nunca se separó en
- * columnas reales — típico cuando un CSV con ";" se abrió en Excel con la
- * configuración regional en "," y luego se guardó tal cual como Excel —
- * cada fila llega con una sola clave gigante ("Nombre;Categoría;...") y un
- * solo valor igual de largo. Se detecta ese caso y se separa a mano en
- * lugar de reportar "sin filas reconocibles".
+ * A partir de la hoja en crudo (filas como arreglos, sin asumir que la fila
+ * 1 es el encabezado) busca la fila que realmente contiene los nombres de
+ * columna de la tabla — muchos reportes traen 1-2 filas de título/subtítulo
+ * arriba, del estilo "REPORTE DE INVENTARIO - UBICACIÓN: OFICINA" — y de
+ * paso intenta extraer el almacén desde esas filas de título si el reporte
+ * es de un solo almacén (sin columna Ubicación/Almacén propia).
+ *
+ * También cubre el caso de un CSV con ";" que Excel no llegó a separar en
+ * columnas (todo el texto quedó en una sola celda por fila): si detecta esa
+ * situación, separa el texto a mano antes de buscar el encabezado real.
  */
-function reconstruirFilasSiVienenSinSeparar(rows) {
-  if (!rows.length) return rows;
-  const keys = Object.keys(rows[0]);
-  if (keys.length !== 1) return rows; // ya viene bien separado en columnas
+function extraerFilasDeHoja(hoja) {
+  let filasCrudas = window.XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "" });
+  if (!filasCrudas.length) return { filas: [], almacenDetectado: "" };
 
-  const encabezadoCombinado = keys[0];
-  const nComas = (encabezadoCombinado.match(/,/g) || []).length;
-  const nPuntoYComa = (encabezadoCombinado.match(/;/g) || []).length;
-  if (!nComas && !nPuntoYComa) return rows; // una sola columna real, no es esto
+  // Caso: cada fila viene como una sola celda con texto delimitado.
+  if (filasCrudas[0].length === 1) {
+    const primeraCelda = String(filasCrudas[0][0] || "");
+    const nComas = (primeraCelda.match(/,/g) || []).length;
+    const nPuntoYComa = (primeraCelda.match(/;/g) || []).length;
+    if (nComas || nPuntoYComa) {
+      const FS = nPuntoYComa > nComas ? ";" : ",";
+      filasCrudas = filasCrudas.map((fila) => String(fila[0] ?? "").split(FS));
+    }
+  }
 
-  const FS = nPuntoYComa > nComas ? ";" : ",";
-  const encabezados = encabezadoCombinado.split(FS).map((h) => h.trim());
+  // Busca la primera fila con al menos 2 celdas que coincidan con algún
+  // alias de columna conocido: esa es la fila de encabezados real de la
+  // tabla (las filas de título antes no van a coincidir con nada).
+  let indiceEncabezado = -1;
+  for (let i = 0; i < filasCrudas.length; i++) {
+    const celdas = filasCrudas[i].map((c) => quitarAcentos(String(c)).trim().toLowerCase());
+    const coincidencias = celdas.filter((c) => Object.values(IMPORT_ALIAS).some((aliases) => aliases.includes(c))).length;
+    if (coincidencias >= 2) {
+      indiceEncabezado = i;
+      break;
+    }
+  }
+  if (indiceEncabezado === -1) return { filas: [], almacenDetectado: "" };
 
-  return rows.map((row) => {
-    const valores = String(row[encabezadoCombinado] ?? "").split(FS);
-    const nuevaFila = {};
-    encabezados.forEach((h, i) => {
-      nuevaFila[h] = (valores[i] ?? "").trim();
+  // Intenta detectar el almacén desde alguna fila de título anterior al
+  // encabezado (ej. "...UBICACIÓN: OFICINA" o "...ALMACÉN: DEPÓSITO").
+  let almacenDetectado = "";
+  for (let i = 0; i < indiceEncabezado; i++) {
+    const texto = quitarAcentos(filasCrudas[i].join(" ")).toLowerCase();
+    const m = /(?:ubicacion|almacen)\s*:?\s*([a-z]+)/.exec(texto);
+    if (m) {
+      const candidato = ALMACENES.find((a) => quitarAcentos(a).toLowerCase() === m[1]);
+      if (candidato) {
+        almacenDetectado = candidato;
+        break;
+      }
+    }
+  }
+
+  const encabezados = filasCrudas[indiceEncabezado].map((h) => String(h).trim());
+  const filas = filasCrudas
+    .slice(indiceEncabezado + 1)
+    .filter((fila) => fila.some((c) => String(c).trim() !== "")) // descarta filas vacías al final
+    .map((fila) => {
+      const obj = {};
+      encabezados.forEach((h, i) => {
+        if (h) obj[h] = fila[i] ?? "";
+      });
+      return obj;
     });
-    return nuevaFila;
-  });
+
+  return { filas, almacenDetectado };
 }
 
 function leerCSV(file) {
@@ -820,8 +860,7 @@ function leerCSV(file) {
         const FS = nPuntoYComa > nComas ? ";" : ",";
         const wb = window.XLSX.read(texto, { type: "string", FS });
         const hoja = wb.Sheets[wb.SheetNames[0]];
-        const filas = window.XLSX.utils.sheet_to_json(hoja, { defval: "" });
-        resolve(reconstruirFilasSiVienenSinSeparar(filas));
+        resolve(extraerFilasDeHoja(hoja));
       } catch (err) {
         reject(err);
       }
@@ -843,8 +882,7 @@ function leerBinario(file) {
         const data = new Uint8Array(e.target.result);
         const wb = window.XLSX.read(data, { type: "array" });
         const hoja = wb.Sheets[wb.SheetNames[0]];
-        const filas = window.XLSX.utils.sheet_to_json(hoja, { defval: "" });
-        resolve(reconstruirFilasSiVienenSinSeparar(filas));
+        resolve(extraerFilasDeHoja(hoja));
       } catch (err) {
         reject(err);
       }
@@ -955,7 +993,14 @@ function setupImportacion() {
       return;
     }
     try {
-      const rows = await leerArchivoImportacion(file);
+      const { filas: rows, almacenDetectado } = await leerArchivoImportacion(file);
+      // Si el reporte trae el almacén en el título (ej. "...UBICACIÓN:
+      // OFICINA") y no hay una columna de Almacén por fila, se preselecciona
+      // automáticamente para que todas las filas lo usen como destino.
+      if (almacenDetectado && almacenDefectoSelect) {
+        almacenDefectoSelect.value = almacenDetectado;
+        toast(`Almacén detectado en el archivo: ${almacenDetectado}.`, "info");
+      }
       const mapeadas = rows.map((r) => mapearFilaImportada(r)).filter((f) => f.nombre || f.categoria || f.cantidad);
       const validadas = mapeadas.map((f) => validarFilaImportacion(f, almacenDefectoSelect?.value || ""));
       renderPreviewImportacion(validadas);
