@@ -78,6 +78,7 @@ export function initInventario() {
   setupEntradaForm();
   setupTransferenciaForm();
   setupDebitoForm();
+  setupImportacion();
 
   document.getElementById("stock-buscar")?.addEventListener("input", renderStockTable);
   document.getElementById("stock-solo-criticos")?.addEventListener("change", renderStockTable);
@@ -692,4 +693,245 @@ export async function deleteDebito(row) {
     console.error(err);
     toast("No se pudo eliminar el débito.", "error");
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Importación masiva de insumos desde Excel/CSV                           */
+/* ---------------------------------------------------------------------- */
+// Encabezados aceptados por columna (sin distinguir tildes/mayúsculas), para
+// tolerar variaciones razonables en cómo alguien nombró las columnas.
+const IMPORT_ALIAS = {
+  nombre: ["nombre", "insumo", "producto", "articulo"],
+  categoria: ["categoria"],
+  cantidad: ["cantidad", "cant", "existencia", "stock"],
+  almacen: ["almacen", "ubicacion", "destino"],
+};
+
+function quitarAcentos(s) {
+  return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function mapearFilaImportada(rawRow) {
+  const found = {};
+  for (const key of Object.keys(rawRow)) {
+    const norm = quitarAcentos(key).trim().toLowerCase();
+    for (const [campo, aliases] of Object.entries(IMPORT_ALIAS)) {
+      if (aliases.includes(norm) && found[campo] === undefined) {
+        found[campo] = rawRow[key];
+      }
+    }
+  }
+  return {
+    nombre: String(found.nombre ?? "").trim(),
+    categoria: String(found.categoria ?? "").trim(),
+    cantidad: found.cantidad === undefined || found.cantidad === "" ? 0 : Number(found.cantidad),
+    almacen: String(found.almacen ?? "").trim(),
+  };
+}
+
+function leerArchivoImportacion(file) {
+  return new Promise((resolve, reject) => {
+    if (!window.XLSX) {
+      reject(new Error("La librería para leer Excel no está disponible."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = window.XLSX.read(data, { type: "array" });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        resolve(window.XLSX.utils.sheet_to_json(hoja, { defval: "" }));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+let filasImportacionValidas = []; // filas listas para procesar tras la vista previa
+
+function validarFilaImportacion(fila, almacenDefecto) {
+  const errores = [];
+  if (!fila.nombre) errores.push("falta el nombre");
+  const cantidad = isNaN(fila.cantidad) ? 0 : fila.cantidad;
+  if (cantidad < 0) errores.push("cantidad inválida");
+
+  let almacenResuelto = fila.almacen;
+  if (almacenResuelto) {
+    const match = ALMACENES.find((a) => quitarAcentos(a).toLowerCase() === quitarAcentos(almacenResuelto).toLowerCase());
+    if (!match) errores.push(`almacén "${fila.almacen}" no reconocido`);
+    almacenResuelto = match || "";
+  } else {
+    almacenResuelto = almacenDefecto;
+  }
+  if (cantidad > 0 && !almacenResuelto) errores.push("falta almacén");
+  if (!fila.categoria) errores.push("falta la categoría");
+
+  const categoriaExiste = getCategoriasInsumos().some((c) => c.nombre.toLowerCase() === fila.categoria.toLowerCase());
+
+  return {
+    ...fila,
+    cantidad,
+    almacenResuelto,
+    categoriaNueva: !!fila.categoria && !categoriaExiste,
+    errores,
+  };
+}
+
+function renderPreviewImportacion(filas) {
+  const root = document.getElementById("importar-preview");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion");
+  if (!root) return;
+
+  if (!filas.length) {
+    root.innerHTML = `<p class="text-xs text-slate-400 italic">Seleccione un archivo para ver la vista previa.</p>`;
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    filasImportacionValidas = [];
+    return;
+  }
+
+  const validas = filas.filter((f) => f.errores.length === 0);
+  filasImportacionValidas = validas;
+
+  root.innerHTML = `
+    <p class="text-xs text-slate-500 mb-2">${validas.length} de ${filas.length} fila(s) lista(s) para importar.</p>
+    <div class="max-h-72 overflow-y-auto border border-slate-200 rounded-md">
+      <table class="min-w-full text-xs">
+        <thead class="bg-slate-50 text-slate-600 sticky top-0">
+          <tr>
+            <th class="text-left px-2 py-1.5">Nombre</th>
+            <th class="text-left px-2 py-1.5">Categoría</th>
+            <th class="text-left px-2 py-1.5">Cantidad</th>
+            <th class="text-left px-2 py-1.5">Almacén</th>
+            <th class="text-left px-2 py-1.5">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filas
+            .map(
+              (f) => `
+          <tr class="border-t border-slate-100 ${f.errores.length ? "bg-red-50" : ""}">
+            <td class="px-2 py-1.5">${escapeHTML(f.nombre) || "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.categoria) || "—"}${f.categoriaNueva && !f.errores.length ? ' <span class="text-amber-600">(nueva)</span>' : ""}</td>
+            <td class="px-2 py-1.5">${f.cantidad}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.almacenResuelto) || "—"}</td>
+            <td class="px-2 py-1.5">${f.errores.length ? `<span class="text-red-700">${escapeHTML(f.errores.join(", "))}</span>` : '<span class="text-emerald-700">OK</span>'}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  if (btnConfirmar) btnConfirmar.disabled = validas.length === 0;
+}
+
+function setupImportacion() {
+  const fileInput = document.getElementById("importar-archivo");
+  const almacenDefectoSelect = document.getElementById("importar-almacen-defecto");
+  const respField = document.getElementById("importar-responsable");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion");
+  if (!fileInput || !btnConfirmar) return;
+
+  if (respField) respField.value = getResponsableLabel();
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      renderPreviewImportacion([]);
+      return;
+    }
+    try {
+      const rows = await leerArchivoImportacion(file);
+      const mapeadas = rows.map((r) => mapearFilaImportada(r)).filter((f) => f.nombre || f.categoria || f.cantidad);
+      const validadas = mapeadas.map((f) => validarFilaImportacion(f, almacenDefectoSelect?.value || ""));
+      renderPreviewImportacion(validadas);
+      if (!mapeadas.length) {
+        toast("No se encontraron filas reconocibles. Verifique los encabezados de las columnas.", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      toast("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx/.xls) o CSV válido.", "error");
+      renderPreviewImportacion([]);
+    }
+  });
+
+  btnConfirmar.addEventListener("click", async () => {
+    if (!filasImportacionValidas.length) return;
+    const responsable = (respField?.value || "").trim() || getResponsableLabel();
+
+    btnConfirmar.disabled = true;
+    const textoOriginal = btnConfirmar.textContent;
+    btnConfirmar.textContent = "Importando...";
+
+    // Copias de trabajo locales de los catálogos: evita crear duplicados
+    // entre filas del mismo archivo aunque la suscripción en tiempo real de
+    // Firestore todavía no haya reflejado lo recién creado en esta misma
+    // corrida de importación.
+    const categoriasCache = new Map(getCategoriasInsumos().map((c) => [c.nombre.toLowerCase(), c]));
+    const insumosCache = new Map(insumos.map((i) => [i.nombre.toLowerCase(), i]));
+
+    let insumosCreados = 0;
+    let entradasRegistradas = 0;
+    let categoriasCreadas = 0;
+    let fallidas = 0;
+
+    for (const fila of filasImportacionValidas) {
+      try {
+        // 1) Categoría: reutilizar o crear.
+        let categoria = categoriasCache.get(fila.categoria.toLowerCase());
+        if (!categoria) {
+          const ref = await createRecord(COLLECTIONS.CATEGORIAS_INSUMOS, { nombre: fila.categoria, activo: true });
+          categoria = { id: ref.id, nombre: fila.categoria };
+          categoriasCache.set(fila.categoria.toLowerCase(), categoria);
+          categoriasCreadas++;
+        }
+
+        // 2) Insumo: reutilizar o crear.
+        let insumo = insumosCache.get(fila.nombre.toLowerCase());
+        if (!insumo) {
+          const ref = await createRecord(COLLECTIONS.INSUMOS, {
+            nombre: fila.nombre,
+            categoriaId: categoria.id,
+            categoriaNombre: categoria.nombre,
+            activo: true,
+          });
+          insumo = { id: ref.id, nombre: fila.nombre, categoriaId: categoria.id, categoriaNombre: categoria.nombre };
+          insumosCache.set(fila.nombre.toLowerCase(), insumo);
+          insumosCreados++;
+        }
+
+        // 3) Existencia inicial: entrada al almacén resuelto.
+        if (fila.cantidad > 0 && fila.almacenResuelto) {
+          await registrarEntrada({
+            insumoId: insumo.id,
+            insumoNombre: insumo.nombre,
+            almacen: fila.almacenResuelto,
+            cantidad: fila.cantidad,
+            responsable,
+            observaciones: "Importación masiva desde archivo",
+            fecha: new Date().toLocaleDateString("en-CA"),
+          });
+          entradasRegistradas++;
+        }
+      } catch (err) {
+        console.error("Error importando fila", fila, err);
+        fallidas++;
+      }
+    }
+
+    toast(
+      `Importación completa: ${insumosCreados} insumo(s) nuevo(s), ${categoriasCreadas} categoría(s) nueva(s), ${entradasRegistradas} entrada(s) registrada(s)${fallidas ? `, ${fallidas} fila(s) con error` : ""}.`,
+      fallidas ? "warning" : "success"
+    );
+
+    btnConfirmar.textContent = textoOriginal;
+    btnConfirmar.disabled = true;
+    filasImportacionValidas = [];
+    fileInput.value = "";
+    renderPreviewImportacion([]);
+  });
 }
