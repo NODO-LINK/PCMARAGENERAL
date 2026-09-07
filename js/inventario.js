@@ -772,6 +772,38 @@ function mapearFilaImportada(rawRow) {
  * latinoamericana) contando cuál aparece más veces en la línea de
  * encabezado, en vez de asumir siempre coma.
  */
+
+/**
+ * Si el archivo (aunque se llame .xlsx) en realidad nunca se separó en
+ * columnas reales — típico cuando un CSV con ";" se abrió en Excel con la
+ * configuración regional en "," y luego se guardó tal cual como Excel —
+ * cada fila llega con una sola clave gigante ("Nombre;Categoría;...") y un
+ * solo valor igual de largo. Se detecta ese caso y se separa a mano en
+ * lugar de reportar "sin filas reconocibles".
+ */
+function reconstruirFilasSiVienenSinSeparar(rows) {
+  if (!rows.length) return rows;
+  const keys = Object.keys(rows[0]);
+  if (keys.length !== 1) return rows; // ya viene bien separado en columnas
+
+  const encabezadoCombinado = keys[0];
+  const nComas = (encabezadoCombinado.match(/,/g) || []).length;
+  const nPuntoYComa = (encabezadoCombinado.match(/;/g) || []).length;
+  if (!nComas && !nPuntoYComa) return rows; // una sola columna real, no es esto
+
+  const FS = nPuntoYComa > nComas ? ";" : ",";
+  const encabezados = encabezadoCombinado.split(FS).map((h) => h.trim());
+
+  return rows.map((row) => {
+    const valores = String(row[encabezadoCombinado] ?? "").split(FS);
+    const nuevaFila = {};
+    encabezados.forEach((h, i) => {
+      nuevaFila[h] = (valores[i] ?? "").trim();
+    });
+    return nuevaFila;
+  });
+}
+
 function leerCSV(file) {
   return new Promise((resolve, reject) => {
     if (!window.XLSX) {
@@ -788,7 +820,8 @@ function leerCSV(file) {
         const FS = nPuntoYComa > nComas ? ";" : ",";
         const wb = window.XLSX.read(texto, { type: "string", FS });
         const hoja = wb.Sheets[wb.SheetNames[0]];
-        resolve(window.XLSX.utils.sheet_to_json(hoja, { defval: "" }));
+        const filas = window.XLSX.utils.sheet_to_json(hoja, { defval: "" });
+        resolve(reconstruirFilasSiVienenSinSeparar(filas));
       } catch (err) {
         reject(err);
       }
@@ -810,7 +843,8 @@ function leerBinario(file) {
         const data = new Uint8Array(e.target.result);
         const wb = window.XLSX.read(data, { type: "array" });
         const hoja = wb.Sheets[wb.SheetNames[0]];
-        resolve(window.XLSX.utils.sheet_to_json(hoja, { defval: "" }));
+        const filas = window.XLSX.utils.sheet_to_json(hoja, { defval: "" });
+        resolve(reconstruirFilasSiVienenSinSeparar(filas));
       } catch (err) {
         reject(err);
       }
