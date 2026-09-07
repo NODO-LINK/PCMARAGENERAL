@@ -424,7 +424,13 @@ function renderStockTable() {
         <td class="px-4 py-2">${escapeHTML(s.insumoNombre)}</td>
         <td class="px-4 py-2">${escapeHTML(s.categoriaNombre)}</td>
         <td class="px-4 py-2 font-medium">${escapeHTML(s.almacen)}</td>
-        <td class="px-4 py-2 ${critico ? "text-red-700 font-semibold" : ""}">${s.existencia}</td>
+        <td class="px-4 py-2 ${critico ? "text-red-700 font-semibold" : ""}">
+          ${
+            admin
+              ? `<input type="number" min="0" value="${s.existencia}" data-id="${s.id}" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm input-existencia" />`
+              : s.existencia
+          }
+        </td>
         <td class="px-4 py-2">
           ${admin ? `<input type="number" min="0" value="${s.minimo ?? 0}" data-id="${s.id}" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm input-minimo" />` : (s.minimo ?? 0)}
         </td>
@@ -435,6 +441,72 @@ function renderStockTable() {
     `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">${buscar || soloCriticos ? "Sin coincidencias para el filtro aplicado." : "Sin existencias registradas."}</td></tr>`;
 
   if (admin) {
+    // Ajuste manual y directo de la existencia (p. ej. tras un conteo
+    // físico), sin tener que pasar por el formulario de Débito o
+    // Transferencia cada vez. Igual queda registrado con trazabilidad: se
+    // genera una Entrada (si sube) o un Débito con motivo "Ajuste de
+    // inventario" (si baja), reutilizando la misma lógica transaccional.
+    tbody.querySelectorAll(".input-existencia").forEach((input) => {
+      input.addEventListener("change", async () => {
+        const row = rows.find((r) => r.id === input.dataset.id);
+        if (!row) return;
+        const actual = Number(row.existencia) || 0;
+        const nuevaExistencia = Number(input.value);
+        if (isNaN(nuevaExistencia) || nuevaExistencia < 0) {
+          toast("Ingrese una cantidad válida.", "error");
+          input.value = actual;
+          return;
+        }
+        const delta = nuevaExistencia - actual;
+        if (delta === 0) return;
+
+        const ok = await confirmDialog({
+          title: "Ajustar existencia",
+          message: `Va a cambiar la existencia de "${escapeHTML(row.insumoNombre)}" en ${escapeHTML(row.almacen)} de ${actual} a ${nuevaExistencia}. Esto se registra como ${delta > 0 ? "una entrada" : "un débito"} de ajuste, con fecha y responsable, igual que cualquier otro movimiento. ¿Continuar?`,
+          confirmText: "Sí, ajustar",
+          danger: delta < 0,
+        });
+        if (!ok) {
+          input.value = actual;
+          return;
+        }
+
+        input.disabled = true;
+        const fechaHoy = new Date().toLocaleDateString("en-CA");
+        try {
+          if (delta > 0) {
+            await registrarEntrada({
+              insumoId: row.insumoId,
+              insumoNombre: row.insumoNombre,
+              almacen: row.almacen,
+              cantidad: delta,
+              responsable: getResponsableLabel(),
+              observaciones: "Ajuste manual de inventario (conteo físico)",
+              fecha: fechaHoy,
+            });
+          } else {
+            await registrarDebito({
+              insumoId: row.insumoId,
+              insumoNombre: row.insumoNombre,
+              almacen: row.almacen,
+              cantidad: -delta,
+              motivo: "Ajuste de inventario (conteo físico)",
+              responsable: getResponsableLabel(),
+              observaciones: "Ajuste manual desde Existencias",
+              fecha: fechaHoy,
+            });
+          }
+          toast(`Existencia ajustada a ${nuevaExistencia} (quedó registrado en ${delta > 0 ? "Entradas" : "Débitos"}).`, "success");
+        } catch (err) {
+          console.error(err);
+          toast(err.message || "No se pudo ajustar la existencia.", "error");
+          input.value = actual;
+        } finally {
+          input.disabled = false;
+        }
+      });
+    });
+
     tbody.querySelectorAll(".input-minimo").forEach((input) => {
       input.addEventListener("change", async () => {
         try {

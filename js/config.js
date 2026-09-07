@@ -90,6 +90,7 @@ export const MOTIVOS_DEBITO_INVENTARIO = [
   "Vencimiento",
   "Daño / Pérdida",
   "Donación saliente",
+  "Ajuste de inventario (conteo físico)",
   "Otro",
 ];
 
