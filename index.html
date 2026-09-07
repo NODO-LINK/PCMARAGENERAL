@@ -552,7 +552,8 @@
               <div>
                 <label class="form-label">Insumo</label>
                 <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
-                <select required name="insumoId" class="form-input select-insumo"></select>
+                <select required name="insumoId" class="form-input select-insumo" data-filtrar-por-almacen="almacenOrigen"></select>
+                <p class="text-xs text-slate-400 mt-1">Solo se muestran insumos con existencia en el almacén elegido.</p>
               </div>
               <div><label class="form-label">Almacén</label><select required name="almacenOrigen" class="form-input select-almacen"></select></div>
               <div><label class="form-label">Cantidad</label><input required type="number" min="1" name="cantidad" class="form-input" /></div>

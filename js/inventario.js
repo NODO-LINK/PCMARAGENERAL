@@ -75,6 +75,7 @@ export function initInventario() {
   populateAlmacenSelects();
   populateMotivoDebitoSelect();
   setupInsumoSearchInputs();
+  setupAlmacenFiltroInsumo();
   setupInsumoForm();
   setupEntradaForm();
   setupTransferenciaForm();
@@ -94,6 +95,10 @@ export function initInventario() {
   subscribeCollection(COLLECTIONS.INSUMO_STOCK, "insumoNombre", (rows) => {
     stock = rows;
     renderStockTable();
+    // La lista de insumos del formulario de Débito depende de la existencia
+    // por almacén: si cambia (p. ej. una entrada agrega stock nuevo a un
+    // almacén), hay que refrescarla para que aparezca sin recargar la página.
+    populateInsumoSelects();
   });
 
   entradasHistorial = subscribeCollection(COLLECTIONS.ENTRADAS_INVENTARIO, "fecha", (rows) => {
@@ -203,10 +208,21 @@ function populateCategoriaInsumoSelect() {
  * (<optgroup>) y opcionalmente filtradas por texto (nombre o categoría) —
  * así la lista es manejable aunque haya muchísimos insumos y se usen
  * decenas al día.
+ *
+ * Si se indica `almacenFiltro`, además se limita la lista a los insumos
+ * que tienen existencia mayor a 0 en ese almacén (usado en el formulario de
+ * Débito, para no poder elegir por error un insumo que no hay en el
+ * almacén de donde se está sacando).
  */
-function buildInsumoOptionsHTML(filterText = "") {
+function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
   const term = filterText.trim().toLowerCase();
-  const activos = insumos.filter((i) => i.activo !== false);
+  let activos = insumos.filter((i) => i.activo !== false);
+  if (almacenFiltro) {
+    const conExistencia = new Set(
+      stock.filter((s) => s.almacen === almacenFiltro && Number(s.existencia) > 0).map((s) => s.insumoId)
+    );
+    activos = activos.filter((i) => conExistencia.has(i.id));
+  }
   const coincide = (i) => i.nombre.toLowerCase().includes(term) || (i.categoriaNombre || "").toLowerCase().includes(term);
   const visibles = term ? activos.filter(coincide) : activos;
 
@@ -226,14 +242,28 @@ function buildInsumoOptionsHTML(filterText = "") {
       .join("");
     html += `</optgroup>`;
   });
-  if (term && !visibles.length) html += `<option value="" disabled>Sin coincidencias para "${escapeHTML(filterText)}"</option>`;
+  if (term && !visibles.length) {
+    html += `<option value="" disabled>Sin coincidencias para "${escapeHTML(filterText)}"</option>`;
+  } else if (almacenFiltro && !visibles.length) {
+    html += `<option value="" disabled>Sin insumos con existencia en ${escapeHTML(almacenFiltro)}</option>`;
+  }
   return html;
+}
+
+/** Si el <select> de insumo trae `data-filtrar-por-almacen`, devuelve el
+ * valor actual del <select> de almacén que lo acompaña en el mismo
+ * formulario (o "" si no aplica ese filtro). */
+function getAlmacenFiltroDeSelect(sel) {
+  const campo = sel.dataset.filtrarPorAlmacen;
+  if (!campo) return "";
+  const form = sel.closest("form");
+  return form?.elements[campo]?.value || "";
 }
 
 function populateInsumoSelects() {
   document.querySelectorAll("select.select-insumo").forEach((sel) => {
     const searchInput = sel.parentElement?.querySelector(".insumo-search");
-    sel.innerHTML = buildInsumoOptionsHTML(searchInput ? searchInput.value : "");
+    sel.innerHTML = buildInsumoOptionsHTML(searchInput ? searchInput.value : "", getAlmacenFiltroDeSelect(sel));
   });
 }
 
@@ -242,7 +272,24 @@ function setupInsumoSearchInputs() {
   document.querySelectorAll(".insumo-search").forEach((input) => {
     input.addEventListener("input", () => {
       const sel = input.parentElement?.querySelector("select.select-insumo");
-      if (sel) sel.innerHTML = buildInsumoOptionsHTML(input.value);
+      if (sel) sel.innerHTML = buildInsumoOptionsHTML(input.value, getAlmacenFiltroDeSelect(sel));
+    });
+  });
+}
+
+/**
+ * Para los <select> de insumo marcados con `data-filtrar-por-almacen`,
+ * refresca la lista de insumos cada vez que cambia el almacén asociado en
+ * el mismo formulario.
+ */
+function setupAlmacenFiltroInsumo() {
+  document.querySelectorAll("select.select-insumo[data-filtrar-por-almacen]").forEach((sel) => {
+    const campo = sel.dataset.filtrarPorAlmacen;
+    const almacenSelect = sel.closest("form")?.elements[campo];
+    if (!almacenSelect) return;
+    almacenSelect.addEventListener("change", () => {
+      const searchInput = sel.parentElement?.querySelector(".insumo-search");
+      sel.innerHTML = buildInsumoOptionsHTML(searchInput ? searchInput.value : "", almacenSelect.value);
     });
   });
 }
