@@ -79,14 +79,15 @@ export function initEmergencias() {
       { key: "nombrePaciente", label: "Nombre del paciente" },
       { key: "cedulaPaciente", label: "Cédula" },
       { key: "edadPaciente", label: "Edad" },
-      { key: "centroDestino", label: "Institución / Centro destino", format: (r) => r.institucionNombre || r.centroDestino || "—" },
+      { key: "centroDestino", label: "Institución", format: (r) => r.institucionNombre || r.centroDestino || "—" },
       { key: "unidad", label: "Unidad" },
       { key: "responsable", label: "Responsable" },
     ],
     beforeSave: (data) => {
-      // "Institución / Centro de destino" se selecciona del catálogo maestro
-      // (igual que en Combustible) para poder contar cuántos traslados se le
-      // hicieron a cada institución registrada.
+      // La "Institución" se selecciona del catálogo maestro (igual que en
+      // Combustible) para poder contar cuántos traslados se le hicieron a
+      // cada institución registrada. Es obligatoria para todo traslado,
+      // sin importar el tipo (Apoyo o Interhospitalario).
       const select = trasladosForm.elements["institucionId"];
       const opt = select ? select.options[select.selectedIndex] : null;
       data.institucionNombre = opt && opt.value ? opt.dataset.nombre : "";
@@ -116,15 +117,6 @@ export function initEmergencias() {
       return data;
     },
   });
-
-  // Mostrar/ocultar campo "Centro de destino" según el tipo de traslado.
-  const tipoTraslado = document.getElementById("traslado-tipo");
-  const centroWrap = document.getElementById("traslado-centro-wrap");
-  if (tipoTraslado && centroWrap) {
-    const toggle = () => centroWrap.classList.toggle("hidden", tipoTraslado.value !== "Interhospitalario");
-    tipoTraslado.addEventListener("change", toggle);
-    toggle();
-  }
 
   modules = { pacientes, traslados, fallecidos };
   setupListaDiaria(pacientes);
@@ -508,10 +500,11 @@ function validarFilaTraslado(fila, responsableDefecto) {
   const responsableResuelto = fila.responsable || responsableDefecto;
   if (!responsableResuelto) errores.push("falta el responsable");
 
-  // Si el texto de "Centro destino" coincide con el nombre de una
-  // institución del catálogo, el traslado queda vinculado a ella (cuenta en
-  // su estadística); si no coincide con ninguna, se guarda igual como texto
-  // libre, solo que sin vínculo con el catálogo.
+  // La institución es obligatoria para todo traslado (igual que en el
+  // formulario manual). Si el texto de "Centro destino" coincide con el
+  // nombre de una institución del catálogo, el traslado queda vinculado a
+  // ella (cuenta en su estadística); si no coincide con ninguna, se guarda
+  // igual como texto libre, solo que sin vínculo con el catálogo.
   let institucionId = "";
   let institucionNombreResuelto = "";
   if (fila.centroDestino) {
@@ -524,6 +517,8 @@ function validarFilaTraslado(fila, responsableDefecto) {
     } else {
       institucionNombreResuelto = fila.centroDestino;
     }
+  } else {
+    errores.push("falta la institución");
   }
 
   return {
@@ -567,7 +562,7 @@ function renderPreviewImportacionTraslados(filas) {
             <th class="text-left px-2 py-1.5">Cédula</th>
             <th class="text-left px-2 py-1.5">Edad</th>
             <th class="text-left px-2 py-1.5">Unidad</th>
-            <th class="text-left px-2 py-1.5">Institución / Centro destino</th>
+            <th class="text-left px-2 py-1.5">Institución</th>
             <th class="text-left px-2 py-1.5">Responsable</th>
             <th class="text-left px-2 py-1.5">Estado</th>
           </tr>
