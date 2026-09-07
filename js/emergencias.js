@@ -24,6 +24,7 @@ import { subscribeCollection, createRecord } from "./data.js";
 import { registrarDebito, deleteDebito } from "./inventario.js";
 import { isAdmin, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
+import { getInstituciones } from "./catalogos.js";
 
 let modules = null;
 
@@ -64,9 +65,10 @@ export function initEmergencias() {
     },
   });
 
+  const trasladosForm = document.getElementById("form-traslados");
   const traslados = createCrudModule({
     collectionName: COLLECTIONS.TRASLADOS,
-    form: document.getElementById("form-traslados"),
+    form: trasladosForm,
     historialRoot: document.getElementById("historial-traslados"),
     dateField: "fecha",
     historialTitle: "Historial de Traslados",
@@ -77,10 +79,19 @@ export function initEmergencias() {
       { key: "nombrePaciente", label: "Nombre del paciente" },
       { key: "cedulaPaciente", label: "Cédula" },
       { key: "edadPaciente", label: "Edad" },
-      { key: "centroDestino", label: "Centro destino" },
+      { key: "centroDestino", label: "Institución / Centro destino", format: (r) => r.institucionNombre || r.centroDestino || "—" },
       { key: "unidad", label: "Unidad" },
       { key: "responsable", label: "Responsable" },
     ],
+    beforeSave: (data) => {
+      // "Institución / Centro de destino" se selecciona del catálogo maestro
+      // (igual que en Combustible) para poder contar cuántos traslados se le
+      // hicieron a cada institución registrada.
+      const select = trasladosForm.elements["institucionId"];
+      const opt = select ? select.options[select.selectedIndex] : null;
+      data.institucionNombre = opt && opt.value ? opt.dataset.nombre : "";
+      return data;
+    },
   });
 
   const fallecidos = createCrudModule({
@@ -439,7 +450,7 @@ function renderInsumosUsadosTable() {
 const TRASLADO_ALIAS = {
   fecha: ["fecha", "fechahora", "fecha/hora", "fecha y hora"],
   tipo: ["tipo", "tipodetraslado", "tipo de traslado"],
-  centroDestino: ["centrodestino", "centro", "destino", "centrodesalud", "centro de salud de destino"],
+  centroDestino: ["centrodestino", "centro destino", "centro", "destino", "institucion", "centrodesalud", "centro de salud de destino", "centro de salud", "centro de salud destino"],
   nombrePaciente: ["nombre", "paciente", "nombrepaciente", "nombre del paciente"],
   cedulaPaciente: ["cedula", "ci", "cedulapaciente", "cedula del paciente"],
   edadPaciente: ["edad", "edadpaciente"],
@@ -497,12 +508,32 @@ function validarFilaTraslado(fila, responsableDefecto) {
   const responsableResuelto = fila.responsable || responsableDefecto;
   if (!responsableResuelto) errores.push("falta el responsable");
 
+  // Si el texto de "Centro destino" coincide con el nombre de una
+  // institución del catálogo, el traslado queda vinculado a ella (cuenta en
+  // su estadística); si no coincide con ninguna, se guarda igual como texto
+  // libre, solo que sin vínculo con el catálogo.
+  let institucionId = "";
+  let institucionNombreResuelto = "";
+  if (fila.centroDestino) {
+    const candidato = getInstituciones().find(
+      (i) => quitarAcentos(i.nombre).trim().toLowerCase() === quitarAcentos(fila.centroDestino).trim().toLowerCase()
+    );
+    if (candidato) {
+      institucionId = candidato.id;
+      institucionNombreResuelto = candidato.nombre;
+    } else {
+      institucionNombreResuelto = fila.centroDestino;
+    }
+  }
+
   return {
     ...fila,
     tipoResuelto,
     fechaResuelta,
     fechaTexto: fechaResuelta ? formatFechaHoraLocal(fechaResuelta) : "",
     responsableResuelto,
+    institucionId,
+    institucionNombreResuelto,
     errores,
   };
 }
@@ -536,6 +567,7 @@ function renderPreviewImportacionTraslados(filas) {
             <th class="text-left px-2 py-1.5">Cédula</th>
             <th class="text-left px-2 py-1.5">Edad</th>
             <th class="text-left px-2 py-1.5">Unidad</th>
+            <th class="text-left px-2 py-1.5">Institución / Centro destino</th>
             <th class="text-left px-2 py-1.5">Responsable</th>
             <th class="text-left px-2 py-1.5">Estado</th>
           </tr>
@@ -551,6 +583,7 @@ function renderPreviewImportacionTraslados(filas) {
             <td class="px-2 py-1.5">${escapeHTML(f.cedulaPaciente) || "—"}</td>
             <td class="px-2 py-1.5">${f.edadPaciente === "" ? "—" : f.edadPaciente}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.unidad) || "—"}</td>
+            <td class="px-2 py-1.5">${escapeHTML(f.institucionNombreResuelto) || "—"}${f.institucionNombreResuelto && !f.institucionId ? ' <span class="text-amber-600">(sin vincular)</span>' : ""}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.responsableResuelto) || "—"}</td>
             <td class="px-2 py-1.5">${f.errores.length ? `<span class="text-red-700">${escapeHTML(f.errores.join(", "))}</span>` : '<span class="text-emerald-700">OK</span>'}</td>
           </tr>`
@@ -607,7 +640,8 @@ function setupImportacionTraslados() {
         await createRecord(COLLECTIONS.TRASLADOS, {
           fecha: fila.fechaTexto,
           tipo: fila.tipoResuelto,
-          centroDestino: fila.centroDestino,
+          institucionId: fila.institucionId,
+          institucionNombre: fila.institucionNombreResuelto,
           nombrePaciente: fila.nombrePaciente,
           cedulaPaciente: fila.cedulaPaciente,
           edadPaciente: fila.edadPaciente,

@@ -19,6 +19,11 @@ import { isAdmin } from "./auth.js";
 
 let instituciones = [];
 let categoriasInsumos = [];
+// Conteos por institución (despachos de combustible y traslados hechos a
+// instituciones registradas), usados solo para la columna informativa de
+// la tabla del catálogo — no requieren su propio módulo de suscripción.
+let despachosCombustible = [];
+let trasladosInstitucion = [];
 const listeners = { instituciones: [], categoriasInsumos: [] };
 
 export function getInstituciones() {
@@ -40,6 +45,17 @@ export function initCatalogos() {
     listeners.instituciones.forEach((cb) => cb(rows));
     renderInstitucionesTable();
     renderInstitucionesSelects();
+  });
+
+  // Solo para calcular la columna de conteo por institución en la tabla del
+  // catálogo (cuántos despachos de combustible y traslados se le hicieron).
+  subscribeCollection(COLLECTIONS.DESPACHOS_COMBUSTIBLE, "fecha", (rows) => {
+    despachosCombustible = rows;
+    renderInstitucionesTable();
+  });
+  subscribeCollection(COLLECTIONS.TRASLADOS, "fecha", (rows) => {
+    trasladosInstitucion = rows;
+    renderInstitucionesTable();
   });
 
   subscribeCollection(COLLECTIONS.CATEGORIAS_INSUMOS, "nombre", (rows) => {
@@ -92,11 +108,15 @@ function renderInstitucionesTable() {
   const admin = isAdmin();
   tbody.innerHTML =
     instituciones
-      .map(
-        (i) => `
+      .map((i) => {
+        const cantCombustible = despachosCombustible.filter((d) => d.institucionId === i.id).length;
+        const cantTraslados = trasladosInstitucion.filter((t) => t.institucionId === i.id).length;
+        return `
       <tr class="border-t border-slate-100">
         <td class="px-4 py-2">${i.nombre}</td>
         <td class="px-4 py-2">${i.categoria}</td>
+        <td class="px-4 py-2 text-center">${cantCombustible}</td>
+        <td class="px-4 py-2 text-center">${cantTraslados}</td>
         <td class="px-4 py-2">${i.activo === false ? '<span class="text-red-600">Inactiva</span>' : '<span class="text-emerald-600">Activa</span>'}</td>
         <td class="px-4 py-2">
           ${
@@ -106,9 +126,9 @@ function renderInstitucionesTable() {
               : "—"
           }
         </td>
-      </tr>`
-      )
-      .join("") || `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Catálogo vacío.</td></tr>`;
+      </tr>`;
+      })
+      .join("") || `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Catálogo vacío.</td></tr>`;
 
   if (admin) {
     tbody.querySelectorAll('[data-act="toggle"]').forEach((btn) => {
