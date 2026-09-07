@@ -144,6 +144,7 @@ export function createHistorial(opts) {
             <input type="text" id="${uid}-q" placeholder="Texto..." class="border border-slate-300 rounded-md px-2 py-1 text-sm" />
           </div>
           <button id="${uid}-print" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900">${getIcon("impresora")}Imprimir</button>
+          <button id="${uid}-print-sel" disabled class="px-3 py-1.5 text-xs rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">${getIcon("impresora")}Imprimir selección</button>
           <button id="${uid}-xlsx" class="px-3 py-1.5 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800">${getIcon("descargar")}Excel</button>
           <button id="${uid}-pdf" class="px-3 py-1.5 text-xs rounded-md bg-red-700 text-white hover:bg-red-800">${getIcon("descargar")}PDF</button>
         </div>
@@ -153,6 +154,7 @@ export function createHistorial(opts) {
         <table class="min-w-full text-sm">
           <thead class="bg-slate-50 text-slate-600">
             <tr>
+              <th class="px-4 py-2 no-print"><input type="checkbox" id="${uid}-check-all" title="Seleccionar todos los visibles" /></th>
               ${columns.map((c) => `<th class="text-left font-medium px-4 py-2 whitespace-nowrap">${c.label}</th>`).join("")}
               <th class="text-left font-medium px-4 py-2 no-print">Acciones</th>
             </tr>
@@ -185,14 +187,14 @@ export function createHistorial(opts) {
     });
   }
 
-  // Imprime UN solo registro como documento institucional (cintillo + una
-  // ficha con todos sus campos + firmas), reutilizando printAdHoc — así,
-  // además de imprimir la tabla completa, cualquier registro puede
-  // imprimirse individualmente (disponible para Operador y Administrador).
-  function printRegistro(row) {
-    if (!row) return;
-    const bodyHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+  // Conjunto de ids marcados con el checkbox de cada fila, para "Imprimir
+  // selección" (imprimir varios registros elegidos a la vez, sin tener que
+  // hacerlo uno por uno ni imprimir la tabla completa).
+  const selectedIds = new Set();
+
+  function registroTableHTML(row) {
+    return `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <tbody>
           ${columns
             .map(
@@ -205,16 +207,52 @@ export function createHistorial(opts) {
             .join("")}
         </tbody>
       </table>`;
-    printAdHoc(`${title} — Registro Individual`, bodyHTML, firmas);
+  }
+
+  // Imprime UN solo registro como documento institucional (cintillo + una
+  // ficha con todos sus campos + firmas), reutilizando printAdHoc — así,
+  // además de imprimir la tabla completa, cualquier registro puede
+  // imprimirse individualmente (disponible para Operador y Administrador).
+  function printRegistro(row) {
+    if (!row) return;
+    printAdHoc(`${title} — Registro Individual`, `<div style="margin-top:8px;">${registroTableHTML(row)}</div>`, firmas);
+  }
+
+  // Imprime SOLO los registros marcados con el checkbox, cada uno como su
+  // propia ficha dentro de un mismo documento (con cintillo y firmas una
+  // sola vez) — para imprimir, por ejemplo, 3 o 6 registros puntuales sin
+  // sacar la tabla completa ni repetir la impresión una por una.
+  function printSeleccionados() {
+    const rows = getRows().filter((r) => selectedIds.has(r.id));
+    if (!rows.length) return;
+    const bodyHTML = rows
+      .map(
+        (row, idx) => `
+      <div style="${idx > 0 ? "margin-top:22px;page-break-inside:avoid;" : "margin-top:8px;"}">
+        <div style="font-weight:bold;font-size:12px;color:#475569;margin-bottom:4px;">Registro ${idx + 1} de ${rows.length}</div>
+        ${registroTableHTML(row)}
+      </div>`
+      )
+      .join("");
+    printAdHoc(`${title} — ${rows.length} Registro(s) Seleccionado(s)`, bodyHTML, firmas);
   }
 
   function render() {
     const rows = filteredRows();
     const admin = isAdmin();
+
+    // Depura la selección: descarta ids de registros que ya no existen
+    // (p. ej. porque un administrador los eliminó).
+    const idsVigentes = new Set(getRows().map((r) => r.id));
+    [...selectedIds].forEach((id) => {
+      if (!idsVigentes.has(id)) selectedIds.delete(id);
+    });
+
     el(`#${uid}-body`).innerHTML = rows
       .map(
         (row) => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
+        <td class="px-4 py-2 no-print"><input type="checkbox" class="row-check" data-id="${row.id}" ${selectedIds.has(row.id) ? "checked" : ""} /></td>
         ${columns.map((c) => `<td class="px-4 py-2 align-top">${escapeHTML(c.format ? c.format(row) : row[c.key] ?? "—")}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
@@ -227,9 +265,28 @@ export function createHistorial(opts) {
         </td>
       </tr>`
       )
-      .join("") || `<tr><td colspan="${columns.length + 1}" class="px-4 py-6 text-center text-slate-400">Sin registros para los filtros aplicados.</td></tr>`;
+      .join("") || `<tr><td colspan="${columns.length + 2}" class="px-4 py-6 text-center text-slate-400">Sin registros para los filtros aplicados.</td></tr>`;
 
     el(`#${uid}-count`).textContent = `${rows.length} registro(s) mostrados de ${getRows().length} total(es).`;
+
+    el(`#${uid}-body`)
+      .querySelectorAll(".row-check")
+      .forEach((cb) => {
+        cb.onchange = () => {
+          if (cb.checked) selectedIds.add(cb.dataset.id);
+          else selectedIds.delete(cb.dataset.id);
+          render();
+        };
+      });
+
+    const checkAll = el(`#${uid}-check-all`);
+    if (checkAll) {
+      const seleccionadosVisibles = rows.filter((r) => selectedIds.has(r.id)).length;
+      checkAll.checked = rows.length > 0 && seleccionadosVisibles === rows.length;
+      checkAll.indeterminate = seleccionadosVisibles > 0 && seleccionadosVisibles < rows.length;
+    }
+    const printSelBtn = el(`#${uid}-print-sel`);
+    if (printSelBtn) printSelBtn.disabled = selectedIds.size === 0;
 
     el(`#${uid}-body`)
       .querySelectorAll('[data-act="print"]')
@@ -254,7 +311,13 @@ export function createHistorial(opts) {
   el(`#${uid}-desde`).addEventListener("change", render);
   el(`#${uid}-hasta`).addEventListener("change", render);
   el(`#${uid}-q`).addEventListener("input", render);
+  el(`#${uid}-check-all`).addEventListener("change", (e) => {
+    const checked = e.target.checked;
+    filteredRows().forEach((r) => (checked ? selectedIds.add(r.id) : selectedIds.delete(r.id)));
+    render();
+  });
   el(`#${uid}-print`).addEventListener("click", () => printElement(root, title));
+  el(`#${uid}-print-sel`).addEventListener("click", printSeleccionados);
   el(`#${uid}-xlsx`).addEventListener("click", () =>
     exportToExcel(exportFileName || title, columns, filteredRows())
   );

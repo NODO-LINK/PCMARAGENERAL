@@ -82,7 +82,7 @@ export const NIVEL_HIDRO_MIN = 0;
 export const NIVEL_HIDRO_MAX = 9;
 
 // Tipos de combustible fijos para el módulo de Despacho de Combustible.
-export const TIPOS_COMBUSTIBLE = ["Gasolina", "Gasoil"];
+export const TIPOS_COMBUSTIBLE = ["Gasolina", "Diesel"];
 
 // Motivos fijos para un débito (salida/consumo) de inventario.
 export const MOTIVOS_DEBITO_INVENTARIO = [

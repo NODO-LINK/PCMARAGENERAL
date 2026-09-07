@@ -47,6 +47,7 @@ export function createCrudModule(cfg) {
 
   let rows = [];
   let editingId = null;
+  let editingDateValue = null; // valor de dateField del registro que se está editando (para detectar si lo cambian)
 
   // Autocompletar responsable con el usuario actual si el campo existe y está vacío.
   const responsableField = form.elements[responsableFieldName];
@@ -58,8 +59,21 @@ export function createCrudModule(cfg) {
   const submitBtn = form.querySelector('[type="submit"]');
   const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Guardar";
 
+  // Aviso visual de "modo edición": sin esto, un operador puede pulsar
+  // "Editar" en el historial para revisar un registro, olvidarlo, y luego
+  // terminar sobrescribiendo ESE registro con los datos de uno nuevo (p. ej.
+  // en la Lista Diaria, reemplazando por error la planilla de otro día en
+  // vez de crear una nueva) — el botón cambia de texto, pero eso es fácil
+  // de pasar por alto.
+  const editBanner = document.createElement("div");
+  editBanner.className = "hidden mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-sm";
+  editBanner.textContent = 'Editando un registro existente: al guardar, reemplazará ese registro (no crea uno nuevo). Para agregar un registro nuevo, pulse "Cancelar edición" primero.';
+  form.prepend(editBanner);
+
   function exitEditMode() {
     editingId = null;
+    editingDateValue = null;
+    editBanner.classList.add("hidden");
     form.reset();
     form.querySelectorAll("select").forEach((s) => s.dispatchEvent(new Event("change")));
     if (responsableField) responsableField.value = getResponsableLabel();
@@ -80,6 +94,24 @@ export function createCrudModule(cfg) {
     let data = formToObject(form);
     if (beforeSave) data = beforeSave(data, form);
     if (!data) return; // beforeSave puede cancelar el guardado devolviendo null
+
+    // Si se está editando y la fecha del formulario ya no coincide con la
+    // del registro original, es la señal más clara de que el operador en
+    // realidad quiere crear un registro NUEVO (para otra fecha) y olvidó
+    // salir del modo edición — sin este aviso, guardar reemplazaría en
+    // silencio el registro original por el de la fecha nueva.
+    if (editingId && dateField && editingDateValue !== null) {
+      const nuevaFecha = String(data[dateField] ?? "");
+      if (nuevaFecha !== editingDateValue) {
+        const ok = await confirmDialog({
+          title: "¿Reemplazar el registro editado?",
+          message: `Está editando el registro guardado con fecha <strong>${editingDateValue}</strong> y lo va a guardar con fecha <strong>${nuevaFecha}</strong>: el registro original de ${editingDateValue} quedará reemplazado por este, no se creará uno nuevo. Si quería agregar un registro aparte para ${nuevaFecha}, pulse Cancelar y luego "Cancelar edición".`,
+          confirmText: "Sí, reemplazar el registro",
+          danger: true,
+        });
+        if (!ok) return;
+      }
+    }
 
     try {
       if (editingId) {
@@ -108,6 +140,7 @@ export function createCrudModule(cfg) {
     onEdit: (row) => {
       if (!row) return;
       editingId = row.id;
+      editingDateValue = dateField ? String(row[dateField] ?? "") : null;
       setFormValues(form, row);
       // Dispara "change" en los <select> del formulario para que cualquier
       // lógica condicional dependiente (p. ej. mostrar/ocultar "Centro de
@@ -116,6 +149,7 @@ export function createCrudModule(cfg) {
       form.querySelectorAll("select").forEach((s) => s.dispatchEvent(new Event("change")));
       if (submitBtn) submitBtn.textContent = "Guardar cambios";
       if (cancelBtn) cancelBtn.classList.remove("hidden");
+      editBanner.classList.remove("hidden");
       form.scrollIntoView({ behavior: "smooth", block: "start" });
       toast("Editando registro. Realice los cambios y guarde.", "info");
     },
