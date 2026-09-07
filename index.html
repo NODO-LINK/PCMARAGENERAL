@@ -463,7 +463,7 @@
           <div class="form-card role-admin-only hidden">
             <h3 class="font-semibold text-slate-700 mb-1">Importar insumos desde Excel/CSV</h3>
             <p class="text-xs text-slate-500 mb-3">
-              El archivo debe tener columnas <strong>Nombre</strong>, <strong>Categoría</strong>, <strong>Cantidad</strong> y opcionalmente <strong>Almacén</strong> (si no la trae, se usa el almacén seleccionado abajo para todas las filas). Si una categoría no existe todavía, se crea automáticamente; si el insumo ya existe, solo se le suma la cantidad como una entrada nueva.
+              El archivo debe tener columnas <strong>Nombre</strong>, <strong>Categoría</strong>, <strong>Existencia</strong> (cantidad) y opcionalmente <strong>Ubicación</strong>/Almacén y <strong>Mínimo</strong> (nivel crítico). Si no trae Ubicación, se usa el almacén seleccionado abajo para todas las filas. Un mismo insumo puede repetirse una fila por cada almacén (así se cargan las 4 existencias por separado). Si una categoría no existe todavía, se crea automáticamente; si el insumo ya existe, solo se le suma la cantidad como una entrada nueva. Se aceptan CSV separados por coma o por punto y coma.
             </p>
             <div class="form-grid">
               <div><label class="form-label">Archivo (.xlsx, .xls o .csv)</label><input type="file" id="importar-archivo" accept=".xlsx,.xls,.csv" class="form-input" /></div>

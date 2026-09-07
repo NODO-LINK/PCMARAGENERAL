@@ -409,7 +409,7 @@ function setupEntradaForm() {
   });
 }
 
-async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, responsable, observaciones, fecha }) {
+async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, responsable, observaciones, fecha, minimo }) {
   const stockId = stockDocId(insumoId, almacen);
   const insumo = insumos.find((i) => i.id === insumoId);
 
@@ -417,6 +417,9 @@ async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, res
     const stockRef = doc(db, COLLECTIONS.INSUMO_STOCK, stockId);
     const stockSnap = await tx.get(stockRef);
     const existenciaActual = stockSnap.exists() ? Number(stockSnap.data().existencia) || 0 : 0;
+    // `minimo` solo se sobrescribe si se pasó explícitamente (p. ej. desde la
+    // importación masiva); el alta manual normal no lo toca.
+    const minimoFinal = minimo !== undefined ? minimo : stockSnap.exists() ? stockSnap.data().minimo ?? 0 : 0;
     tx.set(
       stockRef,
       {
@@ -426,7 +429,7 @@ async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, res
         categoriaNombre: insumo?.categoriaNombre || "",
         almacen,
         existencia: existenciaActual + cantidad,
-        minimo: stockSnap.exists() ? stockSnap.data().minimo ?? 0 : 0,
+        minimo: minimoFinal,
         updatedAt: serverTimestamp(),
       },
       { merge: true }
@@ -445,6 +448,38 @@ async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, res
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
     createdByEmail: user?.email || null,
+  });
+}
+
+/**
+ * Fija el nivel mínimo crítico de un insumo en un almacén sin generar un
+ * movimiento de existencias (para cuando la importación trae el mínimo
+ * pero no trae cantidad que ingresar). Si el documento de stock aún no
+ * existe, lo crea con existencia 0.
+ */
+async function establecerMinimoStock({ insumoId, insumoNombre, almacen, minimo }) {
+  const stockId = stockDocId(insumoId, almacen);
+  const insumo = insumos.find((i) => i.id === insumoId);
+  const stockRef = doc(db, COLLECTIONS.INSUMO_STOCK, stockId);
+  await updateDoc(stockRef, { minimo, updatedAt: serverTimestamp() }).catch(async () => {
+    // El documento todavía no existe (insumo sin existencias en este
+    // almacén): se crea con existencia 0.
+    await runTransaction(db, async (tx) => {
+      tx.set(
+        stockRef,
+        {
+          insumoId,
+          insumoNombre,
+          categoriaId: insumo?.categoriaId || "",
+          categoriaNombre: insumo?.categoriaNombre || "",
+          almacen,
+          existencia: 0,
+          minimo,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
   });
 }
 
@@ -705,6 +740,7 @@ const IMPORT_ALIAS = {
   categoria: ["categoria"],
   cantidad: ["cantidad", "cant", "existencia", "stock"],
   almacen: ["almacen", "ubicacion", "destino"],
+  minimo: ["minimo", "minimocritico", "min"],
 };
 
 function quitarAcentos(s) {
@@ -726,10 +762,43 @@ function mapearFilaImportada(rawRow) {
     categoria: String(found.categoria ?? "").trim(),
     cantidad: found.cantidad === undefined || found.cantidad === "" ? 0 : Number(found.cantidad),
     almacen: String(found.almacen ?? "").trim(),
+    minimo: found.minimo === undefined || found.minimo === "" ? undefined : Number(found.minimo),
   };
 }
 
-function leerArchivoImportacion(file) {
+/**
+ * Lee un .csv como texto y detecta si el separador de columnas es coma o
+ * punto y coma (muy común en exportes en español/configuración regional
+ * latinoamericana) contando cuál aparece más veces en la línea de
+ * encabezado, en vez de asumir siempre coma.
+ */
+function leerCSV(file) {
+  return new Promise((resolve, reject) => {
+    if (!window.XLSX) {
+      reject(new Error("La librería para leer Excel no está disponible."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const texto = e.target.result;
+        const primeraLinea = texto.split(/\r?\n/)[0] || "";
+        const nComas = (primeraLinea.match(/,/g) || []).length;
+        const nPuntoYComa = (primeraLinea.match(/;/g) || []).length;
+        const FS = nPuntoYComa > nComas ? ";" : ",";
+        const wb = window.XLSX.read(texto, { type: "string", FS });
+        const hoja = wb.Sheets[wb.SheetNames[0]];
+        resolve(window.XLSX.utils.sheet_to_json(hoja, { defval: "" }));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+function leerBinario(file) {
   return new Promise((resolve, reject) => {
     if (!window.XLSX) {
       reject(new Error("La librería para leer Excel no está disponible."));
@@ -751,6 +820,10 @@ function leerArchivoImportacion(file) {
   });
 }
 
+function leerArchivoImportacion(file) {
+  return /\.csv$/i.test(file.name) ? leerCSV(file) : leerBinario(file);
+}
+
 let filasImportacionValidas = []; // filas listas para procesar tras la vista previa
 
 function validarFilaImportacion(fila, almacenDefecto) {
@@ -767,7 +840,8 @@ function validarFilaImportacion(fila, almacenDefecto) {
   } else {
     almacenResuelto = almacenDefecto;
   }
-  if (cantidad > 0 && !almacenResuelto) errores.push("falta almacén");
+  const requiereAlmacen = cantidad > 0 || fila.minimo !== undefined;
+  if (requiereAlmacen && !almacenResuelto) errores.push("falta almacén");
   if (!fila.categoria) errores.push("falta la categoría");
 
   const categoriaExiste = getCategoriasInsumos().some((c) => c.nombre.toLowerCase() === fila.categoria.toLowerCase());
@@ -805,6 +879,7 @@ function renderPreviewImportacion(filas) {
             <th class="text-left px-2 py-1.5">Nombre</th>
             <th class="text-left px-2 py-1.5">Categoría</th>
             <th class="text-left px-2 py-1.5">Cantidad</th>
+            <th class="text-left px-2 py-1.5">Mínimo</th>
             <th class="text-left px-2 py-1.5">Almacén</th>
             <th class="text-left px-2 py-1.5">Estado</th>
           </tr>
@@ -817,6 +892,7 @@ function renderPreviewImportacion(filas) {
             <td class="px-2 py-1.5">${escapeHTML(f.nombre) || "—"}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.categoria) || "—"}${f.categoriaNueva && !f.errores.length ? ' <span class="text-amber-600">(nueva)</span>' : ""}</td>
             <td class="px-2 py-1.5">${f.cantidad}</td>
+            <td class="px-2 py-1.5">${f.minimo ?? "—"}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.almacenResuelto) || "—"}</td>
             <td class="px-2 py-1.5">${f.errores.length ? `<span class="text-red-700">${escapeHTML(f.errores.join(", "))}</span>` : '<span class="text-emerald-700">OK</span>'}</td>
           </tr>`
@@ -877,6 +953,7 @@ function setupImportacion() {
     let insumosCreados = 0;
     let entradasRegistradas = 0;
     let categoriasCreadas = 0;
+    let minimosActualizados = 0;
     let fallidas = 0;
 
     for (const fila of filasImportacionValidas) {
@@ -904,8 +981,10 @@ function setupImportacion() {
           insumosCreados++;
         }
 
-        // 3) Existencia inicial: entrada al almacén resuelto.
+        // 3) Existencia y/o mínimo crítico en el almacén resuelto.
         if (fila.cantidad > 0 && fila.almacenResuelto) {
+          // Trae cantidad: se registra como una Entrada real (con
+          // trazabilidad), y de paso se fija el mínimo si vino en el archivo.
           await registrarEntrada({
             insumoId: insumo.id,
             insumoNombre: insumo.nombre,
@@ -914,8 +993,14 @@ function setupImportacion() {
             responsable,
             observaciones: "Importación masiva desde archivo",
             fecha: new Date().toLocaleDateString("en-CA"),
+            minimo: fila.minimo,
           });
           entradasRegistradas++;
+        } else if (fila.minimo !== undefined && fila.almacenResuelto) {
+          // Cantidad 0 pero trae mínimo: solo fija el umbral crítico, sin
+          // generar un movimiento de entrada (no hay nada que mover).
+          await establecerMinimoStock({ insumoId: insumo.id, insumoNombre: insumo.nombre, almacen: fila.almacenResuelto, minimo: fila.minimo });
+          minimosActualizados++;
         }
       } catch (err) {
         console.error("Error importando fila", fila, err);
@@ -924,7 +1009,7 @@ function setupImportacion() {
     }
 
     toast(
-      `Importación completa: ${insumosCreados} insumo(s) nuevo(s), ${categoriasCreadas} categoría(s) nueva(s), ${entradasRegistradas} entrada(s) registrada(s)${fallidas ? `, ${fallidas} fila(s) con error` : ""}.`,
+      `Importación completa: ${insumosCreados} insumo(s) nuevo(s), ${categoriasCreadas} categoría(s) nueva(s), ${entradasRegistradas} entrada(s) registrada(s)${minimosActualizados ? `, ${minimosActualizados} mínimo(s) actualizado(s)` : ""}${fallidas ? `, ${fallidas} fila(s) con error` : ""}.`,
       fallidas ? "warning" : "success"
     );
 
