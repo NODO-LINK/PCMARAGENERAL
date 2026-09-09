@@ -340,6 +340,23 @@
             <button type="submit" class="btn-primary">Guardar despacho</button>
           </div>
         </form>
+
+        <div class="form-card role-admin-only hidden">
+          <h3 class="font-semibold text-slate-700 mb-1">Importar despachos desde Excel/CSV</h3>
+          <p class="text-xs text-slate-500 mb-3">
+            El archivo debe tener columnas <strong>Fecha</strong>, <strong>Institución</strong>, <strong>Tipo</strong> (Gasolina o Diesel — "Diésel" se acepta igual), <strong>Litros</strong> (cantidad despachada) y <strong>Vehículo</strong> (unidad/placa). Opcionalmente <strong>Responsable</strong> y <strong>Observaciones</strong>. La institución es obligatoria: si el texto no coincide con el catálogo, se debe resolver abajo (crear institución nueva o vincular como alias) antes de poder importar esa fila. Si una fila no trae responsable, se usa el indicado abajo. Se aceptan CSV separados por coma o por punto y coma.
+          </p>
+          <div class="form-grid">
+            <div><label class="form-label">Archivo (.xlsx, .xls o .csv)</label><input type="file" id="importar-combustible-archivo" accept=".xlsx,.xls,.csv" class="form-input" /></div>
+            <div><label class="form-label">Responsable por defecto</label><input type="text" id="importar-combustible-responsable" class="form-input" /></div>
+          </div>
+          <div id="importar-combustible-instituciones-sin-vincular" class="mt-3"></div>
+          <div id="importar-combustible-preview" class="mt-3"></div>
+          <div class="form-actions">
+            <button type="button" id="btn-confirmar-importacion-combustible" class="btn-primary" disabled><span class="icon" data-icon="check"></span>Confirmar importación</button>
+          </div>
+        </div>
+
         <div id="historial-combustible"></div>
       </section>
 
