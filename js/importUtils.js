@@ -146,3 +146,27 @@ export function mapearFila(rawRow, aliasMap) {
   }
   return found;
 }
+
+/**
+ * Formato típico de sistemas viejos: "DD/MM/AAAA" o "DD/MM/AAAA hh:mm
+ * a. m./p. m." (día/mes/año a la venezolana, con hora opcional en formato
+ * de 12h en español). El constructor Date() nativo no entiende ese
+ * formato (y para "DD/MM" podría llegar a interpretarlo mal como MM/DD si
+ * algún motor fuera permisivo), así que se resuelve explícitamente antes
+ * de intentar new Date(...) como respaldo genérico en cada importador.
+ */
+export function parsearFechaLegado(str) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?\s*\.?\s*m\.?)?$/i.exec(
+    String(str).trim()
+  );
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, min, ss, ampm] = m;
+  let hora = hh ? Number(hh) : 0;
+  if (ampm) {
+    const esPM = ampm.toLowerCase() === "p";
+    if (hora === 12) hora = esPM ? 12 : 0;
+    else if (esPM) hora += 12;
+  }
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hora, min ? Number(min) : 0, ss ? Number(ss) : 0);
+  return isNaN(d.getTime()) ? null : d;
+}
