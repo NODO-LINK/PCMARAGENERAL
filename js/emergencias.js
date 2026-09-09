@@ -471,17 +471,43 @@ function formatFechaHoraLocal(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Formato típico de sistemas viejos: "DD/MM/AAAA hh:mm a. m./p. m."
+// (día/mes/año a la venezolana, con la hora en formato de 12h en español).
+// El constructor Date() nativo no entiende ese formato (y para "DD/MM"
+// podría llegar a interpretarlo mal como MM/DD si algún motor fuera
+// permisivo), así que se resuelve explícitamente antes de intentar
+// new Date(...) como respaldo genérico.
+function parsearFechaHoraLegado(str) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?\s*\.?\s*m\.?)?$/i.exec(
+    String(str).trim()
+  );
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, min, ss, ampm] = m;
+  let hora = hh ? Number(hh) : 0;
+  if (ampm) {
+    const esPM = ampm.toLowerCase() === "p";
+    if (hora === 12) hora = esPM ? 12 : 0;
+    else if (esPM) hora += 12;
+  }
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hora, min ? Number(min) : 0, ss ? Number(ss) : 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function validarFilaTraslado(fila, responsableDefecto) {
   const errores = [];
   if (!fila.nombrePaciente) errores.push("falta el nombre del paciente");
   if (!fila.cedulaPaciente) errores.push("falta la cédula");
-  if (fila.edadPaciente === "" || isNaN(fila.edadPaciente) || fila.edadPaciente < 0) errores.push("edad inválida");
+  // La edad es opcional al importar (archivos de sistemas viejos suelen no
+  // traerla); si viene, sí debe ser un número válido.
+  if (fila.edadPaciente !== "" && (isNaN(fila.edadPaciente) || fila.edadPaciente < 0)) errores.push("edad inválida");
   if (!fila.unidad) errores.push("falta la unidad");
 
   let tipoResuelto = "";
   if (fila.tipo) {
     const norm = quitarAcentos(fila.tipo).trim().toLowerCase();
-    if (norm === "apoyo") tipoResuelto = "Apoyo";
+    // "Emergencia" es como algunos sistemas viejos llaman a lo que aquí es
+    // "Apoyo" (traslado sin centro de salud de destino específico).
+    if (norm === "apoyo" || norm === "emergencia") tipoResuelto = "Apoyo";
     else if (norm === "interhospitalario") tipoResuelto = "Interhospitalario";
     else errores.push(`tipo "${fila.tipo}" no reconocido (use Apoyo o Interhospitalario)`);
   } else {
@@ -492,8 +518,11 @@ function validarFilaTraslado(fila, responsableDefecto) {
   if (fila.fecha instanceof Date && !isNaN(fila.fecha.getTime())) {
     fechaResuelta = fila.fecha;
   } else if (fila.fecha) {
-    const d = new Date(fila.fecha);
-    if (!isNaN(d.getTime())) fechaResuelta = d;
+    fechaResuelta = parsearFechaHoraLegado(fila.fecha);
+    if (!fechaResuelta) {
+      const d = new Date(fila.fecha);
+      if (!isNaN(d.getTime())) fechaResuelta = d;
+    }
   }
   if (!fechaResuelta) errores.push("fecha inválida");
 
@@ -639,7 +668,9 @@ function setupImportacionTraslados() {
           institucionNombre: fila.institucionNombreResuelto,
           nombrePaciente: fila.nombrePaciente,
           cedulaPaciente: fila.cedulaPaciente,
-          edadPaciente: fila.edadPaciente,
+          // Si el archivo no traía edad, se omite el campo (en vez de
+          // guardar "" ) para que el historial la muestre como "—".
+          ...(fila.edadPaciente !== "" ? { edadPaciente: fila.edadPaciente } : {}),
           unidad: fila.unidad,
           responsable: fila.responsableResuelto,
           observaciones: fila.observaciones,
