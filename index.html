@@ -179,6 +179,13 @@
               <div><label class="form-label">Traslados</label><input required type="number" min="0" value="0" name="cantidadTraslados" class="form-input" /></div>
               <div><label class="form-label">Fallecidos</label><input required type="number" min="0" value="0" name="cantidadFallecidos" class="form-input" /></div>
               <div><label class="form-label">Responsable del día</label><input required type="text" name="responsable" class="form-input" placeholder="Ej. Doctora Isbelia" /></div>
+              <div>
+                <label class="form-label">Tipo de registro</label>
+                <select name="registroLegado" class="form-input">
+                  <option value="no" selected>Planilla real del día (cuenta en las estadísticas)</option>
+                  <option value="si">Conteo histórico / manual antiguo (no cuenta en las estadísticas del Dashboard)</option>
+                </select>
+              </div>
             </div>
             <div class="form-actions">
               <button type="button" data-role="cancel-edit" class="btn-secondary">Cancelar edición</button>

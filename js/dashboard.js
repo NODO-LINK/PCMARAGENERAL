@@ -93,8 +93,17 @@ function pacientesPorPeriodo(rows) {
   return sumByPeriod(rows, personasPlanilla);
 }
 
+// Los registros marcados como "Conteo histórico / manual antiguo" (de
+// antes de que existiera este sistema de planillas, cuando se contaba a
+// mano) no representan una planilla real de un día — se excluyen de TODAS
+// las estadísticas del Dashboard (tarjeta, tendencia y distribución), pero
+// se conservan en el Historial de Pacientes para consulta.
+function pacientesParaEstadisticas() {
+  return state.pacientes.filter((r) => r.registroLegado !== "si");
+}
+
 function renderMetrics() {
-  setMetric("pacientes", pacientesPorPeriodo(state.pacientes));
+  setMetric("pacientes", pacientesPorPeriodo(pacientesParaEstadisticas()));
   setMetric("traslados", countByPeriod(state.traslados));
   setMetric("fallecidos", countByPeriod(state.fallecidos));
   setMetric("guardias", countByPeriod(state.guardias));
@@ -133,7 +142,7 @@ function renderCharts() {
 
   const trendCanvas = document.getElementById("chart-tendencia");
   if (trendCanvas) {
-    const p = monthlySeries(state.pacientes, "fecha", personasPlanilla);
+    const p = monthlySeries(pacientesParaEstadisticas(), "fecha", personasPlanilla);
     const t = monthlySeries(state.traslados);
     const g = monthlySeries(state.guardias);
     charts.tendencia?.destroy();
@@ -161,7 +170,7 @@ function renderCharts() {
         datasets: [
           {
             data: [
-              state.pacientes.reduce((s, r) => s + personasPlanilla(r), 0),
+              pacientesParaEstadisticas().reduce((s, r) => s + personasPlanilla(r), 0),
               state.traslados.length,
               state.fallecidos.length,
               state.guardias.length,

@@ -54,6 +54,11 @@ export function initEmergencias() {
       { key: "cantidadTraslados", label: "Traslados" },
       { key: "cantidadFallecidos", label: "Fallecidos" },
       { key: "responsable", label: "Responsable del día" },
+      {
+        key: "registroLegado",
+        label: "Tipo",
+        format: (r) => (r.registroLegado === "si" ? "Histórico (no cuenta)" : "Planilla"),
+      },
     ],
     beforeSave: (data) => {
       data.ninos = Number(data.ninos) || 0;
