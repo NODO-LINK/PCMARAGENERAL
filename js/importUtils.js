@@ -30,9 +30,14 @@ function extraerFilas(filasCrudasOriginal, aliasMap) {
   let filasCrudas = filasCrudasOriginal;
   if (!filasCrudas.length) return { filas: [], filasTitulo: [] };
 
-  // Cada fila vino como una sola celda con texto delimitado (CSV mal separado).
-  if (filasCrudas[0].length === 1) {
-    const primeraCelda = String(filasCrudas[0][0] || "");
+  // Cada fila vino como una sola celda con texto delimitado (CSV mal
+  // separado). Se busca la primera fila que tenga contenido real (no una
+  // línea en blanco al inicio del archivo, algo común en exportes de
+  // sistemas viejos) para no fallar detectando el separador a partir de
+  // una celda vacía.
+  const filaConContenido = filasCrudas.find((f) => f.some((c) => String(c).trim() !== ""));
+  if (filaConContenido && filaConContenido.length === 1) {
+    const primeraCelda = String(filaConContenido[0] || "");
     const nComas = (primeraCelda.match(/,/g) || []).length;
     const nPuntoYComa = (primeraCelda.match(/;/g) || []).length;
     if (nComas || nPuntoYComa) {
@@ -79,9 +84,12 @@ function leerCSV(file, aliasMap) {
     reader.onload = (e) => {
       try {
         const texto = e.target.result;
-        const primeraLinea = texto.split(/\r?\n/)[0] || "";
-        const nComas = (primeraLinea.match(/,/g) || []).length;
-        const nPuntoYComa = (primeraLinea.match(/;/g) || []).length;
+        // Se usa la primera línea CON CONTENIDO (no necesariamente la
+        // línea 1: algunos exportes traen una línea en blanco antes del
+        // encabezado) para adivinar el separador de columnas.
+        const primeraLineaConContenido = texto.split(/\r?\n/).find((l) => l.trim() !== "") || "";
+        const nComas = (primeraLineaConContenido.match(/,/g) || []).length;
+        const nPuntoYComa = (primeraLineaConContenido.match(/;/g) || []).length;
         const FS = nPuntoYComa > nComas ? ";" : ",";
         const wb = window.XLSX.read(texto, { type: "string", FS, cellDates: true });
         const hoja = wb.Sheets[wb.SheetNames[0]];
