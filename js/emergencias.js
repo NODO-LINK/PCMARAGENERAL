@@ -17,10 +17,10 @@
  * incluyen en el documento impreso de la lista).
  * -----------------------------------------------------------------------
  */
-import { COLLECTIONS } from "./config.js";
+import { COLLECTIONS, CATEGORIAS_INSTITUCIONES } from "./config.js";
 import { createCrudModule } from "./moduleFactory.js";
 import { formatDate, toDate, escapeHTML, printAdHoc, toast } from "./ui.js";
-import { subscribeCollection, createRecord } from "./data.js";
+import { subscribeCollection, createRecord, updateRecord } from "./data.js";
 import { registrarDebito, deleteDebito } from "./inventario.js";
 import { isAdmin, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
@@ -531,6 +531,16 @@ function resolverInstitucionPorTexto(texto) {
   return porCoincidenciaParcial || null;
 }
 
+// Instituciones que el administrador acaba de resolver manualmente durante
+// esta misma sesión de importación (texto del archivo -> {id, nombre}),
+// para no depender del round-trip de Firestore al revalidar la vista
+// previa justo después de crear/vincular una institución.
+const resolucionesManualesInstitucion = new Map();
+
+function normalizarTexto(s) {
+  return quitarAcentos(s).trim().toLowerCase();
+}
+
 function validarFilaTraslado(fila, responsableDefecto) {
   const errores = [];
   if (!fila.nombrePaciente) errores.push("falta el nombre del paciente");
@@ -576,7 +586,12 @@ function validarFilaTraslado(fila, responsableDefecto) {
   let institucionId = "";
   let institucionNombreResuelto = "";
   if (fila.centroDestino) {
-    const candidato = resolverInstitucionPorTexto(fila.centroDestino);
+    // Prioridad: si el administrador ya resolvió este texto manualmente en
+    // esta misma importación (creó la institución o lo vinculó como alias
+    // hace un momento), se usa eso directo sin esperar a que el catálogo
+    // en tiempo real termine de sincronizar.
+    const resueltoManual = resolucionesManualesInstitucion.get(normalizarTexto(fila.centroDestino));
+    const candidato = resueltoManual || resolverInstitucionPorTexto(fila.centroDestino);
     if (candidato) {
       institucionId = candidato.id;
       institucionNombreResuelto = candidato.nombre;
@@ -600,6 +615,131 @@ function validarFilaTraslado(fila, responsableDefecto) {
 }
 
 let filasImportacionTrasladosValidas = [];
+let ultimasFilasImportacionTraslados = []; // filas mapeadas (sin validar) de la última lectura, para poder revalidar sin releer el archivo
+
+/**
+ * Muestra, arriba de la vista previa, las instituciones del archivo que NO
+ * coincidieron con ninguna del catálogo (ni por nombre ni por alias) —
+ * para poder resolverlas ahí mismo (crear la institución o vincularlas
+ * como alias de una existente) en vez de tener que ir a Catálogos,
+ * agregarlas, y volver a leer el archivo desde cero.
+ */
+function renderInstitucionesSinVincular(filasValidadas) {
+  const root = document.getElementById("importar-traslados-instituciones-sin-vincular");
+  if (!root) return;
+
+  // Textos únicos sin vincular (case/tilde-insensible), con un texto de
+  // muestra "bonito" (el primero que apareció) para mostrar en pantalla.
+  const porTexto = new Map();
+  filasValidadas.forEach((f) => {
+    if (f.institucionNombreResuelto && !f.institucionId) {
+      const clave = normalizarTexto(f.institucionNombreResuelto);
+      if (!porTexto.has(clave)) porTexto.set(clave, f.institucionNombreResuelto);
+    }
+  });
+
+  if (!porTexto.size) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const instituciones = getInstituciones();
+  const opcionesExistentes = instituciones
+    .slice()
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .map((i) => `<option value="${i.id}">Vincular como alias de: ${escapeHTML(i.nombre)}</option>`)
+    .join("");
+
+  root.innerHTML = `
+    <div class="border border-amber-300 bg-amber-50 rounded-md p-3">
+      <p class="text-sm font-semibold text-amber-800 mb-1">${porTexto.size} institución(es) del archivo no coinciden con el catálogo</p>
+      <p class="text-xs text-amber-700 mb-3">Para cada una, elija si se crea como institución nueva o se vincula como alias de una ya existente, y pulse "Aplicar" — así no hace falta ir a Catálogos por separado.</p>
+      <div class="space-y-2">
+        ${[...porTexto.values()]
+          .map(
+            (texto) => `
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="font-medium text-slate-700 min-w-[10rem]">"${escapeHTML(texto)}"</span>
+          <select class="form-input !w-auto flex-1 min-w-[16rem] resolucion-institucion" data-texto="${escapeHTML(texto)}">
+            <option value="__nueva__" selected>➕ Crear institución nueva: "${escapeHTML(texto)}"</option>
+            ${opcionesExistentes}
+          </select>
+        </div>`
+          )
+          .join("")}
+      </div>
+      <div class="form-actions !mt-3">
+        <button type="button" id="btn-aplicar-resoluciones-institucion" class="btn-secondary">Aplicar y revisar de nuevo</button>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-aplicar-resoluciones-institucion")?.addEventListener("click", aplicarResolucionesInstitucion);
+}
+
+async function aplicarResolucionesInstitucion() {
+  const btn = document.getElementById("btn-aplicar-resoluciones-institucion");
+  const selects = [...document.querySelectorAll(".resolucion-institucion")];
+  if (!selects.length) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Aplicando...";
+  }
+
+  let creadas = 0;
+  let vinculadas = 0;
+  let fallidas = 0;
+
+  for (const sel of selects) {
+    const texto = sel.dataset.texto;
+    const valor = sel.value;
+    try {
+      if (valor === "__nueva__") {
+        const ref = await createRecord(COLLECTIONS.INSTITUCIONES, {
+          nombre: texto,
+          // La mayoría de los destinos de traslado son centros de salud;
+          // si no corresponde, se puede corregir después en Catálogos.
+          categoria: CATEGORIAS_INSTITUCIONES.includes("Hospitales / Centros de salud")
+            ? "Hospitales / Centros de salud"
+            : CATEGORIAS_INSTITUCIONES[0],
+          alias: "",
+          activo: true,
+        });
+        resolucionesManualesInstitucion.set(normalizarTexto(texto), { id: ref.id, nombre: texto });
+        creadas++;
+      } else {
+        const inst = getInstituciones().find((i) => i.id === valor);
+        if (!inst) throw new Error("Institución no encontrada.");
+        const aliasActuales = (inst.alias || "")
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean);
+        if (!aliasActuales.some((a) => normalizarTexto(a) === normalizarTexto(texto))) {
+          aliasActuales.push(texto);
+          await updateRecord(COLLECTIONS.INSTITUCIONES, inst.id, { alias: aliasActuales.join(", ") });
+        }
+        resolucionesManualesInstitucion.set(normalizarTexto(texto), { id: inst.id, nombre: inst.nombre });
+        vinculadas++;
+      }
+    } catch (err) {
+      console.error("Error resolviendo institución", texto, err);
+      fallidas++;
+    }
+  }
+
+  toast(
+    `${creadas ? `${creadas} institución(es) creada(s). ` : ""}${vinculadas ? `${vinculadas} vinculada(s) como alias. ` : ""}${fallidas ? `${fallidas} con error.` : ""}`.trim() ||
+      "Sin cambios.",
+    fallidas ? "warning" : "success"
+  );
+
+  // Revalida las filas ya leídas (sin releer el archivo) con las
+  // resoluciones recién aplicadas.
+  const respField = document.getElementById("importar-traslados-responsable");
+  const validadas = ultimasFilasImportacionTraslados.map((f) => validarFilaTraslado(f, respField?.value || ""));
+  renderPreviewImportacionTraslados(validadas);
+  renderInstitucionesSinVincular(validadas);
+}
 
 function renderPreviewImportacionTraslados(filas) {
   const root = document.getElementById("importar-traslados-preview");
@@ -668,14 +808,18 @@ function setupImportacionTraslados() {
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) {
+      ultimasFilasImportacionTraslados = [];
       renderPreviewImportacionTraslados([]);
+      renderInstitucionesSinVincular([]);
       return;
     }
     try {
       const { filas: rows } = await leerArchivoTabular(file, TRASLADO_ALIAS);
       const mapeadas = rows.map((r) => mapearFilaTraslado(r)).filter((f) => f.nombrePaciente || f.cedulaPaciente || f.unidad);
+      ultimasFilasImportacionTraslados = mapeadas;
       const validadas = mapeadas.map((f) => validarFilaTraslado(f, respField?.value || ""));
       renderPreviewImportacionTraslados(validadas);
+      renderInstitucionesSinVincular(validadas);
       if (!mapeadas.length) {
         toast("No se encontraron filas reconocibles. Verifique los encabezados de las columnas.", "warning");
       }
@@ -683,6 +827,7 @@ function setupImportacionTraslados() {
       console.error(err);
       toast("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx/.xls) o CSV válido.", "error");
       renderPreviewImportacionTraslados([]);
+      renderInstitucionesSinVincular([]);
     }
   });
 
@@ -727,7 +872,9 @@ function setupImportacionTraslados() {
     btnConfirmar.textContent = textoOriginal;
     btnConfirmar.disabled = true;
     filasImportacionTrasladosValidas = [];
+    ultimasFilasImportacionTraslados = [];
     fileInput.value = "";
     renderPreviewImportacionTraslados([]);
+    renderInstitucionesSinVincular([]);
   });
 }
