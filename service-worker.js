@@ -7,7 +7,12 @@
  * archivos estáticos necesarios para que la interfaz cargue offline.
  * -----------------------------------------------------------------------
  */
-const CACHE_NAME = "pc-gestion-shell-v1";
+// IMPORTANTE: subir este número cada vez que se publique una actualización
+// de los archivos del app shell (cualquier .js/.css/.html listado abajo).
+// Es lo que fuerza al navegador a descartar el caché viejo — si no se sube,
+// los usuarios pueden seguir viendo código desactualizado por días, incluso
+// después de recargar la página, hasta que limpien el caché a mano.
+const CACHE_NAME = "pc-gestion-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -63,7 +68,11 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
+      // "cache: no-store" evita que esta petición de fondo se resuelva con
+      // el caché HTTP del propio navegador (que podría estar tan viejo como
+      // el del Service Worker) — así la actualización en segundo plano
+      // siempre trae los bytes más recientes del servidor.
+      const fetchPromise = fetch(event.request, { cache: "no-store" })
         .then((response) => {
           if (response && response.status === 200) {
             const clone = response.clone();
