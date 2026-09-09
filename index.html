@@ -647,13 +647,17 @@
             <div class="form-grid">
               <div><label class="form-label">Nombre</label><input required type="text" name="nombre" class="form-input" /></div>
               <div><label class="form-label">Categoría</label><select required name="categoria" class="form-input"></select></div>
+              <div class="md:col-span-3">
+                <label class="form-label">Alias / Abreviaturas (opcional, separadas por coma)</label>
+                <input type="text" name="alias" class="form-input" placeholder="Ej: Adolfo Pons, H.A. Pons" />
+              </div>
             </div>
             <div class="form-actions"><button type="submit" class="btn-primary">Agregar institución</button></div>
           </form>
-          <p class="text-xs text-slate-500">Las columnas <strong>Combustible</strong> y <strong>Traslados</strong> muestran cuántos despachos de combustible y cuántos traslados se le han hecho a cada institución registrada.</p>
+          <p class="text-xs text-slate-500">Las columnas <strong>Combustible</strong> y <strong>Traslados</strong> muestran cuántos despachos de combustible y cuántos traslados se le han hecho a cada institución registrada. Los <strong>Alias</strong> se usan al importar Traslados desde Excel/CSV: si el texto del archivo no coincide con el nombre exacto, se busca también entre los alias antes de dejarlo sin vincular (útil para nombres abreviados como "H1SR" o "SAHUM").</p>
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
             <table class="min-w-full text-sm">
-              <thead class="bg-slate-50 text-slate-600"><tr><th class="text-left font-medium px-4 py-2">Nombre</th><th class="text-left font-medium px-4 py-2">Categoría</th><th class="text-center font-medium px-4 py-2">Combustible (L)</th><th class="text-center font-medium px-4 py-2">Traslados</th><th class="text-left font-medium px-4 py-2">Estado</th><th class="text-left font-medium px-4 py-2">Acciones</th></tr></thead>
+              <thead class="bg-slate-50 text-slate-600"><tr><th class="text-left font-medium px-4 py-2">Nombre</th><th class="text-left font-medium px-4 py-2">Categoría</th><th class="text-left font-medium px-4 py-2">Alias / Abreviaturas</th><th class="text-center font-medium px-4 py-2">Combustible (L)</th><th class="text-center font-medium px-4 py-2">Traslados</th><th class="text-left font-medium px-4 py-2">Estado</th><th class="text-left font-medium px-4 py-2">Acciones</th></tr></thead>
               <tbody id="tabla-instituciones-body"></tbody>
             </table>
           </div>

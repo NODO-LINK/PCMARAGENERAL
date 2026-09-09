@@ -493,6 +493,44 @@ function parsearFechaHoraLegado(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Busca la institución del catálogo que corresponde a un texto libre (p.
+ * ej. "Centro destino" de un archivo importado), en tres pasadas de mayor
+ * a menor precisión:
+ *  1. Nombre exacto (sin tildes/mayúsculas).
+ *  2. Algún alias/abreviatura registrado para esa institución (separados
+ *     por coma en el catálogo — p. ej. "H1SR", "SAHUM").
+ *  3. Coincidencia parcial: el texto está contenido en el nombre de la
+ *     institución o viceversa (para casos como "Adolfo Pons" cuando el
+ *     nombre completo es "Hospital Adolfo Pons").
+ * Se hacen tres pasadas completas (en vez de una sola con el mejor
+ * criterio por institución) para que un nombre exacto en OTRA institución
+ * siempre gane sobre una coincidencia parcial más floja.
+ */
+function resolverInstitucionPorTexto(texto) {
+  const normalizado = quitarAcentos(texto).trim().toLowerCase();
+  if (!normalizado) return null;
+  const instituciones = getInstituciones();
+
+  const porNombreExacto = instituciones.find((i) => quitarAcentos(i.nombre).trim().toLowerCase() === normalizado);
+  if (porNombreExacto) return porNombreExacto;
+
+  const porAlias = instituciones.find((i) =>
+    (i.alias || "")
+      .split(",")
+      .map((a) => quitarAcentos(a).trim().toLowerCase())
+      .filter(Boolean)
+      .includes(normalizado)
+  );
+  if (porAlias) return porAlias;
+
+  const porCoincidenciaParcial = instituciones.find((i) => {
+    const nombreNorm = quitarAcentos(i.nombre).trim().toLowerCase();
+    return nombreNorm.includes(normalizado) || normalizado.includes(nombreNorm);
+  });
+  return porCoincidenciaParcial || null;
+}
+
 function validarFilaTraslado(fila, responsableDefecto) {
   const errores = [];
   if (!fila.nombrePaciente) errores.push("falta el nombre del paciente");
@@ -531,15 +569,14 @@ function validarFilaTraslado(fila, responsableDefecto) {
 
   // La institución es obligatoria para todo traslado (igual que en el
   // formulario manual). Si el texto de "Centro destino" coincide con el
-  // nombre de una institución del catálogo, el traslado queda vinculado a
-  // ella (cuenta en su estadística); si no coincide con ninguna, se guarda
-  // igual como texto libre, solo que sin vínculo con el catálogo.
+  // nombre (o algún alias/abreviatura) de una institución del catálogo, el
+  // traslado queda vinculado a ella (cuenta en su estadística); si no
+  // coincide con ninguna, se guarda igual como texto libre, solo que sin
+  // vínculo con el catálogo.
   let institucionId = "";
   let institucionNombreResuelto = "";
   if (fila.centroDestino) {
-    const candidato = getInstituciones().find(
-      (i) => quitarAcentos(i.nombre).trim().toLowerCase() === quitarAcentos(fila.centroDestino).trim().toLowerCase()
-    );
+    const candidato = resolverInstitucionPorTexto(fila.centroDestino);
     if (candidato) {
       institucionId = candidato.id;
       institucionNombreResuelto = candidato.nombre;

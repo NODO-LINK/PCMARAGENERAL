@@ -95,9 +95,10 @@ function setupInstitucionForm() {
     e.preventDefault();
     const nombre = form.elements["nombre"].value.trim();
     const categoria = form.elements["categoria"].value;
+    const alias = form.elements["alias"].value.trim();
     if (!nombre) return;
     try {
-      await createRecord(COLLECTIONS.INSTITUCIONES, { nombre, categoria, activo: true });
+      await createRecord(COLLECTIONS.INSTITUCIONES, { nombre, categoria, alias, activo: true });
       toast("Institución agregada al catálogo.", "success");
       form.reset();
     } catch (err) {
@@ -121,6 +122,13 @@ function renderInstitucionesTable() {
       <tr class="border-t border-slate-100">
         <td class="px-4 py-2">${i.nombre}</td>
         <td class="px-4 py-2">${i.categoria}</td>
+        <td class="px-4 py-2">
+          ${
+            admin
+              ? `<input type="text" value="${(i.alias || "").replace(/"/g, "&quot;")}" data-id="${i.id}" placeholder="Ej: Adolfo Pons, H.A. Pons" class="w-full min-w-[10rem] border border-slate-300 rounded px-2 py-1 text-sm input-alias" />`
+              : i.alias || "—"
+          }
+        </td>
         <td class="px-4 py-2 text-center">${litrosCombustible} L</td>
         <td class="px-4 py-2 text-center">${cantTraslados}</td>
         <td class="px-4 py-2">${i.activo === false ? '<span class="text-red-600">Inactiva</span>' : '<span class="text-emerald-600">Activa</span>'}</td>
@@ -134,9 +142,20 @@ function renderInstitucionesTable() {
         </td>
       </tr>`;
       })
-      .join("") || `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Catálogo vacío.</td></tr>`;
+      .join("") || `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Catálogo vacío.</td></tr>`;
 
   if (admin) {
+    tbody.querySelectorAll(".input-alias").forEach((input) => {
+      input.addEventListener("change", async () => {
+        try {
+          await updateRecord(COLLECTIONS.INSTITUCIONES, input.dataset.id, { alias: input.value.trim() });
+          toast("Alias actualizados.", "success");
+        } catch (err) {
+          console.error(err);
+          toast("No se pudieron actualizar los alias.", "error");
+        }
+      });
+    });
     tbody.querySelectorAll('[data-act="toggle"]').forEach((btn) => {
       btn.onclick = () => {
         const inst = instituciones.find((i) => i.id === btn.dataset.id);
