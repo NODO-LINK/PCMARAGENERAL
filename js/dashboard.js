@@ -45,16 +45,21 @@ function countByPeriod(rows, dateField = "fecha") {
     if (isSameMonth(d, now)) mes++;
     if (isSameYear(d, now)) anio++;
   });
-  return { hoy, mes, anio };
+  // "total" es de todos los tiempos (todos los años, incluidos registros
+  // viejos importados) — no depende de que la fecha sea válida ni del año
+  // actual, a diferencia de hoy/mes/año.
+  return { hoy, mes, anio, total: rows.length };
 }
 
 function setMetric(prefix, counts) {
   const hoyEl = document.getElementById(`dash-${prefix}-hoy`);
   const mesEl = document.getElementById(`dash-${prefix}-mes`);
   const anioEl = document.getElementById(`dash-${prefix}-anio`);
+  const totalEl = document.getElementById(`dash-${prefix}-total`);
   if (hoyEl) hoyEl.textContent = counts.hoy;
   if (mesEl) mesEl.textContent = counts.mes;
   if (anioEl) anioEl.textContent = counts.anio;
+  if (totalEl) totalEl.textContent = counts.total;
 }
 
 function sumByPeriod(rows, valueFn, dateField = "fecha") {
@@ -70,7 +75,8 @@ function sumByPeriod(rows, valueFn, dateField = "fecha") {
     if (isSameMonth(d, now)) mes += v;
     if (isSameYear(d, now)) anio += v;
   });
-  return { hoy, mes, anio };
+  const total = rows.reduce((s, r) => s + valueFn(r), 0);
+  return { hoy, mes, anio, total };
 }
 
 function litrosByPeriod(rows) {
