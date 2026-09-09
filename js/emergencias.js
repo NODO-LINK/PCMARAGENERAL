@@ -544,19 +544,21 @@ function normalizarTexto(s) {
 function validarFilaTraslado(fila, responsableDefecto) {
   const errores = [];
   if (!fila.nombrePaciente) errores.push("falta el nombre del paciente");
-  if (!fila.cedulaPaciente) errores.push("falta la cédula");
-  // La edad es opcional al importar (archivos de sistemas viejos suelen no
-  // traerla); si viene, sí debe ser un número válido.
+  // La cédula y la edad son opcionales al importar (archivos de sistemas
+  // viejos suelen no traerlas para todos los pacientes); si faltan, el
+  // traslado se importa igual y el historial las muestra como "—".
   if (fila.edadPaciente !== "" && (isNaN(fila.edadPaciente) || fila.edadPaciente < 0)) errores.push("edad inválida");
   if (!fila.unidad) errores.push("falta la unidad");
 
   let tipoResuelto = "";
   if (fila.tipo) {
     const norm = quitarAcentos(fila.tipo).trim().toLowerCase();
-    // "Emergencia" es como algunos sistemas viejos llaman a lo que aquí es
-    // "Apoyo" (traslado sin centro de salud de destino específico).
+    // Sinónimos usados por sistemas viejos: "Emergencia" ~ Apoyo (sin
+    // centro de destino específico); "Traslado programado" ~
+    // Interhospitalario (normalmente trae una institución de destino
+    // específica, igual que los interhospitalarios).
     if (norm === "apoyo" || norm === "emergencia") tipoResuelto = "Apoyo";
-    else if (norm === "interhospitalario") tipoResuelto = "Interhospitalario";
+    else if (norm === "interhospitalario" || norm === "traslado programado") tipoResuelto = "Interhospitalario";
     else errores.push(`tipo "${fila.tipo}" no reconocido (use Apoyo o Interhospitalario)`);
   } else {
     errores.push("falta el tipo");
@@ -849,9 +851,9 @@ function setupImportacionTraslados() {
           institucionId: fila.institucionId,
           institucionNombre: fila.institucionNombreResuelto,
           nombrePaciente: fila.nombrePaciente,
-          cedulaPaciente: fila.cedulaPaciente,
-          // Si el archivo no traía edad, se omite el campo (en vez de
-          // guardar "" ) para que el historial la muestre como "—".
+          // Si el archivo no traía cédula y/o edad, se omite el campo (en
+          // vez de guardar "") para que el historial las muestre como "—".
+          ...(fila.cedulaPaciente ? { cedulaPaciente: fila.cedulaPaciente } : {}),
           ...(fila.edadPaciente !== "" ? { edadPaciente: fila.edadPaciente } : {}),
           unidad: fila.unidad,
           responsable: fila.responsableResuelto,
