@@ -126,6 +126,7 @@ export function initEmergencias() {
   modules = { pacientes, traslados, fallecidos };
   setupListaDiaria(pacientes);
   setupInsumosUsados();
+  setupImportacionPacientes(pacientes);
   setupImportacionTraslados();
   return modules;
 }
@@ -438,6 +439,233 @@ function renderInsumosUsadosTable() {
       btn.onclick = () => deleteDebito(rows.find((r) => r.id === btn.dataset.id));
     });
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Importación masiva de Pacientes desde Excel/CSV (una fila por paciente,  */
+/* agrupada en planillas diarias — ver explicación en index.html)          */
+/* ---------------------------------------------------------------------- */
+const PACIENTE_ALIAS = {
+  fecha: ["fecha", "fechaingreso", "fecha ingreso", "fecha de ingreso"],
+  nombre: ["nombre"],
+  edad: ["edad"],
+};
+
+function mapearFilaPaciente(rawRow) {
+  const found = mapearFila(rawRow, PACIENTE_ALIAS);
+  return {
+    fecha: found.fecha,
+    nombre: String(found.nombre ?? "").trim(),
+    edad: found.edad === undefined || found.edad === "" ? "" : Number(found.edad),
+  };
+}
+
+// Rangos LOPNNA: Niños 0-11, Adolescentes 12-17, Adultos 18+.
+function categoriaPorEdad(edad) {
+  if (edad <= 11) return "ninos";
+  if (edad <= 17) return "adolescentes";
+  return "adultos";
+}
+
+function resolverFilaPaciente(fila) {
+  const errores = [];
+
+  let fechaResuelta = null;
+  if (fila.fecha instanceof Date && !isNaN(fila.fecha.getTime())) {
+    fechaResuelta = fila.fecha;
+  } else if (fila.fecha) {
+    fechaResuelta = parsearFechaLegado(fila.fecha);
+    if (!fechaResuelta) {
+      const d = new Date(fila.fecha);
+      if (!isNaN(d.getTime())) fechaResuelta = d;
+    }
+  }
+  if (!fechaResuelta) errores.push("fecha de ingreso inválida");
+
+  let categoria = "";
+  if (fila.edad !== "" && !isNaN(fila.edad) && fila.edad >= 0) {
+    categoria = categoriaPorEdad(fila.edad);
+  } else {
+    errores.push("edad inválida o faltante");
+  }
+
+  return { ...fila, fechaResuelta, fechaTexto: fechaResuelta ? formatFechaLocalPaciente(fechaResuelta) : "", categoria, errores };
+}
+
+function formatFechaLocalPaciente(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * Agrupa las filas ya resueltas (con fecha y categoría de edad) en
+ * planillas diarias: una entrada por fecha distinta, con el conteo de
+ * niños/adolescentes/adultos de esa fecha. Las filas sin fecha o sin edad
+ * válida no se cuentan (se reportan aparte para informarle al usuario).
+ */
+function agruparPacientesPorDia(filasResueltas) {
+  const porFecha = new Map();
+  let sinFecha = 0;
+  let sinEdad = 0;
+
+  filasResueltas.forEach((f) => {
+    if (!f.fechaResuelta) {
+      sinFecha++;
+      return;
+    }
+    if (!f.categoria) {
+      sinEdad++;
+      return;
+    }
+    if (!porFecha.has(f.fechaTexto)) {
+      porFecha.set(f.fechaTexto, { fecha: f.fechaTexto, ninos: 0, adolescentes: 0, adultos: 0 });
+    }
+    porFecha.get(f.fechaTexto)[f.categoria]++;
+  });
+
+  const grupos = [...porFecha.values()]
+    .map((g) => ({ ...g, total: g.ninos + g.adolescentes + g.adultos }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  return { grupos, sinFecha, sinEdad };
+}
+
+let gruposImportacionPacientes = [];
+
+function renderPreviewImportacionPacientes(filasResueltas, pacientesModule) {
+  const root = document.getElementById("importar-pacientes-preview");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-pacientes");
+  if (!root) return;
+
+  if (!filasResueltas.length) {
+    root.innerHTML = `<p class="text-xs text-slate-400 italic">Seleccione un archivo para ver la vista previa.</p>`;
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    gruposImportacionPacientes = [];
+    return;
+  }
+
+  const { grupos, sinFecha, sinEdad } = agruparPacientesPorDia(filasResueltas);
+  gruposImportacionPacientes = grupos;
+
+  const fechasExistentes = new Set(
+    (pacientesModule?.getRows() || []).map((r) => (typeof r.fecha === "string" ? r.fecha.slice(0, 10) : ""))
+  );
+
+  const avisos = [];
+  if (sinFecha) avisos.push(`${sinFecha} paciente(s) sin fecha de ingreso válida (no se contaron)`);
+  if (sinEdad) avisos.push(`${sinEdad} paciente(s) sin edad válida (no se contaron)`);
+
+  root.innerHTML = `
+    <p class="text-xs text-slate-500 mb-2">
+      ${filasResueltas.length} paciente(s) leído(s), agrupados en ${grupos.length} planilla(s) diaria(s).
+      ${avisos.length ? `<span class="text-amber-600">${escapeHTML(avisos.join(" — "))}.</span>` : ""}
+    </p>
+    <div class="max-h-72 overflow-y-auto border border-slate-200 rounded-md">
+      <table class="min-w-full text-xs">
+        <thead class="bg-slate-50 text-slate-600 sticky top-0">
+          <tr>
+            <th class="text-left px-2 py-1.5">Fecha</th>
+            <th class="text-left px-2 py-1.5">Niños</th>
+            <th class="text-left px-2 py-1.5">Adolescentes</th>
+            <th class="text-left px-2 py-1.5">Adultos</th>
+            <th class="text-left px-2 py-1.5">Total</th>
+            <th class="text-left px-2 py-1.5">Nota</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${grupos
+            .map(
+              (g) => `
+          <tr class="border-t border-slate-100">
+            <td class="px-2 py-1.5">${escapeHTML(formatDate(g.fecha))}</td>
+            <td class="px-2 py-1.5">${g.ninos}</td>
+            <td class="px-2 py-1.5">${g.adolescentes}</td>
+            <td class="px-2 py-1.5">${g.adultos}</td>
+            <td class="px-2 py-1.5 font-medium">${g.total}</td>
+            <td class="px-2 py-1.5">${fechasExistentes.has(g.fecha) ? '<span class="text-amber-600">ya existe una planilla — se sumará una adicional</span>' : '<span class="text-emerald-700">planilla nueva</span>'}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  if (btnConfirmar) btnConfirmar.disabled = grupos.length === 0;
+}
+
+function setupImportacionPacientes(pacientesModule) {
+  const fileInput = document.getElementById("importar-pacientes-archivo");
+  const respField = document.getElementById("importar-pacientes-responsable");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-pacientes");
+  if (!fileInput || !btnConfirmar) return;
+
+  if (respField) respField.value = getResponsableLabel();
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      renderPreviewImportacionPacientes([], pacientesModule);
+      return;
+    }
+    try {
+      const { filas: rows } = await leerArchivoTabular(file, PACIENTE_ALIAS);
+      const mapeadas = rows.map((r) => mapearFilaPaciente(r)).filter((f) => f.nombre || f.fecha || f.edad !== "");
+      const resueltas = mapeadas.map((f) => resolverFilaPaciente(f));
+      renderPreviewImportacionPacientes(resueltas, pacientesModule);
+      if (!mapeadas.length) {
+        toast("No se encontraron filas reconocibles. Verifique los encabezados de las columnas.", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      toast("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx/.xls) o CSV válido.", "error");
+      renderPreviewImportacionPacientes([], pacientesModule);
+    }
+  });
+
+  btnConfirmar.addEventListener("click", async () => {
+    if (!gruposImportacionPacientes.length) return;
+    const responsable = (respField?.value || "").trim();
+    if (!responsable) {
+      toast("Escriba el responsable por defecto antes de importar.", "error");
+      return;
+    }
+
+    btnConfirmar.disabled = true;
+    const textoOriginal = btnConfirmar.textContent;
+    btnConfirmar.textContent = "Importando...";
+
+    let registrados = 0;
+    let fallidos = 0;
+
+    for (const grupo of gruposImportacionPacientes) {
+      try {
+        await createRecord(COLLECTIONS.PACIENTES, {
+          fecha: grupo.fecha,
+          ninos: grupo.ninos,
+          adolescentes: grupo.adolescentes,
+          adultos: grupo.adultos,
+          cantidadTraslados: 0,
+          cantidadFallecidos: 0,
+          responsable,
+        });
+        registrados++;
+      } catch (err) {
+        console.error("Error importando planilla de pacientes", grupo, err);
+        fallidos++;
+      }
+    }
+
+    toast(
+      `Importación completa: ${registrados} planilla(s) diaria(s) registrada(s)${fallidos ? `, ${fallidos} con error` : ""}.`,
+      fallidos ? "warning" : "success"
+    );
+
+    btnConfirmar.textContent = textoOriginal;
+    btnConfirmar.disabled = true;
+    gruposImportacionPacientes = [];
+    fileInput.value = "";
+    renderPreviewImportacionPacientes([], pacientesModule);
+  });
 }
 
 /* ---------------------------------------------------------------------- */
