@@ -36,7 +36,6 @@ const REPORTS = {
       { key: "adultos", label: "Adultos" },
       { key: "cantidadTraslados", label: "Traslados" },
       { key: "cantidadFallecidos", label: "Fallecidos" },
-      { key: "responsable", label: "Responsable del día" },
     ],
   },
   traslados: {
