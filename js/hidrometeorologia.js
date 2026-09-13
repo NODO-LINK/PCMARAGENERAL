@@ -3,15 +3,13 @@
  * -----------------------------------------------------------------------
  * Módulo de Hidrometeorología — Monitoreo del Río Limón.
  *
- * La estadística institucional es un índice de 0 a 9 (no metros). La
- * información la nutre otra aplicación externa a través de una API: este
- * módulo NO ofrece registro manual de lecturas, solo:
+ * La estadística institucional es un índice de 0 a 9 (no metros). El nivel
+ * se carga manualmente desde este módulo (Fecha/Hora + Nivel). El módulo
+ * ofrece:
  *  - Un dashboard en tiempo real (numérico + gráfico) con estados de
  *    alerta visual (Normal / Advertencia / Alerta Roja) según umbrales
  *    configurables por el administrador.
- *  - `consultarNivelExterno()`, lista para integrarse con el endpoint/API
- *    provisto por el usuario, que registra automáticamente cada lectura
- *    obtenida.
+ *  - Un formulario de carga manual de lecturas.
  *  - Historial de lecturas (trazabilidad) con impresión formal firmada
  *    por el Responsable y el Director.
  * -----------------------------------------------------------------------
@@ -33,39 +31,19 @@ function calcularEstado(nivel) {
   return { label: "NORMAL", color: "emerald" };
 }
 
-/**
- * Función asíncrona preparada para consumir el endpoint/API externo que
- * nutre el nivel del Río Limón (índice 0-9). Se invoca desde el botón
- * "Consultar fuente externa" y, si hay un endpoint configurado, también
- * al entrar a este módulo (mejor esfuerzo, en silencio).
- */
-async function consultarNivelExterno({ silent = false } = {}) {
-  if (!umbrales.apiEndpoint) {
-    if (!silent) toast("No hay un endpoint externo configurado. Pídale al administrador que lo configure en Ajustes.", "warning");
-    return null;
-  }
-  try {
-    const headers = umbrales.apiKey ? { Authorization: `Bearer ${umbrales.apiKey}` } : {};
-    const res = await fetch(umbrales.apiEndpoint, { headers });
-    if (!res.ok) throw new Error(`Respuesta HTTP ${res.status}`);
-    const json = await res.json();
-    const nivel = Number(json.nivel ?? json.level ?? json.value);
-    if (isNaN(nivel)) throw new Error("La respuesta no contiene un nivel numérico reconocible.");
-    return Math.min(NIVEL_HIDRO_MAX, Math.max(NIVEL_HIDRO_MIN, Math.round(nivel)));
-  } catch (err) {
-    console.error("Error consultando fuente externa de hidrometeorología:", err);
-    if (!silent) toast("No se pudo consultar la fuente externa. Verifique el endpoint configurado.", "error");
-    return null;
-  }
+// Formato "YYYY-MM-DDThh:mm" en hora LOCAL, tal como lo espera un input
+// datetime-local (evita el corrimiento de zona horaria de toISOString()).
+function fechaHoraLocalInput(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function registrarLectura(nivel, fuente) {
+async function registrarLectura(nivel, fecha) {
   const estado = calcularEstado(nivel);
   await createRecord(COLLECTIONS.HIDRO_LECTURAS, {
-    fecha: new Date(),
+    fecha,
     nivel,
     estado: estado.label,
-    fuente,
     responsable: getResponsableLabel(),
   });
 }
@@ -145,8 +123,6 @@ function renderUmbralesUI() {
   if (configForm) {
     configForm.elements["advertencia"].value = umbrales.advertencia;
     configForm.elements["alerta"].value = umbrales.alerta;
-    configForm.elements["apiEndpoint"].value = umbrales.apiEndpoint || "";
-    configForm.elements["apiKey"].value = umbrales.apiKey || "";
     configForm.classList.toggle("hidden", !isAdmin());
   }
   const configNote = document.getElementById("hidro-config-readonly-note");
@@ -155,16 +131,10 @@ function renderUmbralesUI() {
 
 export function refreshHidrometeorologia() {
   renderDashboard();
-  // Mejor esfuerzo: si hay endpoint configurado, intenta actualizar el
-  // nivel automáticamente al entrar a la vista (la fuente la nutre otra
-  // aplicación, por lo que aquí no se espera intervención manual).
-  consultarNivelExterno({ silent: true }).then((nivel) => {
-    if (nivel !== null) registrarLectura(nivel, "API externa");
-  });
 }
 
 export async function initHidrometeorologia() {
-  // Cargar configuración de umbrales/endpoint desde Firestore.
+  // Cargar configuración de umbrales desde Firestore.
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.CONFIG, "hidrometeorologia"));
     if (snap.exists()) umbrales = { ...UMBRALES_HIDRO_DEFAULT, ...snap.data() };
@@ -186,7 +156,6 @@ export async function initHidrometeorologia() {
       { key: "fecha", label: "Fecha/Hora", format: (r) => formatDate(r.fecha, true) },
       { key: "nivel", label: "Nivel (0-9)" },
       { key: "estado", label: "Estado" },
-      { key: "fuente", label: "Fuente" },
       { key: "responsable", label: "Responsable" },
     ],
     dateField: "fecha",
@@ -199,13 +168,36 @@ export async function initHidrometeorologia() {
     // para preservar la integridad de la serie histórica.
   });
 
-  document.getElementById("btn-hidro-consultar")?.addEventListener("click", async () => {
-    const nivel = await consultarNivelExterno();
-    if (nivel !== null) {
-      await registrarLectura(nivel, "API externa");
-      toast(`Nivel obtenido de la fuente externa: ${nivel} / 9.`, "success");
-    }
-  });
+  const lecturaForm = document.getElementById("form-hidro-lectura");
+  if (lecturaForm) {
+    // Precarga la fecha/hora actual para que el operador normalmente solo
+    // tenga que escribir el nivel.
+    lecturaForm.elements["fecha"].value = fechaHoraLocalInput();
+
+    lecturaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nivel = Number(lecturaForm.elements["nivel"].value);
+      const fechaStr = lecturaForm.elements["fecha"].value;
+      if (isNaN(nivel) || nivel < NIVEL_HIDRO_MIN || nivel > NIVEL_HIDRO_MAX) {
+        toast(`Ingrese un nivel válido entre ${NIVEL_HIDRO_MIN} y ${NIVEL_HIDRO_MAX}.`, "error");
+        return;
+      }
+      const fecha = fechaStr ? new Date(fechaStr) : new Date();
+      if (isNaN(fecha.getTime())) {
+        toast("Ingrese una fecha/hora válida.", "error");
+        return;
+      }
+      try {
+        await registrarLectura(nivel, fecha);
+        toast("Lectura registrada correctamente.", "success");
+        lecturaForm.reset();
+        lecturaForm.elements["fecha"].value = fechaHoraLocalInput();
+      } catch (err) {
+        console.error("Error registrando lectura de Hidrometeorología:", err);
+        toast("Ocurrió un error al registrar la lectura.", "error");
+      }
+    });
+  }
 
   const configForm = document.getElementById("form-hidro-config");
   if (configForm) {
@@ -216,8 +208,6 @@ export async function initHidrometeorologia() {
         ...umbrales,
         advertencia: Number(configForm.elements["advertencia"].value) || umbrales.advertencia,
         alerta: Number(configForm.elements["alerta"].value) || umbrales.alerta,
-        apiEndpoint: configForm.elements["apiEndpoint"].value.trim(),
-        apiKey: configForm.elements["apiKey"].value.trim(),
       };
       await setDoc(doc(db, COLLECTIONS.CONFIG, "hidrometeorologia"), {
         ...umbrales,
@@ -229,9 +219,4 @@ export async function initHidrometeorologia() {
       renderDashboard();
     });
   }
-
-  // Primer intento automático al cargar el módulo, si ya hay endpoint.
-  consultarNivelExterno({ silent: true }).then((nivel) => {
-    if (nivel !== null) registrarLectura(nivel, "API externa");
-  });
 }
