@@ -53,7 +53,6 @@ export function initEmergencias() {
       { key: "adultos", label: "Adultos" },
       { key: "cantidadTraslados", label: "Traslados" },
       { key: "cantidadFallecidos", label: "Fallecidos" },
-      { key: "responsable", label: "Responsable del día" },
       {
         key: "registroLegado",
         label: "Tipo",
