@@ -1129,8 +1129,21 @@ function setupDebitoForm() {
   // todavía). Si el insumo ya estaba en la lista, suma la cantidad en vez
   // de duplicar la fila.
   btnAgregar.addEventListener("click", () => {
+    // Fecha, Almacén y Motivo quedan bloqueados en cuanto la lista tiene
+    // algo (ver actualizarBloqueoCamposComunes) para que no cambien a medio
+    // armar la lista — por eso deben quedar completos ANTES de agregar el
+    // primer insumo: si no, el usuario queda atrapado sin poder llenarlos
+    // ni vaciar la lista sin perder lo ya agregado.
+    if (!fechaField.value) {
+      toast("Ponga la fecha antes de agregar insumos a la lista.", "error");
+      return;
+    }
     if (!almacenSelect.value) {
       toast("Seleccione el almacén.", "error");
+      return;
+    }
+    if (!motivoSelect.value) {
+      toast("Seleccione el motivo antes de agregar insumos a la lista.", "error");
       return;
     }
     const opt = insumoSelect.options[insumoSelect.selectedIndex];
