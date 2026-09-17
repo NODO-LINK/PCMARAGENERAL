@@ -242,7 +242,7 @@ details[open] > summary .chevron {
   display: flex;
   justify-content: space-around;
   gap: 3rem;
-  margin-top: 3rem;
+  margin-top: 1.5rem;
   padding: 0 2rem 1rem;
 }
 .print-signature {
@@ -328,11 +328,11 @@ details[open] > summary .chevron {
     max-width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 8.5pt;
+    font-size: 8pt;
   }
   th,
   td {
-    padding: 3px 4px !important;
+    padding: 2px 4px !important;
     overflow-wrap: break-word;
     word-break: break-word;
     white-space: normal !important;
@@ -342,5 +342,19 @@ details[open] > summary .chevron {
   }
   tr {
     page-break-inside: avoid;
+  }
+  /* Que la firma no quede sola en una hoja nueva: no se parte a la mitad
+     ni se separa de la última fila de la tabla (totales incluidos) con un
+     salto de página justo antes. */
+  tfoot,
+  .print-footer,
+  .print-signatures {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  tfoot tr:last-child,
+  tbody tr:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
   }
 }
