@@ -37,6 +37,7 @@ const REPORTS = {
       { key: "cantidadTraslados", label: "Traslados" },
       { key: "cantidadFallecidos", label: "Fallecidos" },
     ],
+    totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
   },
   traslados: {
     label: "Traslados",
@@ -184,6 +185,7 @@ function renderReport(key) {
     getRows: () => dataCache[cfg.collection] || [],
     isAdmin: () => false, // los reportes son de solo consulta (sin editar/eliminar desde este panel)
     exportFileName: `Reporte_${cfg.label}`,
+    totals: cfg.totals,
   });
 }
 
