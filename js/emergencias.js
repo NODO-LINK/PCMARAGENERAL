@@ -59,6 +59,10 @@ export function initEmergencias() {
         format: (r) => (r.registroLegado === "si" ? "Histórico (no cuenta)" : "Planilla"),
       },
     ],
+    // Fila de totales al pie del historial (pantalla e impreso, ej. el
+    // cierre mensual): suma niños, adolescentes, adultos, traslados y
+    // fallecidos sobre las filas del rango de fechas filtrado.
+    totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
     beforeSave: (data) => {
       data.ninos = Number(data.ninos) || 0;
       data.adolescentes = Number(data.adolescentes) || 0;

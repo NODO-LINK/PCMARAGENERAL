@@ -41,6 +41,7 @@ export function createCrudModule(cfg) {
     historialTitle,
     responsableFieldName = "responsable",
     firmas,
+    totals,
     beforeSave,
     onRowsChange,
   } = cfg;
@@ -137,6 +138,7 @@ export function createCrudModule(cfg) {
     isAdmin,
     exportFileName: historialTitle,
     firmas,
+    totals,
     onEdit: (row) => {
       if (!row) return;
       editingId = row.id;

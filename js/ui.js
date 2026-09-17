@@ -123,7 +123,7 @@ export function formatDate(value, withTime = false) {
  * @param {[string,string]} [opts.firmas] - etiquetas de las dos firmas del pie de impresión.
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, exportFileName, firmas } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, exportFileName, firmas, totals } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -160,9 +160,10 @@ export function createHistorial(opts) {
             </tr>
           </thead>
           <tbody id="${uid}-body"></tbody>
+          ${totals && totals.length ? `<tfoot><tr id="${uid}-totals" class="border-t-2 border-slate-300 bg-slate-50 font-semibold"></tr></tfoot>` : ""}
         </table>
       </div>
-      <div class="p-3 text-xs text-slate-400 border-t border-slate-100" id="${uid}-count"></div>
+      <div class="p-3 text-xs text-slate-400 border-t border-slate-100 no-print" id="${uid}-count"></div>
       <div class="print-footer hidden">${printFooterHTML(firmas)}</div>
     </div>`;
 
@@ -268,6 +269,33 @@ export function createHistorial(opts) {
       .join("") || `<tr><td colspan="${columns.length + 2}" class="px-4 py-6 text-center text-slate-400">Sin registros para los filtros aplicados.</td></tr>`;
 
     el(`#${uid}-count`).textContent = `${rows.length} registro(s) mostrados de ${getRows().length} total(es).`;
+
+    // Fila de totales al pie de la tabla (en pantalla e impresión): suma,
+    // sobre las filas actualmente filtradas (respeta Desde/Hasta/Buscar),
+    // las columnas numéricas indicadas en `totals` — por ejemplo, para el
+    // cierre mensual de Pacientes: niños, adolescentes, adultos, traslados
+    // y fallecidos.
+    if (totals && totals.length) {
+      const totalsEl = el(`#${uid}-totals`);
+      if (totalsEl) {
+        const sumas = {};
+        totals.forEach((key) => {
+          sumas[key] = rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+        });
+        let etiquetaPuesta = false;
+        const celdas = columns.map((c) => {
+          if (totals.includes(c.key)) {
+            return `<td class="px-4 py-2">${sumas[c.key]}</td>`;
+          }
+          if (!etiquetaPuesta) {
+            etiquetaPuesta = true;
+            return `<td class="px-4 py-2 text-right">Total:</td>`;
+          }
+          return `<td class="px-4 py-2"></td>`;
+        });
+        totalsEl.innerHTML = `<td class="px-4 py-2 no-print"></td>${celdas.join("")}<td class="px-4 py-2 no-print"></td>`;
+      }
+    }
 
     el(`#${uid}-body`)
       .querySelectorAll(".row-check")
