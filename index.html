@@ -599,6 +599,22 @@
               <tbody id="tabla-insumos-body"></tbody>
             </table>
           </div>
+
+          <div class="form-card role-admin-only hidden border-2 border-red-300 bg-red-50 no-print">
+            <h3 class="font-semibold text-red-800 mb-1">⚠️ Zona de peligro: borrar todos los insumos</h3>
+            <p class="text-xs text-red-700 mb-3">
+              Esto borra <strong>PERMANENTEMENTE</strong> todo el Catálogo de Insumos, las Existencias por almacén y todo el Historial de movimientos (Entradas, Transferencias y Débitos). No hay forma de deshacerlo. Úselo solo si necesita empezar de cero (por ejemplo, tras cargar datos de prueba por error).
+            </p>
+            <div class="form-grid !grid-cols-1">
+              <div>
+                <label class="form-label">Para confirmar, escriba <strong>BORRAR TODO</strong></label>
+                <input type="text" id="confirmar-borrado-insumos" class="form-input" autocomplete="off" placeholder="BORRAR TODO" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-borrar-todos-insumos" disabled class="px-4 py-2 text-sm rounded-md text-white bg-red-700 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed">Borrar todos los insumos y su historial</button>
+            </div>
+          </div>
         </div>
 
         <div id="panel-entradas" class="subtab-panel hidden space-y-4">

@@ -36,6 +36,7 @@ import {
   limit,
   serverTimestamp,
   runTransaction,
+  writeBatch,
   Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
@@ -96,6 +97,7 @@ export {
   limit,
   serverTimestamp,
   runTransaction,
+  writeBatch,
   Timestamp,
   signInWithEmailAndPassword,
   signOut,

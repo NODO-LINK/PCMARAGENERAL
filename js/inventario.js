@@ -40,6 +40,8 @@ import {
   collection,
   addDoc,
   updateDoc,
+  getDocs,
+  writeBatch,
 } from "./firebase.js";
 import { COLLECTIONS, ALMACENES, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
@@ -82,6 +84,7 @@ export function initInventario() {
   setupInsumoSearchInputs();
   setupAlmacenFiltroInsumo();
   setupInsumoForm();
+  setupBorrarTodosInsumos();
   const entradaFormApi = setupEntradaForm();
   const transferenciaFormApi = setupTransferenciaForm();
   const debitoFormApi = setupDebitoForm();
@@ -354,6 +357,75 @@ function setupInsumoForm() {
       form.reset();
     } catch (err) {
       console.error(err);
+    }
+  });
+}
+
+/**
+ * Borra por completo el Catálogo de Insumos, las Existencias (insumoStock)
+ * y todo el Historial de movimientos (Entradas/Transferencias/Débitos).
+ * Acción IRREVERSIBLE — pensada solo para "empezar de cero" (p. ej. tras
+ * cargar datos de prueba por error). Requiere escribir la frase exacta de
+ * confirmación además del diálogo de confirmación estándar, por la
+ * severidad de borrar también el historial de auditoría.
+ */
+async function borrarTodosLosInsumos() {
+  const colecciones = [
+    COLLECTIONS.DEBITOS_INVENTARIO,
+    COLLECTIONS.TRANSFERENCIAS_INVENTARIO,
+    COLLECTIONS.ENTRADAS_INVENTARIO,
+    COLLECTIONS.INSUMO_STOCK,
+    COLLECTIONS.INSUMOS,
+  ];
+  let totalBorrados = 0;
+  for (const col of colecciones) {
+    const snap = await getDocs(collection(db, col));
+    const docs = snap.docs;
+    // Firestore permite máximo 500 operaciones por batch; se procesa en
+    // lotes de 450 para dejar margen.
+    for (let i = 0; i < docs.length; i += 450) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    totalBorrados += docs.length;
+  }
+  return totalBorrados;
+}
+
+function setupBorrarTodosInsumos() {
+  const input = document.getElementById("confirmar-borrado-insumos");
+  const btn = document.getElementById("btn-borrar-todos-insumos");
+  if (!input || !btn) return;
+
+  const FRASE = "BORRAR TODO";
+  input.addEventListener("input", () => {
+    btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+  });
+
+  btn.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "¿Borrar TODOS los insumos y su historial?",
+      message:
+        "Esto borra permanentemente el Catálogo de Insumos completo, las Existencias por almacén y TODO el Historial de Entradas, Transferencias y Débitos. No hay forma de deshacer esta acción. ¿Está completamente seguro?",
+      confirmText: "Sí, borrar todo permanentemente",
+      danger: true,
+    });
+    if (!ok) return;
+
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Borrando...";
+    try {
+      const total = await borrarTodosLosInsumos();
+      toast(`Se borraron ${total} registro(s): catálogo, existencias e historial de movimientos.`, "success");
+      input.value = "";
+    } catch (err) {
+      console.error("Error borrando todos los insumos:", err);
+      toast(err.message || "Ocurrió un error borrando los datos. Revise e intente de nuevo.", "error");
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = input.value.trim().toUpperCase() !== FRASE;
     }
   });
 }
