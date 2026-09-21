@@ -346,17 +346,44 @@ function setupInsumoForm() {
       toast("Complete el nombre y la categoría del insumo.", "error");
       return;
     }
+    // Cantidad/Almacén son opcionales: si se llena la cantidad, se crea de
+    // una vez la existencia inicial en el almacén elegido (queda como una
+    // entrada más, igual que si se hubiera registrado por separado).
+    const cantidad = Number(form.elements["cantidad"].value);
+    const almacen = form.elements["almacen"].value;
+    if (cantidad > 0 && !almacen) {
+      toast("Seleccione el almacén para la cantidad inicial.", "error");
+      return;
+    }
     try {
-      await createRecord(COLLECTIONS.INSUMOS, {
+      const ref = await createRecord(COLLECTIONS.INSUMOS, {
         nombre,
         categoriaId: opt.value,
         categoriaNombre: opt.dataset.nombre,
         activo: true,
       });
-      toast("Insumo agregado al catálogo.", "success");
+      if (cantidad > 0) {
+        await registrarEntrada({
+          insumoId: ref.id,
+          insumoNombre: nombre,
+          // Se pasan explícitas: el caché local de `insumos` todavía no
+          // tiene este insumo recién creado (el listener de Firestore
+          // tarda un round-trip en actualizarlo).
+          categoriaId: opt.value,
+          categoriaNombre: opt.dataset.nombre,
+          almacen,
+          cantidad,
+          responsable: getResponsableLabel(),
+          observaciones: "Existencia inicial al crear el insumo",
+        });
+        toast(`Insumo agregado con ${cantidad} unidad(es) en ${almacen}.`, "success");
+      } else {
+        toast("Insumo agregado al catálogo.", "success");
+      }
       form.reset();
     } catch (err) {
       console.error(err);
+      toast(err.message || "Ocurrió un error agregando el insumo.", "error");
     }
   });
 }
@@ -691,9 +718,16 @@ function setupEntradaForm() {
   return { startEdit };
 }
 
-async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, responsable, observaciones, fecha, minimo }) {
+async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, responsable, observaciones, fecha, minimo, categoriaId, categoriaNombre }) {
   const stockId = stockDocId(insumoId, almacen);
   const insumo = insumos.find((i) => i.id === insumoId);
+  // `categoriaId`/`categoriaNombre` solo se sobrescriben si se pasaron
+  // explícitamente (p. ej. al crear la existencia inicial junto con el
+  // insumo, cuando el caché local de `insumos` todavía no tiene el insumo
+  // recién creado por la latencia normal del listener de Firestore); si
+  // no, se toman del catálogo ya cargado en memoria.
+  const categoriaIdFinal = categoriaId !== undefined ? categoriaId : insumo?.categoriaId || "";
+  const categoriaNombreFinal = categoriaNombre !== undefined ? categoriaNombre : insumo?.categoriaNombre || "";
 
   await runTransaction(db, async (tx) => {
     const stockRef = doc(db, COLLECTIONS.INSUMO_STOCK, stockId);
@@ -707,8 +741,8 @@ async function registrarEntrada({ insumoId, insumoNombre, almacen, cantidad, res
       {
         insumoId,
         insumoNombre,
-        categoriaId: insumo?.categoriaId || "",
-        categoriaNombre: insumo?.categoriaNombre || "",
+        categoriaId: categoriaIdFinal,
+        categoriaNombre: categoriaNombreFinal,
         almacen,
         existencia: existenciaActual + cantidad,
         minimo: minimoFinal,
