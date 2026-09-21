@@ -13,6 +13,27 @@ import { quitarAcentos, leerArchivoTabular, mapearFila, parsearFechaLegado } fro
 
 let moduleRef = null;
 
+/**
+ * Ordena por Código de inspección: numérico cuando ambos códigos son
+ * puramente numéricos (evita el orden lexicográfico erróneo entre, p. ej.,
+ * "9" y "10"); si no, alfanumérico con `numeric: true` (para códigos tipo
+ * "INS-2" vs "INS-10"). Los registros sin código (import viejo o carga
+ * manual sin llenarlo) quedan al final, no se pierden.
+ */
+function ordenarPorCodigo(rows) {
+  return [...rows].sort((a, b) => {
+    const ca = String(a.codigoInspeccion ?? "").trim();
+    const cb = String(b.codigoInspeccion ?? "").trim();
+    if (!ca && !cb) return 0;
+    if (!ca) return 1;
+    if (!cb) return -1;
+    const na = Number(ca);
+    const nb = Number(cb);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return ca.localeCompare(cb, "es", { numeric: true, sensitivity: "base" });
+  });
+}
+
 export function initInspeccion() {
   moduleRef = createCrudModule({
     collectionName: COLLECTIONS.INSPECCIONES,
@@ -30,6 +51,7 @@ export function initInspeccion() {
       { key: "responsable", label: "Responsable" },
       { key: "observacion", label: "Observación" },
     ],
+    sortRows: ordenarPorCodigo,
   });
   setupImportacionInspeccion();
   return moduleRef;

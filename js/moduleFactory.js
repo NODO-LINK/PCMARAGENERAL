@@ -42,6 +42,7 @@ export function createCrudModule(cfg) {
     responsableFieldName = "responsable",
     firmas,
     totals,
+    sortRows,
     beforeSave,
     onRowsChange,
   } = cfg;
@@ -171,8 +172,15 @@ export function createCrudModule(cfg) {
     },
   });
 
+  // La consulta a Firestore siempre ordena por `dateField` (para no perder
+  // registros sin el campo de `sortRows`, que Firestore excluiría del
+  // orderBy si estuviera vacío/ausente); `sortRows`, si se da, reordena el
+  // resultado en el cliente para pantalla, impresión y exportación —
+  // p. ej. Gestión de Riesgo se muestra ordenada por Código en vez de por
+  // fecha, sin arriesgarse a ocultar los registros que todavía no tienen
+  // código.
   const unsubscribe = subscribeCollection(collectionName, dateField, (newRows) => {
-    rows = newRows;
+    rows = sortRows ? sortRows(newRows) : newRows;
     historial.render();
     if (onRowsChange) onRowsChange(rows);
   });
