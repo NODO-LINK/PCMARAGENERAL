@@ -123,7 +123,7 @@ export function formatDate(value, withTime = false) {
  * @param {[string,string]} [opts.firmas] - etiquetas de las dos firmas del pie de impresión.
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, exportFileName, firmas, totals } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, exportFileName, firmas, totals, firmaEspacio } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -164,7 +164,7 @@ export function createHistorial(opts) {
         </table>
       </div>
       <div class="p-3 text-xs text-slate-400 border-t border-slate-100 no-print" id="${uid}-count"></div>
-      <div class="print-footer hidden">${printFooterHTML(firmas)}</div>
+      <div class="print-footer hidden">${printFooterHTML(firmas, firmaEspacio)}</div>
     </div>`;
 
   const el = (sel) => root.querySelector(sel);
@@ -216,7 +216,7 @@ export function createHistorial(opts) {
   // imprimirse individualmente (disponible para Operador y Administrador).
   function printRegistro(row) {
     if (!row) return;
-    printAdHoc(`${title} — Registro Individual`, `<div style="margin-top:8px;">${registroTableHTML(row)}</div>`, firmas);
+    printAdHoc(`${title} — Registro Individual`, `<div style="margin-top:8px;">${registroTableHTML(row)}</div>`, firmas, firmaEspacio);
   }
 
   // Imprime SOLO los registros marcados con el checkbox, cada uno como su
@@ -235,7 +235,7 @@ export function createHistorial(opts) {
       </div>`
       )
       .join("");
-    printAdHoc(`${title} — ${rows.length} Registro(s) Seleccionado(s)`, bodyHTML, firmas);
+    printAdHoc(`${title} — ${rows.length} Registro(s) Seleccionado(s)`, bodyHTML, firmas, firmaEspacio);
   }
 
   function render() {
@@ -383,10 +383,18 @@ export function printHeaderHTML(subtitle) {
     </div>`;
 }
 
-export function printFooterHTML(firmas) {
+/**
+ * @param {[string,string]} [firmas]
+ * @param {number} [espacioRem] - separación extra (en rem) antes de la
+ *   firma, para documentos cortos donde conviene dejar más espacio en
+ *   blanco para firmar a mano (el margen por defecto del CSS es compacto,
+ *   pensado para que reportes largos no empujen la firma a otra hoja).
+ */
+export function printFooterHTML(firmas, espacioRem) {
   const labels = firmas && firmas.length === 2 ? firmas : ["Responsable", "Departamento"];
+  const estiloExtra = espacioRem ? ` style="margin-top:${espacioRem}rem"` : "";
   return `
-    <div class="print-signatures">
+    <div class="print-signatures"${estiloExtra}>
       ${labels
         .map(
           (label) => `
@@ -446,7 +454,7 @@ export function printElement(root, title) {
  * @param {[string,string]} [firmas]
  */
 let printScratchEl = null;
-export function printAdHoc(title, bodyHTML, firmas) {
+export function printAdHoc(title, bodyHTML, firmas, espacioFirmaRem) {
   if (!printScratchEl) {
     printScratchEl = document.createElement("div");
     printScratchEl.className = "print-only-staging";
@@ -456,7 +464,7 @@ export function printAdHoc(title, bodyHTML, firmas) {
     <div style="background:#fff;">
       <div class="print-header">${printHeaderHTML(title)}</div>
       ${bodyHTML}
-      <div class="print-footer">${printFooterHTML(firmas)}</div>
+      <div class="print-footer">${printFooterHTML(firmas, espacioFirmaRem)}</div>
     </div>`;
   printElement(printScratchEl, title);
 }

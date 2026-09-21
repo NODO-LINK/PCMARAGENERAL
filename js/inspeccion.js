@@ -42,6 +42,12 @@ export function initInspeccion() {
     dateField: "fecha",
     historialTitle: "Historial de Gestión de Riesgo (Inspección)",
     firmas: ["Inspector", "Director"],
+    // Las inspecciones suelen imprimirse como documentos cortos (una ficha
+    // o pocas filas), así que hay margen de sobra para dejar más espacio
+    // en blanco antes de la firma y que se pueda firmar a mano con
+    // comodidad — a diferencia de reportes largos (como Pacientes), donde
+    // ese espacio se mantiene compacto para no empujar la firma a otra hoja.
+    firmaEspacio: 4,
     columns: [
       { key: "codigoInspeccion", label: "Código" },
       { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
