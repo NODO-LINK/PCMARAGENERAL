@@ -22,6 +22,7 @@ export function initInspeccion() {
     historialTitle: "Historial de Gestión de Riesgo (Inspección)",
     firmas: ["Inspector", "Director"],
     columns: [
+      { key: "codigoInspeccion", label: "Código" },
       { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
       { key: "institucion", label: "Institución" },
       { key: "solicitante", label: "Solicitante" },
@@ -42,6 +43,7 @@ export function getInspeccionModule() {
 /* Importación masiva de Gestión de Riesgo (Inspección) desde Excel/CSV    */
 /* ---------------------------------------------------------------------- */
 const INSPECCION_ALIAS = {
+  codigoInspeccion: ["codigo", "codigoinspeccion", "codigo de inspeccion", "código"],
   fecha: ["fecha"],
   institucion: ["institucion", "institución"],
   solicitante: ["solicitante"],
@@ -53,6 +55,7 @@ const INSPECCION_ALIAS = {
 function mapearFilaInspeccion(rawRow) {
   const found = mapearFila(rawRow, INSPECCION_ALIAS);
   return {
+    codigoInspeccion: String(found.codigoInspeccion ?? "").trim(),
     fecha: found.fecha,
     institucion: String(found.institucion ?? "").trim(),
     solicitante: String(found.solicitante ?? "").trim(),
@@ -122,6 +125,7 @@ function renderPreviewImportacionInspeccion(filas) {
       <table class="min-w-full text-xs">
         <thead class="bg-slate-50 text-slate-600 sticky top-0">
           <tr>
+            <th class="text-left px-2 py-1.5">Código</th>
             <th class="text-left px-2 py-1.5">Fecha</th>
             <th class="text-left px-2 py-1.5">Institución</th>
             <th class="text-left px-2 py-1.5">Solicitante</th>
@@ -135,6 +139,7 @@ function renderPreviewImportacionInspeccion(filas) {
             .map(
               (f) => `
           <tr class="border-t border-slate-100 ${f.errores.length ? "bg-red-50" : ""}">
+            <td class="px-2 py-1.5">${escapeHTML(f.codigoInspeccion) || "—"}</td>
             <td class="px-2 py-1.5">${f.fechaResuelta ? escapeHTML(formatDate(f.fechaTexto)) : "—"}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.institucion) || "—"}</td>
             <td class="px-2 py-1.5">${escapeHTML(f.solicitante) || "—"}</td>
@@ -193,6 +198,9 @@ function setupImportacionInspeccion() {
     for (const fila of filasImportacionInspeccionValidas) {
       try {
         await createRecord(COLLECTIONS.INSPECCIONES, {
+          // Si el archivo no traía código, se omite el campo (en vez de
+          // guardar "") para que el historial lo muestre como "—".
+          ...(fila.codigoInspeccion ? { codigoInspeccion: fila.codigoInspeccion } : {}),
           fecha: fila.fechaTexto,
           institucion: fila.institucion,
           solicitante: fila.solicitante,
