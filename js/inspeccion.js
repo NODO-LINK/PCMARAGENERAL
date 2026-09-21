@@ -27,6 +27,7 @@ export function initInspeccion() {
       { key: "solicitante", label: "Solicitante" },
       { key: "cedulaRif", label: "C.I. / RIF" },
       { key: "responsable", label: "Responsable" },
+      { key: "observacion", label: "Observación" },
     ],
   });
   setupImportacionInspeccion();
@@ -70,7 +71,9 @@ function validarFilaInspeccion(fila, responsableDefecto) {
   const errores = [];
   if (!fila.institucion) errores.push("falta la institución");
   if (!fila.solicitante) errores.push("falta el solicitante");
-  if (!fila.cedulaRif) errores.push("falta la cédula/RIF");
+  // La cédula/RIF es opcional al importar (archivos de sistemas viejos
+  // suelen no traerla para todos los registros); si falta, la inspección
+  // se importa igual y el historial la muestra como "—".
 
   let fechaResuelta = null;
   if (fila.fecha instanceof Date && !isNaN(fila.fecha.getTime())) {
@@ -193,7 +196,9 @@ function setupImportacionInspeccion() {
           fecha: fila.fechaTexto,
           institucion: fila.institucion,
           solicitante: fila.solicitante,
-          cedulaRif: fila.cedulaRif,
+          // Si el archivo no traía cédula/RIF, se omite el campo (en vez
+          // de guardar "") para que el historial la muestre como "—".
+          ...(fila.cedulaRif ? { cedulaRif: fila.cedulaRif } : {}),
           responsable: fila.responsableResuelto,
           observacion: fila.observacion,
         });
