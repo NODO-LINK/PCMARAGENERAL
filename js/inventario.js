@@ -312,6 +312,14 @@ function setupInsumoSearchInputs() {
       const sel = input.parentElement?.querySelector("select.select-insumo");
       if (sel) sel.innerHTML = buildInsumoOptionsHTML(input.value, getAlmacenFiltroDeSelect(sel));
     });
+    // Este buscador puede vivir dentro de un <form> (p. ej. Débito, con su
+    // botón "Registrar todos" como submit por defecto): un Enter aquí no
+    // "confirma" nada por sí mismo (todavía falta elegir insumo y
+    // cantidad), así que se evita que dispare el submit del formulario
+    // completo por error.
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") e.preventDefault();
+    });
   });
 }
 
@@ -355,6 +363,52 @@ function setupInsumoForm() {
       toast("Seleccione el almacén para la cantidad inicial.", "error");
       return;
     }
+
+    // Evita duplicados por error (p. ej. doble clic, o no recordar que el
+    // insumo ya existía): si ya hay uno con el mismo nombre (sin distinguir
+    // tildes/mayúsculas), se ofrece usar ESE en vez de crear uno nuevo y
+    // separado — así "agregar existencia a un insumo" y "crear insumo" no
+    // terminan generando catálogo duplicado.
+    const nombreNorm = quitarAcentos(nombre).toLowerCase();
+    const existente = insumos.find((i) => quitarAcentos(i.nombre).toLowerCase() === nombreNorm);
+    if (existente) {
+      const usarExistente = await confirmDialog({
+        title: "Este insumo ya existe",
+        message: `Ya hay un insumo llamado "${escapeHTML(existente.nombre)}" en el catálogo (categoría: ${escapeHTML(existente.categoriaNombre || "—")}).${cantidad > 0 ? ` ¿Agregar las ${cantidad} unidad(es) a ese insumo ya existente en vez de crear uno duplicado?` : " ¿Usar ese insumo en vez de crear uno duplicado?"}`,
+        confirmText: cantidad > 0 ? "Sí, agregar al existente" : "Sí, usar el existente",
+        danger: false,
+      });
+      if (usarExistente) {
+        if (cantidad > 0) {
+          try {
+            await registrarEntrada({
+              insumoId: existente.id,
+              insumoNombre: existente.nombre,
+              almacen,
+              cantidad,
+              responsable: getResponsableLabel(),
+              observaciones: "Existencia agregada desde el formulario de Nuevo insumo",
+            });
+            toast(`Se agregaron ${cantidad} unidad(es) de "${existente.nombre}" en ${almacen}.`, "success");
+            form.reset();
+          } catch (err) {
+            console.error(err);
+            toast(err.message || "Ocurrió un error agregando la existencia.", "error");
+          }
+        } else {
+          toast(`"${existente.nombre}" ya estaba en el catálogo — no se creó de nuevo.`, "info");
+        }
+        return;
+      }
+      const confirmarDuplicado = await confirmDialog({
+        title: "¿Crear un insumo duplicado?",
+        message: `Se va a crear "${escapeHTML(nombre)}" como un insumo NUEVO y SEPARADO del ya existente — quedarán dos entradas distintas en el catálogo con (casi) el mismo nombre. ¿Continuar de todas formas?`,
+        confirmText: "Sí, crear de todas formas",
+        danger: true,
+      });
+      if (!confirmarDuplicado) return;
+    }
+
     try {
       const ref = await createRecord(COLLECTIONS.INSUMOS, {
         nombre,
@@ -486,8 +540,30 @@ function renderInsumosTable() {
   if (admin) {
     tbody.querySelectorAll('[data-act="del"]').forEach((btn) => {
       btn.onclick = async () => {
-        const ok = await confirmDialog({ title: "Eliminar insumo", message: "¿Eliminar este insumo del catálogo? Las existencias registradas no se verán afectadas." });
-        if (ok) deleteRecord(COLLECTIONS.INSUMOS, btn.dataset.id);
+        const insumoId = btn.dataset.id;
+        // Antes las existencias (insumoStock) del insumo NO se borraban al
+        // eliminarlo del catálogo, así que un insumo borrado (p. ej. un
+        // duplicado) seguía "reflejado" en Existencias con su cantidad
+        // vieja, aunque ya no estuviera en el catálogo — confuso. Ahora se
+        // borran juntas; el historial de Entradas/Transferencias/Débitos ya
+        // registrado sí se conserva (queda como registro histórico).
+        const existenciasDelInsumo = stock.filter((s) => s.insumoId === insumoId);
+        const avisoExistencias = existenciasDelInsumo.length
+          ? ` También se borrarán sus ${existenciasDelInsumo.length} existencia(s) registrada(s) (${existenciasDelInsumo.map((s) => `${escapeHTML(s.almacen)}: ${s.existencia}`).join(", ")}).`
+          : "";
+        const ok = await confirmDialog({
+          title: "Eliminar insumo",
+          message: `¿Eliminar este insumo del catálogo?${avisoExistencias} El historial de Entradas/Transferencias/Débitos ya registrado se conserva para consulta.`,
+        });
+        if (!ok) return;
+        try {
+          await Promise.all(existenciasDelInsumo.map((s) => deleteRecord(COLLECTIONS.INSUMO_STOCK, s.id)));
+          await deleteRecord(COLLECTIONS.INSUMOS, insumoId);
+          toast("Insumo y sus existencias eliminados.", "success");
+        } catch (err) {
+          console.error("Error eliminando insumo y sus existencias:", err);
+          toast(err.message || "No se pudo eliminar el insumo.", "error");
+        }
       };
     });
   }
@@ -1159,6 +1235,19 @@ function setupDebitoForm() {
 
   let editingRow = null;
 
+  // El bloque de Insumo/Cantidad/"Agregar a la lista" vive DENTRO de este
+  // mismo <form> (junto con Fecha/Almacén/Motivo y "Registrar todos los
+  // débitos"): sin esto, teclear la cantidad y presionar Enter — el gesto
+  // más natural al cargar varios insumos rápido — dispara el submit por
+  // defecto del formulario (registrar TODO el carrito) en vez de agregar
+  // ese insumo a la lista, cortando el flujo a mitad de carga.
+  cantidadField.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !editingRow) {
+      e.preventDefault();
+      btnAgregar.click();
+    }
+  });
+
   // Fecha, Almacén y Motivo aplican a TODOS los insumos de la lista: se
   // bloquean mientras haya algo pendiente para que no se pueda cambiar el
   // almacén (o el motivo) a medio armar la lista y terminar registrando un
@@ -1263,7 +1352,23 @@ function setupDebitoForm() {
       return;
     }
 
+    // Valida contra la existencia disponible YA AL AGREGAR a la lista, no
+    // solo al final: sin esto, el error de "existencia insuficiente" solo
+    // aparecía al registrar TODO el carrito (a veces con otros insumos ya
+    // debitados antes de llegar al problemático), obligando a revisar cuál
+    // falló a mitad de camino en vez de saberlo de entrada.
     const existente = carritoDebitos.find((it) => it.insumoId === opt.value);
+    const yaEnCarrito = existente ? existente.cantidad : 0;
+    const stockDoc = stock.find((s) => s.insumoId === opt.value && s.almacen === almacenSelect.value);
+    const disponible = stockDoc ? Number(stockDoc.existencia) || 0 : 0;
+    if (yaEnCarrito + cantidad > disponible) {
+      toast(
+        `Solo hay ${disponible} unidad(es) de "${opt.dataset.nombre}" disponibles en ${almacenSelect.value}${yaEnCarrito ? ` (ya tiene ${yaEnCarrito} en la lista)` : ""}.`,
+        "error"
+      );
+      return;
+    }
+
     if (existente) {
       existente.cantidad += cantidad;
     } else {
