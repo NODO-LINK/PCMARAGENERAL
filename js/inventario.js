@@ -98,6 +98,10 @@ export function initInventario() {
     insumos = rows;
     renderInsumosTable();
     populateInsumoSelects();
+    // El aviso de existencias huérfanas compara `insumos` contra `stock`:
+    // debe recalcularse también cuando cambia el catálogo, no solo cuando
+    // cambian las existencias.
+    renderAvisoExistenciasHuerfanas();
   });
 
   subscribeCollection(COLLECTIONS.INSUMO_STOCK, "insumoNombre", (rows) => {
@@ -571,9 +575,56 @@ function renderInsumosTable() {
 
 /* ------------------------------ Existencias ----------------------------- */
 
+/**
+ * Existencias "huérfanas": documentos de insumoStock cuyo insumoId ya no
+ * corresponde a ningún insumo del catálogo — quedaron así por insumos
+ * eliminados ANTES de que borrar un insumo también borrara sus
+ * existencias (ver eliminación en renderInsumosTable). No se limpian
+ * solas: hay que ofrecer borrarlas explícitamente.
+ */
+function getExistenciasHuerfanas() {
+  const idsVigentes = new Set(insumos.map((i) => i.id));
+  return stock.filter((s) => !idsVigentes.has(s.insumoId));
+}
+
+function renderAvisoExistenciasHuerfanas() {
+  const root = document.getElementById("existencias-huerfanas-aviso");
+  if (!root) return;
+  const huerfanas = getExistenciasHuerfanas();
+  if (!huerfanas.length || !isAdmin()) {
+    root.innerHTML = "";
+    return;
+  }
+  root.innerHTML = `
+    <div class="border border-amber-300 bg-amber-50 rounded-md p-3 flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm text-amber-800">
+        ${huerfanas.length} existencia(s) quedaron sin insumo en el catálogo (de insumos eliminados antes de esta corrección) — por eso siguen apareciendo abajo aunque ya no existan en Insumos.
+      </p>
+      <button type="button" id="btn-limpiar-existencias-huerfanas" class="px-3 py-1.5 text-xs rounded-md bg-amber-700 text-white hover:bg-amber-800">Limpiar ${huerfanas.length} existencia(s) huérfana(s)</button>
+    </div>`;
+  document.getElementById("btn-limpiar-existencias-huerfanas")?.addEventListener("click", async () => {
+    const detalle = huerfanas.map((s) => `${s.insumoNombre || "(sin nombre)"} — ${s.almacen}: ${s.existencia}`).join("; ");
+    const ok = await confirmDialog({
+      title: "Limpiar existencias huérfanas",
+      message: `Se van a borrar ${huerfanas.length} registro(s) de existencia sin insumo en el catálogo (${detalle}). El historial de movimientos ya registrado no se toca. ¿Continuar?`,
+      confirmText: "Sí, limpiar",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await Promise.all(huerfanas.map((s) => deleteRecord(COLLECTIONS.INSUMO_STOCK, s.id)));
+      toast(`${huerfanas.length} existencia(s) huérfana(s) eliminada(s).`, "success");
+    } catch (err) {
+      console.error("Error limpiando existencias huérfanas:", err);
+      toast(err.message || "No se pudieron limpiar las existencias huérfanas.", "error");
+    }
+  });
+}
+
 function renderStockTable() {
   const tbody = document.getElementById("tabla-stock-body");
   if (!tbody) return;
+  renderAvisoExistenciasHuerfanas();
   const filtro = document.getElementById("stock-filtro-almacen")?.value || "";
   const buscar = (document.getElementById("stock-buscar")?.value || "").trim().toLowerCase();
   const soloCriticos = document.getElementById("stock-solo-criticos")?.checked || false;
