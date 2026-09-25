@@ -546,6 +546,15 @@
               Mostrar solo insumos bajo el mínimo crítico
             </label>
           </div>
+          <div id="stock-deficit-wrap" class="no-print flex flex-wrap items-center gap-2">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" id="stock-solo-deficit" />
+              Mostrar solo insumos en déficit: menos de
+            </label>
+            <input type="number" id="stock-deficit-umbral" min="0" step="1" value="20" class="form-input !w-20 !py-1" />
+            <span class="text-sm text-slate-600">unidades</span>
+            <span id="stock-deficit-count" class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold"></span>
+          </div>
           <p class="text-xs text-slate-500 no-print role-admin-only hidden">La columna <strong>Existencia</strong> se puede editar directamente (p. ej. tras un conteo físico) sin pasar por Débitos o Transferencias — el cambio queda igual registrado en el historial correspondiente.</p>
           <div id="existencias-huerfanas-aviso" class="no-print"></div>
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">

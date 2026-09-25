@@ -92,6 +92,8 @@ export function initInventario() {
 
   document.getElementById("stock-buscar")?.addEventListener("input", renderStockTable);
   document.getElementById("stock-solo-criticos")?.addEventListener("change", renderStockTable);
+  document.getElementById("stock-solo-deficit")?.addEventListener("change", renderStockTable);
+  document.getElementById("stock-deficit-umbral")?.addEventListener("input", renderStockTable);
   document.getElementById("insumos-catalogo-buscar")?.addEventListener("input", renderInsumosTable);
 
   subscribeCollection(COLLECTIONS.INSUMOS, "nombre", (rows) => {
@@ -636,6 +638,8 @@ function renderStockTable() {
   const filtro = document.getElementById("stock-filtro-almacen")?.value || "";
   const buscar = (document.getElementById("stock-buscar")?.value || "").trim().toLowerCase();
   const soloCriticos = document.getElementById("stock-solo-criticos")?.checked || false;
+  const soloDeficit = document.getElementById("stock-solo-deficit")?.checked || false;
+  const umbralDeficit = Number(document.getElementById("stock-deficit-umbral")?.value) || 0;
   const admin = isAdmin();
 
   let rows = stock.filter((s) => !filtro || s.almacen === filtro);
@@ -646,6 +650,21 @@ function renderStockTable() {
   }
   if (soloCriticos) {
     rows = rows.filter((s) => Number(s.existencia) <= Number(s.minimo ?? 0));
+  }
+  // Déficit: un umbral fijo (ajustable, 20 por defecto) independiente del
+  // mínimo crítico configurado por insumo — útil porque la mayoría de los
+  // insumos nunca llegan a tener un mínimo asignado, así que ese filtro
+  // por sí solo no alcanza para ver "qué se está por acabar". El contador
+  // se calcula sobre el almacén filtrado (si hay uno elegido), pero
+  // ignora el buscador de texto, para que sea un indicador estable de
+  // "cuántos" en vez de depender de lo que se esté buscando.
+  const deficitCountEl = document.getElementById("stock-deficit-count");
+  if (deficitCountEl) {
+    const enDeficit = stock.filter((s) => (!filtro || s.almacen === filtro) && Number(s.existencia) < umbralDeficit).length;
+    deficitCountEl.textContent = enDeficit ? `${enDeficit} en déficit` : "sin déficit";
+  }
+  if (soloDeficit) {
+    rows = rows.filter((s) => Number(s.existencia) < umbralDeficit);
   }
   rows = rows.sort((a, b) => (a.insumoNombre || "").localeCompare(b.insumoNombre || ""));
 
