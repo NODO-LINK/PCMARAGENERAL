@@ -661,10 +661,11 @@ function renderStockTable() {
           ${admin ? `<input type="number" min="0" value="${s.minimo ?? 0}" data-id="${s.id}" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm input-minimo" />` : (s.minimo ?? 0)}
         </td>
         <td class="px-4 py-2">${critico ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">${getIcon("alerta")}Bajo mínimo</span>` : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">OK</span>'}</td>
+        <td class="px-4 py-2 no-print">${admin ? `<button data-id="${s.id}" class="text-red-700 hover:underline" data-act="del-stock">Eliminar</button>` : "—"}</td>
       </tr>`;
       })
       .join("") ||
-    `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">${buscar || soloCriticos ? "Sin coincidencias para el filtro aplicado." : "Sin existencias registradas."}</td></tr>`;
+    `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">${buscar || soloCriticos ? "Sin coincidencias para el filtro aplicado." : "Sin existencias registradas."}</td></tr>`;
 
   if (admin) {
     // Ajuste manual y directo de la existencia (p. ej. tras un conteo
@@ -743,6 +744,32 @@ function renderStockTable() {
           toast("No se pudo actualizar el mínimo.", "error");
         }
       });
+    });
+
+    // Elimina directamente el registro de existencia de esta fila (insumo +
+    // almacén) — útil para quitar duplicados o existencias que ya no
+    // corresponden, sin tener que borrar el insumo completo del catálogo.
+    // El historial de Entradas/Transferencias/Débitos ya registrado no se
+    // toca; solo desaparece este conteo de existencia puntual.
+    tbody.querySelectorAll('[data-act="del-stock"]').forEach((btn) => {
+      btn.onclick = async () => {
+        const row = rows.find((r) => r.id === btn.dataset.id);
+        if (!row) return;
+        const ok = await confirmDialog({
+          title: "Eliminar existencia",
+          message: `¿Eliminar el registro de existencia de "${escapeHTML(row.insumoNombre)}" en ${escapeHTML(row.almacen)} (${row.existencia} unidad(es))? El insumo sigue en el catálogo; el historial de movimientos ya registrado no se toca. Esta acción no se puede deshacer.`,
+          confirmText: "Sí, eliminar",
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          await deleteRecord(COLLECTIONS.INSUMO_STOCK, row.id);
+          toast("Existencia eliminada.", "success");
+        } catch (err) {
+          console.error("Error eliminando existencia:", err);
+          toast(err.message || "No se pudo eliminar la existencia.", "error");
+        }
+      };
     });
   }
 }
