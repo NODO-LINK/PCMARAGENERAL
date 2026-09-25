@@ -232,11 +232,16 @@ function populateCategoriaInsumoSelect() {
 function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
   const term = filterText.trim().toLowerCase();
   let activos = insumos.filter((i) => i.activo !== false);
+  // Cuando se filtra por almacén (Débito, Insumos utilizados), se guarda
+  // también la existencia de cada insumo en ese almacén para mostrarla
+  // junto al nombre en el <option> — así se ve cuánto hay disponible
+  // mientras se busca, sin tener que ir a consultar Existencias aparte.
+  let existenciaPorInsumo = null;
   if (almacenFiltro) {
-    const conExistencia = new Set(
-      stock.filter((s) => s.almacen === almacenFiltro && Number(s.existencia) > 0).map((s) => s.insumoId)
+    existenciaPorInsumo = new Map(
+      stock.filter((s) => s.almacen === almacenFiltro).map((s) => [s.insumoId, Number(s.existencia) || 0])
     );
-    activos = activos.filter((i) => conExistencia.has(i.id));
+    activos = activos.filter((i) => (existenciaPorInsumo.get(i.id) || 0) > 0);
   }
   const coincide = (i) => i.nombre.toLowerCase().includes(term) || (i.categoriaNombre || "").toLowerCase().includes(term);
   const visibles = term ? activos.filter(coincide) : activos;
@@ -253,7 +258,10 @@ function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
     html += `<optgroup label="${escapeHTML(cat)}">`;
     html += porCategoria[cat]
       .sort((a, b) => a.nombre.localeCompare(b.nombre))
-      .map((i) => `<option value="${i.id}" data-nombre="${escapeHTML(i.nombre)}">${escapeHTML(i.nombre)}</option>`)
+      .map((i) => {
+        const etiqueta = existenciaPorInsumo ? `${i.nombre} — ${existenciaPorInsumo.get(i.id) || 0} disponible(s)` : i.nombre;
+        return `<option value="${i.id}" data-nombre="${escapeHTML(i.nombre)}">${escapeHTML(etiqueta)}</option>`;
+      })
       .join("");
     html += `</optgroup>`;
   });

@@ -21,7 +21,7 @@ import { COLLECTIONS, CATEGORIAS_INSTITUCIONES } from "./config.js";
 import { createCrudModule } from "./moduleFactory.js";
 import { formatDate, toDate, escapeHTML, printAdHoc, toast } from "./ui.js";
 import { subscribeCollection, createRecord, updateRecord } from "./data.js";
-import { registrarDebito, deleteDebito } from "./inventario.js";
+import { registrarDebito, deleteDebito, getStock } from "./inventario.js";
 import { isAdmin, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
 import { getInstituciones } from "./catalogos.js";
@@ -264,6 +264,16 @@ function setupInsumosUsados() {
   fechaField.value = new Date().toLocaleDateString("en-CA");
   respField.value = getResponsableLabel();
 
+  // Presionar Enter en Cantidad agrega el insumo a la lista directamente,
+  // igual que en Débito — el gesto natural al cargar varios insumos rápido
+  // durante la atención del día.
+  cantidadField.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnAgregar.click();
+    }
+  });
+
   // Agrega el insumo seleccionado a la lista pendiente (no toca Firestore
   // todavía). Si el insumo ya estaba en la lista, suma la cantidad en vez
   // de duplicar la fila.
@@ -279,7 +289,22 @@ function setupInsumosUsados() {
       return;
     }
 
+    // Valida contra la existencia disponible YA AL AGREGAR a la lista (no
+    // solo al registrar todo al final), igual que en Débito — evita que el
+    // error de "existencia insuficiente" aparezca a mitad del registro,
+    // con otros insumos del carrito ya debitados.
     const existente = carritoInsumosUsados.find((it) => it.insumoId === opt.value);
+    const yaEnCarrito = existente ? existente.cantidad : 0;
+    const stockDoc = getStock().find((s) => s.insumoId === opt.value && s.almacen === almacenSelect.value);
+    const disponible = stockDoc ? Number(stockDoc.existencia) || 0 : 0;
+    if (yaEnCarrito + cantidad > disponible) {
+      toast(
+        `Solo hay ${disponible} unidad(es) de "${opt.dataset.nombre}" disponibles en ${almacenSelect.value}${yaEnCarrito ? ` (ya tiene ${yaEnCarrito} en la lista)` : ""}.`,
+        "error"
+      );
+      return;
+    }
+
     if (existente) {
       existente.cantidad += cantidad;
     } else {
