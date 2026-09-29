@@ -38,7 +38,7 @@ const REPORTS = {
       { key: "cantidadFallecidos", label: "Fallecidos" },
     ],
     totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
-    firmas: ["Jefe de Módulo de Emergencia", "Director"],
+    firmas: ["Jefe de Departamento", "Director"],
   },
   traslados: {
     label: "Traslados",
