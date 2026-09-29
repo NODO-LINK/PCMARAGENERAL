@@ -38,6 +38,7 @@ const REPORTS = {
       { key: "cantidadFallecidos", label: "Fallecidos" },
     ],
     totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
+    firmas: ["Jefe de Módulo de Emergencia", "Director"],
   },
   traslados: {
     label: "Traslados",
@@ -186,6 +187,7 @@ function renderReport(key) {
     isAdmin: () => false, // los reportes son de solo consulta (sin editar/eliminar desde este panel)
     exportFileName: `Reporte_${cfg.label}`,
     totals: cfg.totals,
+    firmas: cfg.firmas,
   });
 }
 

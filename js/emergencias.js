@@ -45,7 +45,7 @@ export function initEmergencias() {
     historialRoot: document.getElementById("historial-pacientes"),
     dateField: "fecha",
     historialTitle: "Listas Diarias de Pacientes Atendidos",
-    firmas: ["Jefe de Departamento", "Director"],
+    firmas: ["Jefe de Módulo de Emergencia", "Director"],
     columns: [
       { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
       { key: "ninos", label: "Niños" },
@@ -173,7 +173,7 @@ function setupListaDiaria(pacientes) {
     printAdHoc(
       `Lista Diaria de Pacientes — ${fechaFmt}`,
       buildListaDiariaBodyHTML(fechaFmt, registro, insumosDia),
-      ["Jefe de Departamento", "Director"]
+      ["Jefe de Módulo de Emergencia", "Director"]
     );
   });
 }
