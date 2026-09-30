@@ -46,7 +46,7 @@ import {
 import { COLLECTIONS, ALMACENES, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
 import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js";
-import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML } from "./ui.js";
+import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, printAdHoc } from "./ui.js";
 import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
@@ -94,6 +94,7 @@ export function initInventario() {
   document.getElementById("stock-solo-criticos")?.addEventListener("change", renderStockTable);
   document.getElementById("stock-solo-deficit")?.addEventListener("change", renderStockTable);
   document.getElementById("stock-deficit-umbral")?.addEventListener("input", renderStockTable);
+  document.getElementById("btn-imprimir-deficit")?.addEventListener("click", imprimirListaDeficit);
   document.getElementById("insumos-catalogo-buscar")?.addEventListener("input", renderInsumosTable);
 
   subscribeCollection(COLLECTIONS.INSUMOS, "nombre", (rows) => {
@@ -584,6 +585,62 @@ function renderInsumosTable() {
 }
 
 /* ------------------------------ Existencias ----------------------------- */
+
+const cellStylePrint = "border:1px solid #cbd5e1;padding:5px 8px;";
+const headStylePrint = `${cellStylePrint}background:#f1f5f9;font-weight:bold;`;
+
+/**
+ * Imprime la lista de insumos en déficit (existencia por debajo del umbral
+ * elegido) como documento institucional, respetando el almacén filtrado
+ * (si hay uno elegido) pero SIN depender de que el checkbox "Mostrar
+ * solo..." esté marcado — siempre imprime la lista completa de déficit
+ * actual.
+ */
+function imprimirListaDeficit() {
+  const filtro = document.getElementById("stock-filtro-almacen")?.value || "";
+  const umbral = Number(document.getElementById("stock-deficit-umbral")?.value) || 0;
+  const enDeficit = stock
+    .filter((s) => (!filtro || s.almacen === filtro) && Number(s.existencia) < umbral)
+    .sort((a, b) => (a.insumoNombre || "").localeCompare(b.insumoNombre || ""));
+
+  if (!enDeficit.length) {
+    toast("No hay insumos en déficit para imprimir con ese umbral/almacén.", "info");
+    return;
+  }
+
+  const filas = enDeficit
+    .map(
+      (s) => `
+      <tr>
+        <td style="${cellStylePrint}">${escapeHTML(s.insumoNombre)}</td>
+        <td style="${cellStylePrint}">${escapeHTML(s.categoriaNombre)}</td>
+        <td style="${cellStylePrint}">${escapeHTML(s.almacen)}</td>
+        <td style="${cellStylePrint}text-align:center;font-weight:bold;color:#b91c1c;">${s.existencia}</td>
+      </tr>`
+    )
+    .join("");
+
+  const bodyHTML = `
+    <div style="padding:12px 20px 4px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 4px;">INSUMOS EN DÉFICIT</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 14px;color:#475569;">
+        Menos de ${umbral} unidad(es) — ${filtro ? `Almacén: ${escapeHTML(filtro)}` : "Todos los almacenes"} — ${enDeficit.length} insumo(s)
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr>
+            <th style="${headStylePrint}">Insumo</th>
+            <th style="${headStylePrint}">Categoría</th>
+            <th style="${headStylePrint}">Almacén</th>
+            <th style="${headStylePrint}">Existencia</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>`;
+
+  printAdHoc(`Insumos en Déficit (menos de ${umbral})`, bodyHTML);
+}
 
 /**
  * Existencias "huérfanas": documentos de insumoStock cuyo insumoId ya no
