@@ -28,6 +28,14 @@ import { getInstituciones } from "./catalogos.js";
 
 let modules = null;
 
+// Compara una fecha con hora (Timestamp/Date de un traslado) contra una
+// fecha-solo en formato "YYYY-MM-DD" (la de una planilla de Pacientes) —
+// mismo día en hora LOCAL, ignorando la hora.
+function mismaFecha(fechaConHora, fechaSoloStr) {
+  const d = toDate(fechaConHora);
+  return d ? d.toLocaleDateString("en-CA") === fechaSoloStr : false;
+}
+
 export function initEmergencias() {
   // Sub-pestañas internas del módulo unificado.
   const tabs = document.querySelectorAll("#view-emergencias .subtab-btn");
@@ -63,6 +71,19 @@ export function initEmergencias() {
     // cierre mensual): suma niños, adolescentes, adultos, traslados y
     // fallecidos sobre las filas del rango de fechas filtrado.
     totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
+    // El campo `cantidadTraslados` de la planilla se escribe A MANO por
+    // planilla (independiente del módulo de Traslados, por diseño
+    // original) y en la práctica casi nunca se mantenía actualizado —
+    // reportaba muchos menos traslados de los que en verdad hay
+    // registrados. Para que el historial/impreso muestre un número real,
+    // se reemplaza aquí por el conteo de registros REALES del módulo de
+    // Traslados en esa misma fecha (no se toca el documento en Firestore,
+    // solo la copia que se muestra/exporta/imprime).
+    mapRows: (rows) =>
+      rows.map((r) => ({
+        ...r,
+        cantidadTraslados: traslados.getRows().filter((t) => mismaFecha(t.fecha, r.fecha)).length,
+      })),
     beforeSave: (data) => {
       data.ninos = Number(data.ninos) || 0;
       data.adolescentes = Number(data.adolescentes) || 0;

@@ -39,6 +39,15 @@ const REPORTS = {
     ],
     totals: ["ninos", "adolescentes", "adultos", "cantidadTraslados", "cantidadFallecidos"],
     firmas: ["Jefe de Departamento", "Director"],
+    // El campo `cantidadTraslados` de la planilla se escribe a mano por
+    // día y casi nunca se mantenía actualizado (independiente del módulo
+    // de Traslados, por diseño original) — reportaba muchos menos
+    // traslados de los que en verdad hay registrados. Se reemplaza por el
+    // conteo real de Traslados en esa misma fecha (ver renderReport()).
+    mapRows: (rows, dataCache) => {
+      const traslados = dataCache[COLLECTIONS.TRASLADOS] || [];
+      return rows.map((r) => ({ ...r, cantidadTraslados: traslados.filter((t) => sameDate(t, "fecha", r.fecha)).length }));
+    },
   },
   traslados: {
     label: "Traslados",
@@ -183,7 +192,10 @@ function renderReport(key) {
     title: `Reporte: ${cfg.label}`,
     columns: cfg.columns,
     dateField: cfg.dateField,
-    getRows: () => dataCache[cfg.collection] || [],
+    getRows: () => {
+      const raw = dataCache[cfg.collection] || [];
+      return cfg.mapRows ? cfg.mapRows(raw, dataCache) : raw;
+    },
     isAdmin: () => false, // los reportes son de solo consulta (sin editar/eliminar desde este panel)
     exportFileName: `Reporte_${cfg.label}`,
     totals: cfg.totals,

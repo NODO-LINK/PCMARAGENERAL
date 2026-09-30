@@ -44,6 +44,7 @@ export function createCrudModule(cfg) {
     firmaEspacio,
     totals,
     sortRows,
+    mapRows,
     beforeSave,
     onRowsChange,
   } = cfg;
@@ -181,8 +182,16 @@ export function createCrudModule(cfg) {
   // p. ej. Gestión de Riesgo se muestra ordenada por Código en vez de por
   // fecha, sin arriesgarse a ocultar los registros que todavía no tienen
   // código.
+  // `mapRows`, si se da, transforma cada fila ANTES de ordenar (p. ej. para
+  // reemplazar un campo con un valor calculado en vivo a partir de otro
+  // módulo — ver Pacientes: la cantidad de Traslados que se ve en el
+  // historial/impreso se recalcula desde los registros reales del módulo
+  // de Traslados, en vez de depender del campo escrito a mano en la
+  // planilla del día). No modifica los documentos en Firestore, solo la
+  // copia usada para mostrar/exportar/imprimir.
   const unsubscribe = subscribeCollection(collectionName, dateField, (newRows) => {
-    rows = sortRows ? sortRows(newRows) : newRows;
+    const mapeadas = mapRows ? mapRows(newRows) : newRows;
+    rows = sortRows ? sortRows(mapeadas) : mapeadas;
     historial.render();
     if (onRowsChange) onRowsChange(rows);
   });
