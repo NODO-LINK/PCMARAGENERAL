@@ -103,6 +103,7 @@ const REPORTS = {
       { key: "unidadVehicular", label: "Unidad" },
       { key: "responsable", label: "Responsable" },
     ],
+    firmas: ["Despachador", "Director"],
   },
   educacion: {
     label: "Educación",
