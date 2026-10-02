@@ -96,6 +96,7 @@ export function initInventario() {
   document.getElementById("stock-deficit-umbral")?.addEventListener("input", renderStockTable);
   document.getElementById("btn-imprimir-deficit")?.addEventListener("click", imprimirListaDeficit);
   document.getElementById("insumos-catalogo-buscar")?.addEventListener("input", renderInsumosTable);
+  setupVaciarAlmacen();
 
   subscribeCollection(COLLECTIONS.INSUMOS, "nombre", (rows) => {
     insumos = rows;
@@ -640,6 +641,62 @@ function imprimirListaDeficit() {
     </div>`;
 
   printAdHoc(`Insumos en Déficit (menos de ${umbral})`, bodyHTML);
+}
+
+/**
+ * Borra TODAS las existencias (insumoStock) de un almacén específico —
+ * para recargarlo desde cero tras un conteo físico nuevo, sin afectar el
+ * catálogo de insumos, las existencias de otros almacenes, ni el
+ * historial de movimientos ya registrado (Entradas/Transferencias/
+ * Débitos). Acción IRREVERSIBLE: requiere escribir la frase exacta de
+ * confirmación, igual que "Borrar todos los insumos" en el Catálogo.
+ */
+function setupVaciarAlmacen() {
+  const select = document.getElementById("vaciar-almacen-select");
+  const input = document.getElementById("vaciar-almacen-confirmar");
+  const btn = document.getElementById("btn-vaciar-almacen");
+  if (!select || !input || !btn) return;
+
+  const FRASE = "VACIAR";
+  input.addEventListener("input", () => {
+    btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+  });
+
+  btn.addEventListener("click", async () => {
+    const almacen = select.value;
+    if (!almacen) {
+      toast("Seleccione el almacén a vaciar.", "error");
+      return;
+    }
+    const delAlmacen = stock.filter((s) => s.almacen === almacen);
+    if (!delAlmacen.length) {
+      toast(`No hay existencias registradas en ${almacen} para borrar.`, "info");
+      return;
+    }
+
+    const ok = await confirmDialog({
+      title: `¿Vaciar existencias de ${almacen}?`,
+      message: `Esto borra permanentemente ${delAlmacen.length} registro(s) de existencia de ${almacen}. El catálogo de insumos, las existencias de otros almacenes y el historial de movimientos ya registrado NO se tocan. No hay forma de deshacer esta acción. ¿Está completamente seguro?`,
+      confirmText: `Sí, vaciar ${almacen} permanentemente`,
+      danger: true,
+    });
+    if (!ok) return;
+
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Vaciando...";
+    try {
+      await Promise.all(delAlmacen.map((s) => deleteRecord(COLLECTIONS.INSUMO_STOCK, s.id)));
+      toast(`${delAlmacen.length} existencia(s) de ${almacen} eliminada(s).`, "success");
+      input.value = "";
+    } catch (err) {
+      console.error("Error vaciando almacén:", err);
+      toast(err.message || "Ocurrió un error vaciando el almacén. Revise e intente de nuevo.", "error");
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+    }
+  });
 }
 
 /**
