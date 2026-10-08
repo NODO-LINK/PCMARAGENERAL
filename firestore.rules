@@ -120,10 +120,12 @@ service cloud.firestore {
     match /hidroLecturas/{docId} {
       allow read: if isSignedIn();
       allow create: if isKnownUser() && isOwnCreation();
-      // Serie instrumental: inmutable incluso para administrador desde la
-      // UI (no se ofrece edición/eliminación); se deja bloqueada por
-      // seguridad de datos.
-      allow update, delete: if false;
+      // Serie instrumental: no se edita una vez guardada (no se ofrece
+      // edición individual desde la UI). El administrador sí puede
+      // eliminar registros — necesario para corregir importaciones
+      // masivas erróneas (ej. "vaciar historial" antes de reimportar).
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     /* ------------------------- Catálogos maestros ------------------------ */

@@ -14,10 +14,10 @@
  *    por el Responsable y el Director.
  * -----------------------------------------------------------------------
  */
-import { db, doc, getDoc, setDoc, serverTimestamp } from "./firebase.js";
+import { db, doc, getDoc, setDoc, serverTimestamp, collection, getDocs, writeBatch } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
-import { createHistorial, formatDate, parseLocalDate, escapeHTML, toast } from "./ui.js";
+import { createHistorial, formatDate, parseLocalDate, escapeHTML, toast, confirmDialog } from "./ui.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
 
@@ -222,6 +222,7 @@ export async function initHidrometeorologia() {
   }
 
   setupImportacionHidro();
+  setupVaciarHidro();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -362,5 +363,66 @@ function setupImportacionHidro() {
     filasImportacionHidroValidas = [];
     fileInput.value = "";
     renderPreviewImportacionHidro([]);
+  });
+}
+
+/* ---------------------------------------------------------------------- */
+/* Vaciar historial completo (para corregir importaciones erróneas y       */
+/* volver a cargar el Excel desde cero)                                    */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * Borra TODAS las lecturas de hidroLecturas. Acción irreversible, pensada
+ * para cuando una importación masiva quedó con datos incorrectos (ej.
+ * fechas mal interpretadas) y es más simple vaciar y volver a importar el
+ * Excel corregido que corregir lectura por lectura.
+ */
+async function borrarTodasLasLecturasHidro() {
+  const snap = await getDocs(collection(db, COLLECTIONS.HIDRO_LECTURAS));
+  const docs = snap.docs;
+  // Firestore permite máximo 500 operaciones por batch; se procesa en
+  // lotes de 450 para dejar margen.
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  return docs.length;
+}
+
+function setupVaciarHidro() {
+  const input = document.getElementById("confirmar-vaciado-hidro");
+  const btn = document.getElementById("btn-vaciar-hidro");
+  if (!input || !btn) return;
+
+  const FRASE = "BORRAR TODO";
+  input.addEventListener("input", () => {
+    btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+  });
+
+  btn.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "¿Vaciar TODO el historial de Hidrometeorología?",
+      message:
+        "Esto borra permanentemente TODAS las lecturas del Río Limón registradas hasta ahora. No hay forma de deshacer esta acción. Úselo solo si va a volver a importar el Excel corregido de inmediato. ¿Está completamente seguro?",
+      confirmText: "Sí, vaciar todo permanentemente",
+      danger: true,
+    });
+    if (!ok) return;
+
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Vaciando...";
+    try {
+      const total = await borrarTodasLasLecturasHidro();
+      toast(`Se borraron ${total} lectura(s) del historial. Ya puede volver a importar el Excel.`, "success");
+      input.value = "";
+    } catch (err) {
+      console.error("Error vaciando el historial de Hidrometeorología:", err);
+      toast(err.message || "Ocurrió un error vaciando el historial. Revise e intente de nuevo.", "error");
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+    }
   });
 }
