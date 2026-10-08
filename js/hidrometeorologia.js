@@ -17,8 +17,9 @@
 import { db, doc, getDoc, setDoc, serverTimestamp } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
-import { createHistorial, formatDate, parseLocalDate, toast } from "./ui.js";
+import { createHistorial, formatDate, parseLocalDate, escapeHTML, toast } from "./ui.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
+import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
 
 let lecturas = [];
 let umbrales = { ...UMBRALES_HIDRO_DEFAULT };
@@ -219,4 +220,147 @@ export async function initHidrometeorologia() {
       renderDashboard();
     });
   }
+
+  setupImportacionHidro();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Importación masiva de lecturas desde Excel/CSV                          */
+/* ---------------------------------------------------------------------- */
+const HIDRO_ALIAS = {
+  fecha: ["fecha"],
+  nivel: ["nivel", "msnm", "nivelmsnm", "nivel msnm"],
+};
+
+function mapearFilaHidro(rawRow) {
+  const found = mapearFila(rawRow, HIDRO_ALIAS);
+  return {
+    fecha: found.fecha,
+    nivel: found.nivel === undefined || found.nivel === "" ? "" : Number(found.nivel),
+  };
+}
+
+function validarFilaHidro(fila) {
+  const errores = [];
+  if (fila.nivel === "" || isNaN(fila.nivel)) errores.push("falta el nivel");
+  else if (fila.nivel < NIVEL_HIDRO_MIN || fila.nivel > NIVEL_HIDRO_MAX) errores.push(`nivel fuera de rango (${NIVEL_HIDRO_MIN}-${NIVEL_HIDRO_MAX})`);
+
+  let fechaResuelta = null;
+  if (fila.fecha instanceof Date && !isNaN(fila.fecha.getTime())) {
+    fechaResuelta = fila.fecha;
+  } else if (fila.fecha) {
+    fechaResuelta = parsearFechaLegado(fila.fecha);
+    if (!fechaResuelta) {
+      const d = new Date(fila.fecha);
+      if (!isNaN(d.getTime())) fechaResuelta = d;
+    }
+  }
+  if (!fechaResuelta) errores.push("fecha inválida");
+
+  return { ...fila, fechaResuelta, errores };
+}
+
+let filasImportacionHidroValidas = [];
+
+function renderPreviewImportacionHidro(filas) {
+  const root = document.getElementById("importar-hidro-preview");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-hidro");
+  if (!root) return;
+
+  if (!filas.length) {
+    root.innerHTML = `<p class="text-xs text-slate-400 italic">Seleccione un archivo para ver la vista previa.</p>`;
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    filasImportacionHidroValidas = [];
+    return;
+  }
+
+  const validas = filas.filter((f) => f.errores.length === 0);
+  filasImportacionHidroValidas = validas;
+
+  root.innerHTML = `
+    <p class="text-xs text-slate-500 mb-2">${validas.length} de ${filas.length} fila(s) lista(s) para importar.</p>
+    <div class="max-h-72 overflow-y-auto border border-slate-200 rounded-md">
+      <table class="min-w-full text-xs">
+        <thead class="bg-slate-50 text-slate-600 sticky top-0">
+          <tr>
+            <th class="text-left px-2 py-1.5">Fecha</th>
+            <th class="text-left px-2 py-1.5">Nivel (msnm)</th>
+            <th class="text-left px-2 py-1.5">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filas
+            .map(
+              (f) => `
+          <tr class="border-t border-slate-100 ${f.errores.length ? "bg-red-50" : ""}">
+            <td class="px-2 py-1.5">${f.fechaResuelta ? escapeHTML(formatDate(f.fechaResuelta)) : "—"}</td>
+            <td class="px-2 py-1.5">${f.nivel === "" || isNaN(f.nivel) ? "—" : f.nivel}</td>
+            <td class="px-2 py-1.5">${f.errores.length ? `<span class="text-red-700">${escapeHTML(f.errores.join(", "))}</span>` : '<span class="text-emerald-700">OK</span>'}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  if (btnConfirmar) btnConfirmar.disabled = validas.length === 0;
+}
+
+function setupImportacionHidro() {
+  const fileInput = document.getElementById("importar-hidro-archivo");
+  const btnConfirmar = document.getElementById("btn-confirmar-importacion-hidro");
+  if (!fileInput || !btnConfirmar) return;
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      renderPreviewImportacionHidro([]);
+      return;
+    }
+    try {
+      const { filas: rows } = await leerArchivoTabular(file, HIDRO_ALIAS);
+      const mapeadas = rows.map((r) => mapearFilaHidro(r)).filter((f) => f.fecha || f.nivel !== "");
+      const validadas = mapeadas.map((f) => validarFilaHidro(f));
+      renderPreviewImportacionHidro(validadas);
+      if (!mapeadas.length) {
+        toast("No se encontraron filas reconocibles. Verifique los encabezados de las columnas.", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      toast("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx/.xls) o CSV válido.", "error");
+      renderPreviewImportacionHidro([]);
+    }
+  });
+
+  btnConfirmar.addEventListener("click", async () => {
+    if (!filasImportacionHidroValidas.length) return;
+
+    btnConfirmar.disabled = true;
+    const textoOriginal = btnConfirmar.textContent;
+    btnConfirmar.textContent = "Importando...";
+
+    let registradas = 0;
+    let fallidas = 0;
+
+    for (const fila of filasImportacionHidroValidas) {
+      try {
+        await registrarLectura(fila.nivel, fila.fechaResuelta);
+        registradas++;
+      } catch (err) {
+        console.error("Error importando lectura de Hidrometeorología", fila, err);
+        fallidas++;
+      }
+    }
+
+    toast(
+      `Importación completa: ${registradas} lectura(s) registrada(s)${fallidas ? `, ${fallidas} fila(s) con error` : ""}.`,
+      fallidas ? "warning" : "success"
+    );
+
+    btnConfirmar.textContent = textoOriginal;
+    btnConfirmar.disabled = true;
+    filasImportacionHidroValidas = [];
+    fileInput.value = "";
+    renderPreviewImportacionHidro([]);
+  });
 }
