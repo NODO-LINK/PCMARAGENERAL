@@ -65,10 +65,11 @@ export const CATEGORIAS_INSTITUCIONES = [
   "Otros",
 ];
 
-// Umbrales por defecto del nivel del Río Limón. La escala institucional es
-// un índice de 0 a 9 (no metros): pueden ser sobrescritos por el documento
-// config/hidrometeorologia en Firestore desde la interfaz de
-// administración. El nivel se carga manualmente desde el propio módulo.
+// Umbrales por defecto del nivel del Río Limón. La escala institucional se
+// mide en msnm (metros sobre el nivel del mar), de 0 a 9, y admite
+// decimales: pueden ser sobrescritos por el documento config/hidrometeorologia
+// en Firestore desde la interfaz de administración. El nivel se carga
+// manualmente desde el propio módulo.
 export const UMBRALES_HIDRO_DEFAULT = {
   advertencia: 4,
   alerta: 7,

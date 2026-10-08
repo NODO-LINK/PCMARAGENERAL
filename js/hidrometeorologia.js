@@ -3,9 +3,9 @@
  * -----------------------------------------------------------------------
  * Módulo de Hidrometeorología — Monitoreo del Río Limón.
  *
- * La estadística institucional es un índice de 0 a 9 (no metros). El nivel
- * se carga manualmente desde este módulo (Fecha/Hora + Nivel). El módulo
- * ofrece:
+ * El nivel se mide en msnm (metros sobre el nivel del mar), admite
+ * decimales (ej. 2.5), y se carga manualmente desde este módulo (Fecha +
+ * Nivel, sin hora). El módulo ofrece:
  *  - Un dashboard en tiempo real (numérico + gráfico) con estados de
  *    alerta visual (Normal / Advertencia / Alerta Roja) según umbrales
  *    configurables por el administrador.
@@ -17,7 +17,7 @@
 import { db, doc, getDoc, setDoc, serverTimestamp } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
-import { createHistorial, formatDate, toast } from "./ui.js";
+import { createHistorial, formatDate, parseLocalDate, toast } from "./ui.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 
 let lecturas = [];
@@ -31,11 +31,11 @@ function calcularEstado(nivel) {
   return { label: "NORMAL", color: "emerald" };
 }
 
-// Formato "YYYY-MM-DDThh:mm" en hora LOCAL, tal como lo espera un input
-// datetime-local (evita el corrimiento de zona horaria de toISOString()).
-function fechaHoraLocalInput(d = new Date()) {
+// Formato "YYYY-MM-DD" en hora LOCAL, tal como lo espera un input date
+// (evita el corrimiento de zona horaria de toISOString()).
+function fechaLocalInput(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 async function registrarLectura(nivel, fecha) {
@@ -56,8 +56,8 @@ function renderDashboard() {
   const nivelEl = document.getElementById("hidro-nivel-actual");
   const badgeEl = document.getElementById("hidro-estado-badge");
   const fechaEl = document.getElementById("hidro-fecha-lectura");
-  if (nivelEl) nivelEl.textContent = nivel !== null ? `${nivel} / 9` : "—";
-  if (fechaEl) fechaEl.textContent = ultima ? `Última lectura: ${formatDate(ultima.fecha, true)}` : "Sin lecturas registradas";
+  if (nivelEl) nivelEl.textContent = nivel !== null ? `${nivel} msnm` : "—";
+  if (fechaEl) fechaEl.textContent = ultima ? `Última lectura: ${formatDate(ultima.fecha)}` : "Sin lecturas registradas";
 
   const colorClasses = {
     emerald: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -77,7 +77,7 @@ function renderChart() {
   const canvas = document.getElementById("chart-hidro");
   if (!canvas || !window.Chart) return;
   const ultimos = [...lecturas].slice(0, 20).reverse();
-  const labels = ultimos.map((l) => formatDate(l.fecha, true));
+  const labels = ultimos.map((l) => formatDate(l.fecha));
   const data = ultimos.map((l) => Number(l.nivel));
 
   if (chart) chart.destroy();
@@ -87,7 +87,7 @@ function renderChart() {
       labels,
       datasets: [
         {
-          label: "Nivel del Río Limón (0-9)",
+          label: "Nivel del Río Limón (msnm)",
           data,
           borderColor: "#C81E1E",
           backgroundColor: "rgba(200,30,30,0.1)",
@@ -107,7 +107,7 @@ function renderChart() {
           min: NIVEL_HIDRO_MIN,
           max: NIVEL_HIDRO_MAX,
           ticks: { stepSize: 1 },
-          title: { display: true, text: "Nivel (0-9)" },
+          title: { display: true, text: "Nivel (msnm)" },
         },
       },
     },
@@ -153,8 +153,8 @@ export async function initHidrometeorologia() {
     root: document.getElementById("historial-hidro"),
     title: "Historial de Lecturas — Río Limón",
     columns: [
-      { key: "fecha", label: "Fecha/Hora", format: (r) => formatDate(r.fecha, true) },
-      { key: "nivel", label: "Nivel (0-9)" },
+      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
+      { key: "nivel", label: "Nivel (msnm)" },
       { key: "estado", label: "Estado" },
       { key: "responsable", label: "Responsable" },
     ],
@@ -170,9 +170,9 @@ export async function initHidrometeorologia() {
 
   const lecturaForm = document.getElementById("form-hidro-lectura");
   if (lecturaForm) {
-    // Precarga la fecha/hora actual para que el operador normalmente solo
-    // tenga que escribir el nivel.
-    lecturaForm.elements["fecha"].value = fechaHoraLocalInput();
+    // Precarga la fecha de hoy para que el operador normalmente solo tenga
+    // que escribir el nivel.
+    lecturaForm.elements["fecha"].value = fechaLocalInput();
 
     lecturaForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -182,16 +182,16 @@ export async function initHidrometeorologia() {
         toast(`Ingrese un nivel válido entre ${NIVEL_HIDRO_MIN} y ${NIVEL_HIDRO_MAX}.`, "error");
         return;
       }
-      const fecha = fechaStr ? new Date(fechaStr) : new Date();
-      if (isNaN(fecha.getTime())) {
-        toast("Ingrese una fecha/hora válida.", "error");
+      const fecha = fechaStr ? parseLocalDate(fechaStr) : new Date();
+      if (!fecha || isNaN(fecha.getTime())) {
+        toast("Ingrese una fecha válida.", "error");
         return;
       }
       try {
         await registrarLectura(nivel, fecha);
         toast("Lectura registrada correctamente.", "success");
         lecturaForm.reset();
-        lecturaForm.elements["fecha"].value = fechaHoraLocalInput();
+        lecturaForm.elements["fecha"].value = fechaLocalInput();
       } catch (err) {
         console.error("Error registrando lectura de Hidrometeorología:", err);
         toast("Ocurrió un error al registrar la lectura.", "error");
