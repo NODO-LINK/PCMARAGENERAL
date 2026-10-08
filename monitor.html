@@ -223,55 +223,63 @@
 
     /* ===================== Mascota: perrito K9 ========================== */
     :root {
-      --beige: #d9b589;
-      --beige-claro: #ecd3ac;
-      --beige-oscuro: #a9784f;
+      --beige: #d9ad73;
+      --beige-claro: #f2d9ad;
+      --beige-oscuro: #b07d43;
+      --trazo: #4a2f18;
       --chaleco: var(--accent-orange);
     }
     .perrito {
       position: fixed;
       left: 0;
       top: 0;
-      width: 9vh;
-      height: 7.5vh;
+      width: 10vh;
+      height: 8vh;
       z-index: 500;
       pointer-events: none;
       will-change: transform;
     }
+    /* Todo lo que es "animación del personaje" (salto, giro, sacudida,
+       revolcón, respiración al dormir) vive en esta capa INTERNA — nunca
+       en .perrito directamente, porque .perrito ya recibe su posición
+       (translate) por JavaScript en cada cuadro; si una animación CSS
+       también le pusiera "transform" al mismo elemento, una pisaría a la
+       otra y el perrito "saltaba" a una posición equivocada. */
+    .p-interior { position: relative; width: 100%; height: 100%; }
     .p-sombra {
       position: absolute;
       left: 50%;
-      bottom: 0.3vh;
+      bottom: 0.1vh;
       width: 6vh;
-      height: 0.9vh;
-      background: rgba(0, 0, 0, 0.35);
+      height: 0.8vh;
+      background: rgba(0, 0, 0, 0.4);
       border-radius: 50%;
       transform: translateX(-50%);
-      filter: blur(0.3vh);
+      filter: blur(0.25vh);
       transition: width 0.3s ease, opacity 0.3s ease;
     }
     .p-cuerpo {
       position: absolute;
-      left: 1.4vh;
-      top: 2.4vh;
-      width: 5.6vh;
-      height: 3.1vh;
-      border-radius: 45% 50% 48% 50%;
-      background: linear-gradient(160deg, var(--beige-claro) 0%, var(--beige) 55%, var(--beige-oscuro) 100%);
-      box-shadow: inset -0.3vh -0.3vh 0.6vh rgba(0, 0, 0, 0.25), inset 0.2vh 0.2vh 0.4vh rgba(255, 255, 255, 0.35);
+      left: 1.8vh;
+      top: 3vh;
+      width: 6.2vh;
+      height: 3vh;
+      border-radius: 50% 50% 45% 45%;
+      background: linear-gradient(165deg, var(--beige-claro) 0%, var(--beige) 60%);
+      border: 0.16vh solid var(--trazo);
     }
     .p-chaleco {
       position: absolute;
       left: 50%;
-      top: 35%;
+      top: 38%;
       transform: translate(-50%, -50%);
-      width: 3.4vh;
-      height: 1.7vh;
-      background: linear-gradient(160deg, #ff9142, var(--chaleco));
+      width: 3.2vh;
+      height: 1.5vh;
+      background: var(--chaleco);
+      border: 0.14vh solid var(--trazo);
       border-radius: 0.3vh;
-      box-shadow: 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4);
-      color: #0B2545;
-      font-size: 0.8vh;
+      color: #fff7ec;
+      font-size: 0.85vh;
       font-weight: 900;
       display: flex;
       align-items: center;
@@ -280,88 +288,111 @@
     }
     .p-cola {
       position: absolute;
-      left: 0.1vh;
-      top: 1.6vh;
-      width: 2.6vh;
-      height: 0.9vh;
-      background: linear-gradient(90deg, var(--beige-oscuro), var(--beige));
-      border-radius: 1vh;
-      transform-origin: 100% 50%;
+      left: -0.6vh;
+      top: 2vh;
+      width: 2.4vh;
+      height: 1vh;
+      background: var(--beige);
+      border: 0.14vh solid var(--trazo);
+      border-radius: 1vh 1vh 1vh 0.2vh;
+      transform-origin: 90% 60%;
       animation: p-colear 0.5s ease-in-out infinite;
     }
     .p-pata {
       position: absolute;
-      width: 0.95vh;
-      height: 2vh;
-      background: linear-gradient(180deg, var(--beige), var(--beige-oscuro));
-      border-radius: 0.4vh;
-      top: 4.9vh;
+      width: 1.1vh;
+      height: 2.3vh;
+      background: var(--beige);
+      border: 0.14vh solid var(--trazo);
+      border-radius: 0.5vh;
+      top: 5.5vh;
       transform-origin: 50% 0%;
     }
-    .p-pata-di { left: 2vh; }
-    .p-pata-ti { left: 3vh; animation-delay: 0.2s; }
-    .p-pata-dd { left: 5.2vh; animation-delay: 0.1s; }
-    .p-pata-td { left: 6.2vh; animation-delay: 0.3s; }
+    .p-pata-ti { left: 2.3vh; }
+    .p-pata-di { left: 3.5vh; animation-delay: 0.2s; }
+    .p-pata-td { left: 5.6vh; animation-delay: 0.1s; }
+    .p-pata-dd { left: 6.8vh; animation-delay: 0.3s; }
     .p-cabeza {
       position: absolute;
-      left: 5.6vh;
-      top: 1.1vh;
-      width: 3.2vh;
-      height: 3vh;
-      border-radius: 55% 55% 50% 50%;
-      background: linear-gradient(145deg, var(--beige-claro), var(--beige) 60%, var(--beige-oscuro));
-      box-shadow: inset -0.25vh -0.25vh 0.5vh rgba(0, 0, 0, 0.25);
+      left: 6.1vh;
+      top: 0.9vh;
+      width: 3.4vh;
+      height: 3.3vh;
+      border-radius: 50%;
+      background: linear-gradient(150deg, var(--beige-claro), var(--beige) 65%);
+      border: 0.16vh solid var(--trazo);
     }
     .p-oreja {
       position: absolute;
-      top: -0.3vh;
-      width: 1.1vh;
-      height: 1.8vh;
-      background: linear-gradient(180deg, var(--beige-oscuro), var(--beige));
+      top: -0.2vh;
+      width: 1.2vh;
+      height: 1.9vh;
+      background: var(--beige-oscuro);
+      border: 0.13vh solid var(--trazo);
       border-radius: 40% 40% 50% 50%;
-      transform-origin: 50% 0%;
+      transform-origin: 50% 10%;
     }
-    .p-oreja-i { left: 0.1vh; transform: rotate(-15deg); }
-    .p-oreja-d { right: 0.1vh; transform: rotate(15deg); }
+    .p-oreja-i { left: 0.2vh; transform: rotate(-20deg); }
+    .p-oreja-d { right: 0.2vh; transform: rotate(20deg); }
     .p-hocico {
       position: absolute;
-      left: 2.6vh;
+      right: -1vh;
       top: 1.5vh;
-      width: 1.3vh;
-      height: 1.1vh;
+      width: 1.6vh;
+      height: 1.3vh;
       background: var(--beige-claro);
-      border-radius: 40%;
-      box-shadow: inset -0.15vh -0.1vh 0.25vh rgba(0, 0, 0, 0.2);
+      border: 0.14vh solid var(--trazo);
+      border-radius: 45%;
     }
     .p-hocico::after {
       content: "";
       position: absolute;
-      right: -0.05vh;
-      top: 0.25vh;
-      width: 0.45vh;
-      height: 0.35vh;
-      background: #3a2515;
+      right: -0.1vh;
+      top: 0.35vh;
+      width: 0.5vh;
+      height: 0.4vh;
+      background: var(--trazo);
       border-radius: 50%;
     }
-    .p-ojo { position: absolute; top: 0.9vh; width: 0.4vh; height: 0.4vh; background: #241509; border-radius: 50%; }
-    .p-ojo-i { left: 1vh; }
+    .p-ojo {
+      position: absolute;
+      top: 1.1vh;
+      width: 0.75vh;
+      height: 0.75vh;
+      background: #fff;
+      border: 0.1vh solid var(--trazo);
+      border-radius: 50%;
+    }
+    .p-ojo::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 0.35vh;
+      height: 0.35vh;
+      background: var(--trazo);
+      border-radius: 50%;
+      transform: translate(-30%, -30%);
+    }
+    .p-ojo-i { left: 0.6vh; }
     .p-ojo-d { left: 1.9vh; }
     .p-lengua {
       position: absolute;
-      left: 2.3vh;
-      top: 2.4vh;
-      width: 0.6vh;
-      height: 0.9vh;
-      background: #e06a7a;
+      right: 0.1vh;
+      top: 2.6vh;
+      width: 0.7vh;
+      height: 1vh;
+      background: #e8778a;
+      border: 0.1vh solid var(--trazo);
       border-radius: 0 0 0.5vh 0.5vh;
       opacity: 0;
       transform-origin: 50% 0%;
     }
     .p-zzz {
       position: absolute;
-      right: -1.2vh;
-      top: -1.6vh;
-      font-size: 1.3vh;
+      right: -1.4vh;
+      top: -1.8vh;
+      font-size: 1.4vh;
       font-weight: 800;
       color: #cfe0ff;
       opacity: 0;
@@ -421,11 +452,11 @@
     .perrito.accion-ladrar .p-hocico { animation: p-ladrar 0.3s ease-in-out 3; }
     .perrito.accion-jadeo .p-lengua { opacity: 1; animation: p-jadeo 0.5s ease-in-out infinite; }
     .perrito.accion-bostezo .p-cabeza { animation: p-bostezo 1.2s ease-in-out 1; }
-    .perrito.accion-salto { animation: p-salto 0.6s ease-in-out 1; }
-    .perrito.accion-girar { animation: p-girar 0.8s linear 1; }
-    .perrito.accion-sacudir { animation: p-sacudir 0.5s ease-in-out 2; }
+    .perrito.accion-salto .p-interior { animation: p-salto 0.6s ease-in-out 1; }
+    .perrito.accion-girar .p-interior { animation: p-girar 0.8s linear 1; }
+    .perrito.accion-sacudir .p-interior { animation: p-sacudir 0.5s ease-in-out 2; }
     .perrito.accion-estirar .p-cuerpo { animation: p-estirar 1.2s ease-in-out 1; }
-    .perrito.accion-revolcar { animation: p-revolcar 1.4s ease-in-out 1; }
+    .perrito.accion-revolcar .p-interior { animation: p-revolcar 1.4s ease-in-out 1; }
     .perrito.accion-impaciente .p-pata-di { animation: p-pata-golpe 0.3s ease-in-out 4; }
     .perrito.accion-oreja .p-oreja-d { animation: p-oreja-mover 0.4s ease-in-out 2; }
   </style>
@@ -513,23 +544,25 @@
   <!-- Mascota K9: vive fuera de monitor-root (position:fixed) para poder
        caminar libremente por toda la pantalla, incluso sobre las tarjetas. -->
   <div class="perrito" id="perrito" aria-hidden="true">
-    <div class="p-sombra"></div>
-    <div class="p-cola"></div>
-    <div class="p-cuerpo">
-      <div class="p-chaleco">K9</div>
-    </div>
-    <div class="p-pata p-pata-ti"></div>
-    <div class="p-pata p-pata-di"></div>
-    <div class="p-pata p-pata-td"></div>
-    <div class="p-pata p-pata-dd"></div>
-    <div class="p-cabeza">
-      <div class="p-oreja p-oreja-i"></div>
-      <div class="p-oreja p-oreja-d"></div>
-      <div class="p-hocico"></div>
-      <div class="p-ojo p-ojo-i"></div>
-      <div class="p-ojo p-ojo-d"></div>
-      <div class="p-lengua"></div>
-      <div class="p-zzz">Z z z</div>
+    <div class="p-interior">
+      <div class="p-sombra"></div>
+      <div class="p-cola"></div>
+      <div class="p-cuerpo">
+        <div class="p-chaleco">K9</div>
+      </div>
+      <div class="p-pata p-pata-ti"></div>
+      <div class="p-pata p-pata-di"></div>
+      <div class="p-pata p-pata-td"></div>
+      <div class="p-pata p-pata-dd"></div>
+      <div class="p-cabeza">
+        <div class="p-oreja p-oreja-i"></div>
+        <div class="p-oreja p-oreja-d"></div>
+        <div class="p-hocico"></div>
+        <div class="p-ojo p-ojo-i"></div>
+        <div class="p-ojo p-ojo-d"></div>
+        <div class="p-lengua"></div>
+        <div class="p-zzz">Z z z</div>
+      </div>
     </div>
   </div>
 

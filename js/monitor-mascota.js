@@ -151,52 +151,101 @@
     return rango[0] + Math.random() * (rango[1] - rango[0]);
   }
 
+  /* ------------------------- Líneas sobre las que camina -------------------- */
+  // El perrito NUNCA camina por el aire: solo se desplaza en horizontal, con
+  // las patas siempre apoyadas sobre el borde superior de una fila de
+  // tarjetas reales (.card) — igual que caminar sobre el borde de una
+  // repisa. Cambiar de "repisa" (de una fila de tarjetas a otra) se hace
+  // con un salto corto, nunca deslizando en diagonal por el vacío.
+  var lineas = []; // [{y, x1, x2}, ...] uno por cada fila de tarjetas detectada
+  function recalcularLineas() {
+    var tarjetas = document.querySelectorAll(".card");
+    var grupos = {};
+    for (var i = 0; i < tarjetas.length; i++) {
+      var r = tarjetas[i].getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      var clave = String(Math.round(r.top));
+      if (!grupos[clave]) grupos[clave] = { y: r.top, x1: r.left, x2: r.right };
+      else {
+        if (r.left < grupos[clave].x1) grupos[clave].x1 = r.left;
+        if (r.right > grupos[clave].x2) grupos[clave].x2 = r.right;
+      }
+    }
+    var nuevas = [];
+    for (var clave2 in grupos) {
+      if (grupos.hasOwnProperty(clave2)) nuevas.push(grupos[clave2]);
+    }
+    if (nuevas.length) lineas = nuevas;
+  }
+
   /* ------------------------- Posición y movimiento -------------------------- */
-  var posX = window.innerWidth / 2;
-  var posY = window.innerHeight / 2;
   var direccion = 1; // 1 = mira a la derecha, -1 = mira a la izquierda
   var estadoActual = null;
   var finEstadoQuieto = 0;
+  var lineaActual = null; // {y,x1,x2} — la repisa donde están paradas las patas ahora
+  var posX = window.innerWidth / 2;
+  var posY = window.innerHeight / 2;
   var destinoX = posX;
   var destinoY = posY;
-  var ultimaMarca = null;
+  var saltandoEntreLineas = false;
+
+  // Arranca ya parado sobre una repisa real (nunca en el centro de la
+  // pantalla "al aire"), si para cuando corre este script las tarjetas ya
+  // tienen tamaño — si no, se corrige solo apenas elija su primer destino.
+  (function posicionInicial() {
+    recalcularLineas();
+    if (!lineas.length) return;
+    var linea = lineas[Math.floor(Math.random() * lineas.length)];
+    lineaActual = linea;
+    posX = linea.x1 + Math.random() * Math.max(1, linea.x2 - linea.x1);
+    posY = linea.y - piePerritoPx();
+    destinoX = posX;
+    destinoY = posY;
+  })();
 
   function medidaPerrito() {
-    // 9vh / 7.5vh tal como está definido en el CSS (.perrito).
-    return { w: (window.innerHeight * 9) / 100, h: (window.innerHeight * 7.5) / 100 };
+    // Debe coincidir con .perrito (ancho/alto) en el CSS.
+    return { w: (window.innerHeight * 10) / 100, h: (window.innerHeight * 8) / 100 };
+  }
+  // Distancia entre la esquina superior izquierda de .perrito y la línea
+  // donde se apoyan las patas (.p-pata: top 5.5vh + height 2.3vh = 7.8vh).
+  function piePerritoPx() {
+    return (window.innerHeight * 7.8) / 100;
   }
 
   function elegirNuevoDestino() {
-    var m = medidaPerrito();
-    var margenSalida = m.w * 1.8;
-    var anchoV = window.innerWidth;
-    var altoV = window.innerHeight;
-    // De vez en cuando el destino cae bien afuera de la pantalla (por
-    // cualquiera de los 4 bordes), para que el perrito "salga de los
-    // límites" y luego reaparezca por otro lado al elegir el siguiente.
-    var sale = Math.random() < 0.3;
-    var x, y;
-    if (sale) {
-      var borde = Math.floor(Math.random() * 4);
-      if (borde === 0) {
-        x = -margenSalida - Math.random() * margenSalida; // sale por la izquierda
-        y = Math.random() * altoV;
-      } else if (borde === 1) {
-        x = anchoV + Math.random() * margenSalida; // sale por la derecha
-        y = Math.random() * altoV;
-      } else if (borde === 2) {
-        x = Math.random() * anchoV;
-        y = -margenSalida - Math.random() * margenSalida; // sale por arriba
-      } else {
-        x = Math.random() * anchoV;
-        y = altoV + Math.random() * margenSalida; // sale por abajo
-      }
-    } else {
-      x = Math.random() * (anchoV - m.w);
-      y = Math.random() * (altoV - m.h);
+    if (!lineas.length) recalcularLineas();
+    if (!lineas.length) {
+      // Aún no hay tarjetas medibles (no debería pasar) — se queda quieto
+      // donde está en vez de arriesgarse a "flotar".
+      destinoX = posX;
+      destinoY = posY;
+      return;
     }
+    var m = medidaPerrito();
+    // La mayoría de las veces sigue en la MISMA línea (camina de un lado a
+    // otro de esa repisa); de vez en cuando cambia a otra fila de tarjetas
+    // (con un salto corto, ver más abajo).
+    var cambiarLinea = !lineaActual || Math.random() < 0.3;
+    var linea = cambiarLinea ? lineas[Math.floor(Math.random() * lineas.length)] : lineaActual;
+    saltandoEntreLineas = cambiarLinea && !!lineaActual && linea.y !== lineaActual.y;
+
+    // Y de vez en cuando, en vez de quedarse dentro del ancho de las
+    // tarjetas de esa fila, sigue de largo más allá del borde de la
+    // pantalla — así "sale de los límites" y reaparece luego por otro lado,
+    // pero siempre manteniéndose sobre la altura de una repisa real.
+    var sale = Math.random() < 0.25;
+    var x;
+    if (sale) {
+      var margenSalida = m.w * 2 + Math.random() * m.w * 3;
+      x = Math.random() < 0.5 ? linea.x1 - margenSalida : linea.x2 + margenSalida;
+    } else {
+      x = linea.x1 + Math.random() * Math.max(1, linea.x2 - linea.x1);
+    }
+
+    lineaActual = linea;
     destinoX = x;
-    destinoY = y;
+    destinoY = linea.y - piePerritoPx();
   }
 
   function iniciarEstado(nombreEstado) {
@@ -251,11 +300,20 @@
       var dx = destinoX - posX;
       var dy = destinoY - posY;
       var dist = Math.sqrt(dx * dx + dy * dy);
-      var pasoMax = cfg.velocidad * window.innerHeight * 0.01 * dt; // vh/seg aproximado a píxeles
+      // Si está cambiando de repisa (dy != 0), va rápido y con pose de
+      // salto — un salto corto se ve intencional; arrastrarse despacio en
+      // diagonal por el vacío es justamente lo que se veía mal antes.
+      var velocidadVhSeg = saltandoEntreLineas ? 22 : cfg.velocidad;
+      var pasoMax = velocidadVhSeg * window.innerHeight * 0.01 * dt;
+      if (saltandoEntreLineas) el.classList.add("accion-salto");
       if (dist <= pasoMax || dist === 0) {
         posX = destinoX;
         posY = destinoY;
         aplicarTransform();
+        if (saltandoEntreLineas) {
+          saltandoEntreLineas = false;
+          el.classList.remove("accion-salto");
+        }
         siguienteEstado();
       } else {
         if (Math.abs(dx) > 2) direccion = dx > 0 ? 1 : -1;
@@ -269,6 +327,10 @@
 
     raf(cuadro);
   }
+
+  window.addEventListener("resize", function () {
+    recalcularLineas();
+  });
 
   aplicarTransform();
   raf(cuadro);
