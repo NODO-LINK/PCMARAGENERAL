@@ -96,6 +96,7 @@ export function initInventario() {
   document.getElementById("stock-deficit-umbral")?.addEventListener("input", renderStockTable);
   document.getElementById("btn-imprimir-deficit")?.addEventListener("click", imprimirListaDeficit);
   document.getElementById("insumos-catalogo-buscar")?.addEventListener("input", renderInsumosTable);
+  setupVaciarAlmacen();
 
   subscribeCollection(COLLECTIONS.INSUMOS, "nombre", (rows) => {
     insumos = rows;
@@ -643,6 +644,62 @@ function imprimirListaDeficit() {
 }
 
 /**
+ * Borra TODAS las existencias (insumoStock) de un almacén específico —
+ * para recargarlo desde cero tras un conteo físico nuevo, sin afectar el
+ * catálogo de insumos, las existencias de otros almacenes, ni el
+ * historial de movimientos ya registrado (Entradas/Transferencias/
+ * Débitos). Acción IRREVERSIBLE: requiere escribir la frase exacta de
+ * confirmación, igual que "Borrar todos los insumos" en el Catálogo.
+ */
+function setupVaciarAlmacen() {
+  const select = document.getElementById("vaciar-almacen-select");
+  const input = document.getElementById("vaciar-almacen-confirmar");
+  const btn = document.getElementById("btn-vaciar-almacen");
+  if (!select || !input || !btn) return;
+
+  const FRASE = "VACIAR";
+  input.addEventListener("input", () => {
+    btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+  });
+
+  btn.addEventListener("click", async () => {
+    const almacen = select.value;
+    if (!almacen) {
+      toast("Seleccione el almacén a vaciar.", "error");
+      return;
+    }
+    const delAlmacen = stock.filter((s) => s.almacen === almacen);
+    if (!delAlmacen.length) {
+      toast(`No hay existencias registradas en ${almacen} para borrar.`, "info");
+      return;
+    }
+
+    const ok = await confirmDialog({
+      title: `¿Vaciar existencias de ${almacen}?`,
+      message: `Esto borra permanentemente ${delAlmacen.length} registro(s) de existencia de ${almacen}. El catálogo de insumos, las existencias de otros almacenes y el historial de movimientos ya registrado NO se tocan. No hay forma de deshacer esta acción. ¿Está completamente seguro?`,
+      confirmText: `Sí, vaciar ${almacen} permanentemente`,
+      danger: true,
+    });
+    if (!ok) return;
+
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Vaciando...";
+    try {
+      await Promise.all(delAlmacen.map((s) => deleteRecord(COLLECTIONS.INSUMO_STOCK, s.id)));
+      toast(`${delAlmacen.length} existencia(s) de ${almacen} eliminada(s).`, "success");
+      input.value = "";
+    } catch (err) {
+      console.error("Error vaciando almacén:", err);
+      toast(err.message || "Ocurrió un error vaciando el almacén. Revise e intente de nuevo.", "error");
+    } finally {
+      btn.textContent = textoOriginal;
+      btn.disabled = input.value.trim().toUpperCase() !== FRASE;
+    }
+  });
+}
+
+/**
  * Existencias "huérfanas": documentos de insumoStock cuyo insumoId ya no
  * corresponde a ningún insumo del catálogo — quedaron así por insumos
  * eliminados ANTES de que borrar un insumo también borrara sus
@@ -1119,32 +1176,66 @@ async function deleteEntrada(row) {
 
 /* --------------------------- Transferencias ------------------------------ */
 
+// Lista temporal ("carrito") de insumos a transferir, todos del mismo
+// origen/destino/fecha/responsable — así se pueden mover varios productos
+// de una vez sin repetir esos campos comunes por cada uno.
+let carritoTransferencias = []; // [{ insumoId, insumoNombre, cantidad }]
+
 function setupTransferenciaForm() {
   const form = document.getElementById("form-transferencia");
   if (!form) return;
   const respField = form.elements["responsable"];
   if (respField) respField.value = getResponsableLabel();
 
-  const insumoSelect = form.elements["insumoId"];
+  const fechaField = form.elements["fecha"];
+  const origenSelect = form.elements["stockOrigen"];
+  const destinoSelect = form.elements["stockDestino"];
+  const insumoSelect = document.getElementById("transferencia-insumo-select");
+  const cantidadField = document.getElementById("transferencia-cantidad");
+  const btnAgregar = document.getElementById("btn-agregar-transferencia");
+  const avisoBloqueo = document.getElementById("transferencia-campos-bloqueados-aviso");
   const cancelBtn = form.querySelector('[data-role="cancel-edit"]');
   const submitBtn = form.querySelector('[type="submit"]');
-  const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Registrar transferencia";
+  const defaultSubmitLabel = submitBtn ? submitBtn.textContent : "Registrar todas las transferencias";
+  if (!insumoSelect || !cantidadField || !btnAgregar) return;
 
   const editBanner = document.createElement("div");
   editBanner.className = "hidden mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-sm";
-  editBanner.textContent = 'Editando una transferencia existente: el insumo no se puede cambiar. Pulse "Cancelar edición" para registrar una transferencia nueva en su lugar.';
+  editBanner.textContent = 'Editando una transferencia existente: el insumo no se puede cambiar. Pulse "Cancelar edición" para volver a la lista de insumos pendientes.';
   form.prepend(editBanner);
 
   let editingRow = null;
 
+  // Mismo gesto que en Débito: Enter en Cantidad agrega el insumo a la
+  // lista en vez de disparar el submit del formulario completo.
+  cantidadField.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !editingRow) {
+      e.preventDefault();
+      btnAgregar.click();
+    }
+  });
+
+  // Fecha, Stock origen y Stock destino aplican a TODOS los insumos de la
+  // lista: se bloquean mientras haya algo pendiente para que no cambien a
+  // medio armar la lista (mismo riesgo ya corregido en Débito).
+  function actualizarBloqueoCamposComunes() {
+    const bloquear = carritoTransferencias.length > 0;
+    [fechaField, origenSelect, destinoSelect].forEach((f) => {
+      if (f) f.disabled = bloquear;
+    });
+    if (avisoBloqueo) avisoBloqueo.hidden = !bloquear;
+  }
+
   function exitEditMode() {
     editingRow = null;
-    form.reset();
     insumoSelect.disabled = false;
-    if (respField) respField.value = getResponsableLabel();
+    insumoSelect.value = "";
+    cantidadField.value = "";
     if (submitBtn) submitBtn.textContent = defaultSubmitLabel;
     if (cancelBtn) cancelBtn.classList.add("hidden");
     editBanner.classList.add("hidden");
+    btnAgregar.classList.remove("hidden");
+    actualizarBloqueoCamposComunes();
   }
 
   if (cancelBtn) {
@@ -1155,67 +1246,242 @@ function setupTransferenciaForm() {
     });
   }
 
+  function renderCarritoTransferencias() {
+    const root = document.getElementById("carrito-transferencias");
+    if (!root) return;
+    if (!carritoTransferencias.length) {
+      root.innerHTML = `<p class="text-xs text-slate-400 italic">Aún no ha agregado insumos a la lista.</p>`;
+      actualizarBloqueoCamposComunes();
+      return;
+    }
+    root.innerHTML = `
+      <table class="min-w-full text-sm border border-slate-200 rounded-md overflow-hidden">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="text-left font-medium px-3 py-1.5">Insumo</th>
+            <th class="text-left font-medium px-3 py-1.5">Cantidad</th>
+            <th class="px-3 py-1.5"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${carritoTransferencias
+            .map(
+              (item, i) => `
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-1.5">${escapeHTML(item.insumoNombre)}</td>
+            <td class="px-3 py-1.5">${item.cantidad}</td>
+            <td class="px-3 py-1.5 text-right"><button type="button" data-idx="${i}" class="text-red-700 hover:underline text-xs">Quitar</button></td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    root.querySelectorAll("[data-idx]").forEach((btn) => {
+      btn.onclick = () => {
+        carritoTransferencias.splice(Number(btn.dataset.idx), 1);
+        renderCarritoTransferencias();
+      };
+    });
+    actualizarBloqueoCamposComunes();
+  }
+
+  // Agrega el insumo seleccionado a la lista pendiente (no toca Firestore
+  // todavía). Si el insumo ya estaba en la lista, suma la cantidad en vez
+  // de duplicar la fila.
+  btnAgregar.addEventListener("click", () => {
+    // Fecha, Stock origen y Stock destino quedan bloqueados en cuanto la
+    // lista tiene algo — por eso deben quedar completos ANTES de agregar
+    // el primer insumo (mismo motivo que en Débito).
+    if (!fechaField.value) {
+      toast("Ponga la fecha antes de agregar insumos a la lista.", "error");
+      return;
+    }
+    if (!origenSelect.value) {
+      toast("Seleccione el stock origen.", "error");
+      return;
+    }
+    if (!destinoSelect.value) {
+      toast("Seleccione el stock destino.", "error");
+      return;
+    }
+    if (origenSelect.value === destinoSelect.value) {
+      toast("El stock de origen y destino no pueden ser el mismo.", "error");
+      return;
+    }
+    const opt = insumoSelect.options[insumoSelect.selectedIndex];
+    const cantidad = Number(cantidadField.value);
+    if (!opt?.value) {
+      toast("Seleccione un insumo.", "error");
+      return;
+    }
+    if (!cantidad || cantidad <= 0) {
+      toast("Ingrese una cantidad válida.", "error");
+      return;
+    }
+
+    // Valida contra la existencia disponible en el ORIGEN ya al agregar a
+    // la lista, no solo al final (mismo motivo que en Débito).
+    const existente = carritoTransferencias.find((it) => it.insumoId === opt.value);
+    const yaEnCarrito = existente ? existente.cantidad : 0;
+    const stockDoc = stock.find((s) => s.insumoId === opt.value && s.almacen === origenSelect.value);
+    const disponible = stockDoc ? Number(stockDoc.existencia) || 0 : 0;
+    if (yaEnCarrito + cantidad > disponible) {
+      toast(
+        `Solo hay ${disponible} unidad(es) de "${opt.dataset.nombre}" disponibles en ${origenSelect.value}${yaEnCarrito ? ` (ya tiene ${yaEnCarrito} en la lista)` : ""}.`,
+        "error"
+      );
+      return;
+    }
+
+    if (existente) {
+      existente.cantidad += cantidad;
+    } else {
+      carritoTransferencias.push({ insumoId: opt.value, insumoNombre: opt.dataset.nombre, cantidad });
+    }
+    renderCarritoTransferencias();
+
+    cantidadField.value = "";
+    const searchInput = insumoSelect.parentElement?.querySelector(".insumo-search");
+    if (searchInput) {
+      searchInput.value = "";
+      searchInput.dispatchEvent(new Event("input"));
+    }
+    insumoSelect.value = "";
+    (searchInput || insumoSelect).focus();
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const insumoOpt = insumoSelect.options[insumoSelect.selectedIndex];
-    const origen = form.elements["stockOrigen"].value;
-    const destino = form.elements["stockDestino"].value;
-    const cantidad = Number(form.elements["cantidad"].value);
-    const responsable = form.elements["responsable"].value.trim();
-    const fecha = form.elements["fecha"].value;
 
-    if (!insumoOpt?.value || !origen || !destino || !cantidad || cantidad <= 0) {
-      toast("Complete insumo, stock origen, stock destino y una cantidad válida.", "error");
+    // Modo edición: el formulario representa UNA sola transferencia ya
+    // registrada (no la lista pendiente), así que se actualiza directo en
+    // vez de procesar el carrito.
+    if (editingRow) {
+      const origen = origenSelect.value;
+      const destino = destinoSelect.value;
+      const cantidad = Number(cantidadField.value);
+      const responsable = form.elements["responsable"].value.trim();
+      const fecha = fechaField.value;
+
+      if (!origen || !destino || !cantidad || cantidad <= 0) {
+        toast("Complete stock origen, stock destino y una cantidad válida.", "error");
+        return;
+      }
+      if (origen === destino) {
+        toast("El stock de origen y destino no pueden ser el mismo.", "error");
+        return;
+      }
+      if (!responsable) {
+        toast("Escriba el responsable.", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const textoOriginal = submitBtn.textContent;
+      submitBtn.textContent = "Guardando...";
+      try {
+        await editarTransferencia(editingRow, { origen, destino, cantidad, responsable, fecha });
+        toast("Transferencia actualizada y existencias ajustadas.", "success");
+        exitEditMode();
+      } catch (err) {
+        console.error("Error editando transferencia", err);
+        toast(err.message || "No se pudo actualizar la transferencia.", "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = textoOriginal;
+      }
+      return;
+    }
+
+    if (!carritoTransferencias.length) {
+      toast("Agregue al menos un insumo a la lista antes de registrar.", "error");
+      return;
+    }
+    const origen = origenSelect.value;
+    const destino = destinoSelect.value;
+    const responsable = form.elements["responsable"].value.trim();
+    const fecha = fechaField.value;
+
+    if (!origen || !destino) {
+      toast("Complete stock origen y stock destino.", "error");
       return;
     }
     if (origen === destino) {
       toast("El stock de origen y destino no pueden ser el mismo.", "error");
       return;
     }
+    if (!responsable) {
+      toast("Escriba el responsable.", "error");
+      return;
+    }
 
+    submitBtn.disabled = true;
+    const defaultLabel = submitBtn.textContent;
+    submitBtn.textContent = "Registrando...";
+
+    let registrados = 0;
     try {
-      if (editingRow) {
-        await editarTransferencia(editingRow, { origen, destino, cantidad, responsable, fecha });
-        toast("Transferencia actualizada y existencias ajustadas.", "success");
-        exitEditMode();
-      } else {
+      // Va sacando de la lista cada insumo YA registrado (no solo al
+      // final): si uno falla a medio camino, un reintento solo procesa
+      // los que quedan pendientes, sin volver a transferir los que ya se
+      // aplicaron.
+      while (carritoTransferencias.length) {
+        const item = carritoTransferencias[0];
         await registrarTransferencia({
-          insumoId: insumoOpt.value,
-          insumoNombre: insumoOpt.dataset.nombre,
+          insumoId: item.insumoId,
+          insumoNombre: item.insumoNombre,
           origen,
           destino,
-          cantidad,
+          cantidad: item.cantidad,
           responsable,
           fecha,
         });
-        toast("Transferencia registrada correctamente.", "success");
-        form.reset();
-        if (respField) respField.value = getResponsableLabel();
+        registrados++;
+        carritoTransferencias.shift();
       }
+      toast(`${registrados} transferencia(s) registrada(s) y existencias actualizadas.`, "success");
+      renderCarritoTransferencias();
+      form.reset();
+      if (respField) respField.value = getResponsableLabel();
+      form.querySelectorAll("select").forEach((s) => s.dispatchEvent(new Event("change")));
     } catch (err) {
-      console.error(err);
-      toast(err.message || "No se pudo registrar la transferencia.", "error");
+      console.error("Error registrando transferencia", err);
+      renderCarritoTransferencias();
+      toast(
+        `${registrados ? `${registrados} transferencia(s) registrada(s). ` : ""}${err.message || "Ocurrió un error registrando un insumo."} Revise la lista e intente de nuevo.`,
+        "error"
+      );
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = defaultLabel;
+      actualizarBloqueoCamposComunes();
     }
   });
 
   function startEdit(row) {
     if (!row) return;
+    if (carritoTransferencias.length) {
+      toast("Termine de registrar los insumos pendientes en la lista antes de editar otro registro.", "error");
+      return;
+    }
     editingRow = row;
+    fechaField.value = formatFechaInput(row.fecha);
+    origenSelect.value = row.stockOrigen;
+    destinoSelect.value = row.stockDestino;
+    form.elements["responsable"].value = row.responsable || "";
     asegurarOpcionInsumo(insumoSelect, row.insumoId, row.insumoNombre);
     insumoSelect.value = row.insumoId;
     insumoSelect.disabled = true;
-    form.elements["fecha"].value = formatFechaInput(row.fecha);
-    form.elements["stockOrigen"].value = row.stockOrigen;
-    form.elements["stockDestino"].value = row.stockDestino;
-    form.elements["cantidad"].value = row.cantidad;
-    form.elements["responsable"].value = row.responsable || "";
+    cantidadField.value = row.cantidad;
     if (submitBtn) submitBtn.textContent = "Guardar cambios";
     if (cancelBtn) cancelBtn.classList.remove("hidden");
     editBanner.classList.remove("hidden");
+    btnAgregar.classList.add("hidden");
     form.scrollIntoView({ behavior: "smooth", block: "start" });
     toast("Editando registro. Realice los cambios y guarde.", "info");
   }
 
+  renderCarritoTransferencias();
   return { startEdit };
 }
 

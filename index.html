@@ -574,6 +574,23 @@
               <tbody id="tabla-stock-body"></tbody>
             </table>
           </div>
+
+          <div class="form-card role-admin-only hidden border-2 border-red-300 bg-red-50 no-print">
+            <h3 class="font-semibold text-red-800 mb-1">⚠️ Zona de peligro: vaciar existencias de un almacén</h3>
+            <p class="text-xs text-red-700 mb-3">
+              Borra <strong>PERMANENTEMENTE</strong> todas las existencias registradas (insumoStock) del almacén que elija — útil para recargarlo desde cero después de un conteo físico nuevo. <strong>No</strong> borra el catálogo de insumos ni el historial de movimientos ya registrado (Entradas/Transferencias/Débitos). No hay forma de deshacer esta acción.
+            </p>
+            <div class="form-grid !grid-cols-2">
+              <div><label class="form-label">Almacén a vaciar</label><select id="vaciar-almacen-select" class="form-input select-almacen"></select></div>
+              <div>
+                <label class="form-label">Para confirmar, escriba <strong>VACIAR</strong></label>
+                <input type="text" id="vaciar-almacen-confirmar" class="form-input" autocomplete="off" placeholder="VACIAR" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-vaciar-almacen" disabled class="px-4 py-2 text-sm rounded-md text-white bg-red-700 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed">Vaciar existencias del almacén</button>
+            </div>
+          </div>
         </div>
 
         <div id="panel-catalogo" class="subtab-panel hidden space-y-4">
@@ -658,22 +675,36 @@
 
         <div id="panel-transferencias" class="subtab-panel hidden space-y-4">
           <form id="form-transferencia" class="form-card">
-            <h3 class="font-semibold text-slate-700 mb-2">Registrar transferencia entre stocks</h3>
+            <h3 class="font-semibold text-slate-700 mb-2">Registrar transferencias entre stocks</h3>
+            <p class="text-xs text-slate-500 mb-3">Ponga primero la Fecha, el Stock origen y el Stock destino (aplican a toda la lista); luego agregue todos los insumos que necesite (uno por uno) y regístrelos <strong>todos juntos</strong> con un clic.</p>
             <div class="form-grid">
               <div><label class="form-label">Fecha</label><input required type="date" name="fecha" class="form-input" /></div>
-              <div>
-                <label class="form-label">Insumo</label>
-                <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
-                <select required name="insumoId" class="form-input select-insumo"></select>
-              </div>
               <div><label class="form-label">Stock origen</label><select required name="stockOrigen" class="form-input select-almacen"></select></div>
               <div><label class="form-label">Stock destino</label><select required name="stockDestino" class="form-input select-almacen"></select></div>
-              <div><label class="form-label">Cantidad transferida</label><input required type="number" min="1" name="cantidad" class="form-input" /></div>
               <div><label class="form-label">Responsable</label><input required type="text" name="responsable" class="form-input" /></div>
             </div>
+            <p class="text-xs text-slate-400 mt-1" id="transferencia-campos-bloqueados-aviso" hidden>Fecha, Stock origen y Stock destino quedan fijos mientras haya insumos en la lista. Vacíela para cambiarlos.</p>
+
+            <hr class="my-4 border-slate-200" />
+
+            <div class="form-grid">
+              <div class="md:col-span-2">
+                <label class="form-label">Insumo</label>
+                <input type="text" class="form-input insumo-search input-search mb-1" placeholder="Buscar insumo..." autocomplete="off" />
+                <select id="transferencia-insumo-select" class="form-input select-insumo" data-filtrar-por-almacen="stockOrigen"></select>
+                <p class="text-xs text-slate-400 mt-1">Solo se muestran insumos con existencia en el stock origen elegido.</p>
+              </div>
+              <div><label class="form-label">Cantidad</label><input type="number" min="1" id="transferencia-cantidad" class="form-input" /></div>
+            </div>
+            <div class="form-actions !mt-3">
+              <button type="button" id="btn-agregar-transferencia" class="btn-secondary"><span class="icon" data-icon="mas"></span>Agregar a la lista</button>
+            </div>
+
+            <div id="carrito-transferencias" class="mt-3"></div>
+
             <div class="form-actions">
               <button type="button" data-role="cancel-edit" class="btn-secondary">Cancelar edición</button>
-              <button type="submit" class="btn-primary">Registrar transferencia</button>
+              <button type="submit" class="btn-primary"><span class="icon" data-icon="check"></span>Registrar todas las transferencias</button>
             </div>
           </form>
           <div id="historial-transferencias"></div>
