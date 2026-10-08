@@ -66,6 +66,7 @@
     HIDRO_LECTURAS: "hidroLecturas",
   };
   var NIVEL_HIDRO_MAX = 9;
+  var UMBRALES_HIDRO_DEFAULT = { advertencia: 4, alerta: 7 };
 
   var app = firebase.initializeApp(firebaseConfig);
   var auth = app.auth();
@@ -117,6 +118,7 @@
     inspecciones: [],
     hidro: [],
   };
+  var hidroUmbrales = UMBRALES_HIDRO_DEFAULT;
   var rrhhState = { trabajadores: [], grupos: [], cambiosGuardia: [], asistenciaManual: [], asistExternasHoy: [] };
 
   /* ------------------------- Utilidades generales ------------------------- */
@@ -421,47 +423,77 @@
     if (root) root.innerHTML = barra("Simulacros", simulacros) + barra("Formación", formacion);
   }
 
-  /* ------------------------- Gráfica: Río Limón (línea) -------------------- */
-  function renderHidroChart() {
-    var now = new Date();
-    var esteMes = [];
+  /* ------------------------- Gráfica: Río Limón (pico más alto por mes) --- */
+  // Misma lógica que "Por mes (picos)" en el módulo de Hidrometeorología de
+  // la app principal (js/hidrometeorologia.js): un punto por mes, con el
+  // nivel más alto alcanzado ese mes, coloreado según su estado de alerta.
+  function colorEstadoHidro(nivel) {
+    if (nivel === null || nivel === undefined || isNaN(nivel)) return "#94a3b8";
+    if (nivel >= hidroUmbrales.alerta) return "#dc2626";
+    if (nivel >= hidroUmbrales.advertencia) return "#d97706";
+    return "#059669";
+  }
+  var MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  function picosPorMesHidro() {
+    var porMes = {};
+    var claves = [];
     for (var i = 0; i < state.hidro.length; i++) {
       var r = state.hidro[i];
       var d = toDate(r.fecha);
-      if (d && isSameMonth(d, now)) esteMes.push(r);
+      var nivel = Number(r.nivel);
+      if (!d || isNaN(nivel)) continue;
+      var mes = d.getMonth() + 1;
+      var clave = d.getFullYear() + "-" + (mes < 10 ? "0" + mes : mes);
+      if (!porMes[clave]) claves.push(clave);
+      if (!porMes[clave] || nivel > porMes[clave].nivel) {
+        porMes[clave] = { fecha: d, nivel: nivel };
+      }
     }
-    esteMes.sort(function (a, b) {
-      var da = toDate(a.fecha);
-      var db2 = toDate(b.fecha);
-      var ta = da ? da.getTime() : 0;
-      var tb = db2 ? db2.getTime() : 0;
-      return ta - tb;
-    });
+    claves.sort();
+    // Como máximo los últimos 12 meses, para que no se amontonen en la TV.
+    if (claves.length > 12) claves = claves.slice(claves.length - 12);
+    var resultado = [];
+    for (var j = 0; j < claves.length; j++) resultado.push(porMes[claves[j]]);
+    return resultado;
+  }
+  function renderHidroChart() {
+    var picos = picosPorMesHidro();
     var root = document.getElementById("m-hidro-svg");
     if (!root) return;
-    if (esteMes.length === 0) {
-      root.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#9fb0c9" font-size="13">Sin lecturas este mes</text>';
+    if (picos.length === 0) {
+      root.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#9fb0c9" font-size="13">Sin lecturas registradas</text>';
       return;
     }
     var W = 600,
       H = 220,
-      PAD = 28;
-    var n = esteMes.length;
+      PAD = 28,
+      PAD_INFERIOR = 44;
+    var n = picos.length;
     var puntos = [];
+    var circulos = "";
+    var etiquetas = "";
     for (var k = 0; k < n; k++) {
       var x = n === 1 ? W / 2 : PAD + (k * (W - 2 * PAD)) / (n - 1);
-      var nivel = Number(esteMes[k].nivel) || 0;
-      if (nivel < 0) nivel = 0;
-      if (nivel > NIVEL_HIDRO_MAX) nivel = NIVEL_HIDRO_MAX;
-      var y = H - PAD - (nivel / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
+      var nivel = picos[k].nivel;
+      var nivelAcotado = nivel < 0 ? 0 : nivel > NIVEL_HIDRO_MAX ? NIVEL_HIDRO_MAX : nivel;
+      var y = H - PAD_INFERIOR - (nivelAcotado / NIVEL_HIDRO_MAX) * (H - PAD - PAD_INFERIOR);
       puntos.push(x.toFixed(1) + "," + y.toFixed(1));
+      circulos += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="5" fill="' + colorEstadoHidro(nivel) + '" stroke="#0b1b33" stroke-width="1.5"/>';
+      etiquetas +=
+        '<text x="' +
+        x.toFixed(1) +
+        '" y="' +
+        (H - PAD_INFERIOR + 18) +
+        '" text-anchor="middle" fill="#9fb0c9" font-size="11">' +
+        MESES_CORTOS[picos[k].fecha.getMonth()] +
+        "</text>";
     }
     var guias = [0, 3, 6, 9];
     var lineasGuia = "";
     for (var g = 0; g < guias.length; g++) {
       var n0 = guias[g];
       if (n0 > NIVEL_HIDRO_MAX) continue;
-      var yGuia = H - PAD - (n0 / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
+      var yGuia = H - PAD_INFERIOR - (n0 / NIVEL_HIDRO_MAX) * (H - PAD - PAD_INFERIOR);
       lineasGuia +=
         '<line x1="' +
         PAD +
@@ -486,7 +518,9 @@
       lineasGuia +
       '<polyline points="' +
       puntos.join(" ") +
-      '" fill="none" stroke="#e5484d" stroke-width="2.5" />' +
+      '" fill="none" stroke="#13315C" stroke-width="2.5" />' +
+      circulos +
+      etiquetas +
       "</svg>";
   }
 
@@ -790,6 +824,27 @@
       }
     );
   }
+  function suscribirUmbralesHidro() {
+    db.collection("config")
+      .doc("hidrometeorologia")
+      .onSnapshot(
+        function (snap) {
+          if (snap.exists) {
+            var data = snap.data();
+            hidroUmbrales = {
+              advertencia: typeof data.advertencia === "number" ? data.advertencia : UMBRALES_HIDRO_DEFAULT.advertencia,
+              alerta: typeof data.alerta === "number" ? data.alerta : UMBRALES_HIDRO_DEFAULT.alerta,
+            };
+          } else {
+            hidroUmbrales = UMBRALES_HIDRO_DEFAULT;
+          }
+          renderHidroChart();
+        },
+        function (err) {
+          console.error("Monitor: error leyendo umbrales de Hidrometeorología:", err);
+        }
+      );
+  }
   function iniciarSuscripciones() {
     suscribir(COLLECTIONS.PACIENTES, "pacientes");
     suscribir(COLLECTIONS.TRASLADOS, "traslados");
@@ -799,6 +854,7 @@
     suscribir(COLLECTIONS.EDUCACION, "educacion");
     suscribir(COLLECTIONS.INSPECCIONES, "inspecciones");
     suscribir(COLLECTIONS.HIDRO_LECTURAS, "hidro");
+    suscribirUmbralesHidro();
   }
 
   function suscribirRRHH(nombreColeccion, key) {
