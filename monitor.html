@@ -98,7 +98,7 @@
       animation: pulso-borde 3.5s ease-in-out infinite;
     }
     .emergencia-section .section-title { margin: 0 0 0.4vh; }
-    .emergencia-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
+    .emergencia-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr 0.5fr; gap: 1vh 1vw; }
     .chart-row { flex: 2.6 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
     .th-row { flex: 1.6 1 0; min-height: 0; display: flex; flex-direction: column; }
     .small-row { flex: 0.9 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8vh 1vw; }
@@ -456,10 +456,12 @@
           <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
         </div>
         <div class="card chart-card accent-ops">
-          <div class="card-title"><span class="card-icon" data-micon="traslados"></span>Traslados por institución</div>
+          <div class="card-title"><span class="card-icon" data-micon="traslados"></span>Traslados</div>
+          <div class="num-grande-label">Total histórico</div>
+          <div class="num-grande" id="m-traslados-total" style="font-size: clamp(1.1rem, 3vh, 2.1rem);">0</div>
           <div class="chart-body" id="m-traslados-chart"></div>
         </div>
-        <div class="card accent-ops">
+        <div class="card small-card accent-ops">
           <div class="card-title"><span class="card-icon" data-micon="fallecidos"></span>Fallecidos</div>
           <div class="num-grande-label">Total histórico</div>
           <div class="num-grande" id="m-fallecidos-grande">0</div>

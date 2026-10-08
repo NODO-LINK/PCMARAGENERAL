@@ -338,6 +338,7 @@
 
   /* ------------------------- Gráfica: Traslados por institución ----------- */
   function renderTrasladosChart() {
+    setTotalSolo("traslados", state.traslados.length);
     var counts = {};
     var orden = [];
     for (var i = 0; i < state.traslados.length; i++) {
