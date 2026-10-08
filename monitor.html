@@ -29,119 +29,104 @@
       flex-direction: column;
       height: 100vh;
       width: 100vw;
-      padding: 1.4vh 1.6vw;
-      gap: 1vh;
+      padding: 1.1vh 1.4vw;
+      gap: 0.8vh;
     }
     .monitor-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex: 0 0 auto;
-      padding-bottom: 0.6vh;
+      padding-bottom: 0.5vh;
       border-bottom: 2px solid var(--navy-700);
     }
-    .monitor-brand {
-      display: flex;
-      align-items: center;
-      gap: 1vw;
-    }
-    .monitor-brand img {
-      height: 6vh;
-      width: 6vh;
-      object-fit: contain;
-    }
-    .monitor-brand-text h1 {
-      margin: 0;
-      font-size: clamp(1rem, 2.1vh, 1.8rem);
-      font-weight: 800;
-      letter-spacing: 0.03em;
-    }
-    .monitor-brand-text p {
-      margin: 0;
-      font-size: clamp(0.65rem, 1.3vh, 1rem);
-      color: var(--text-dim);
-    }
-    .monitor-clock {
-      text-align: right;
-    }
-    .monitor-clock .hora {
-      font-size: clamp(1.2rem, 3vh, 2.4rem);
+    .monitor-brand { display: flex; align-items: center; gap: 1vw; }
+    .monitor-brand img { height: 4.2vh; width: 4.2vh; object-fit: contain; }
+    .monitor-brand-text h1 { margin: 0; font-size: clamp(0.9rem, 1.8vh, 1.5rem); font-weight: 800; letter-spacing: 0.03em; }
+    .monitor-brand-text p { margin: 0; font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); }
+    .monitor-clock { text-align: right; }
+    .monitor-clock .hora { font-size: clamp(1rem, 2.4vh, 1.9rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+    .monitor-clock .fecha { font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); text-transform: capitalize; }
+
+    .section-title {
+      font-size: clamp(0.6rem, 1.15vh, 0.9rem);
       font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-    }
-    .monitor-clock .fecha {
-      font-size: clamp(0.65rem, 1.3vh, 1rem);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--text-dim);
-      text-transform: capitalize;
+      flex: 0 0 auto;
+      margin: 0.1vh 0;
     }
-    .monitor-grid {
-      flex: 1 1 auto;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      grid-template-rows: repeat(2, 1fr);
-      gap: 1.3vh 1.2vw;
-    }
+
+    .big-row { flex: 2.5 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
+    .chart-row { flex: 2.3 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1vh 1vw; }
+    .th-row { flex: 1.6 1 0; min-height: 0; display: flex; flex-direction: column; }
+    .small-row { flex: 1.1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8vh 1vw; }
+
     .card {
       background: var(--navy-800);
       border: 1px solid var(--navy-600);
-      border-radius: 0.9vh;
+      border-radius: 0.8vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 0.8vh 0.6vw;
+      padding: 0.6vh 0.6vw;
       min-width: 0;
       min-height: 0;
     }
     .card-title {
-      font-size: clamp(0.7rem, 1.7vh, 1.15rem);
+      font-size: clamp(0.65rem, 1.5vh, 1.05rem);
       font-weight: 700;
       letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--text-dim);
-      margin-bottom: 0.4vh;
+      margin-bottom: 0.3vh;
     }
-    .num-grande {
-      font-size: clamp(1.8rem, 6.2vh, 4.6rem);
-      font-weight: 800;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    .num-grande-label {
-      font-size: clamp(0.6rem, 1.15vh, 0.9rem);
-      color: var(--text-dim);
-      margin-bottom: 0.6vh;
-    }
-    .card-sub {
-      margin-top: 0.6vh;
+    .num-grande { font-size: clamp(1.6rem, 5.6vh, 4rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .num-grande-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); margin-bottom: 0.4vh; }
+    .card-sub { margin-top: 0.4vh; display: flex; align-items: baseline; gap: 0.4vw; }
+    .num-chico { font-size: clamp(0.9rem, 2.2vh, 1.5rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .num-chico-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); }
+
+    .small-card .num-grande { font-size: clamp(1.3rem, 3.6vh, 2.6rem); }
+    .small-card .card-title { font-size: clamp(0.55rem, 1.1vh, 0.85rem); }
+
+    .chart-card { align-items: stretch; justify-content: flex-start; }
+    .chart-card .card-title { text-align: center; }
+    .chart-body { flex: 1 1 0; min-height: 0; width: 100%; display: flex; }
+
+    /* Barras (Educación) */
+    #m-educacion-chart { flex: 1 1 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3vw; padding: 0 1vw; }
+    .bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; width: 30%; }
+    .bar-value { font-size: clamp(0.8rem, 2vh, 1.3rem); font-weight: 700; margin-bottom: 0.3vh; }
+    .bar-track { flex: 1 1 0; width: 60%; min-width: 2vw; display: flex; align-items: flex-end; background: rgba(255,255,255,0.05); border-radius: 0.3vh 0.3vh 0 0; }
+    .bar-fill { width: 100%; background: linear-gradient(180deg, #4f86d6, #1D4E89); border-radius: 0.3vh 0.3vh 0 0; transition: height 0.4s ease; }
+    .bar-label { font-size: clamp(0.55rem, 1.1vh, 0.85rem); color: var(--text-dim); margin-top: 0.4vh; text-transform: uppercase; }
+
+    #m-hidro-svg { flex: 1 1 0; width: 100%; display: flex; }
+    #m-hidro-svg svg { width: 100%; height: 100%; }
+
+    /* Talento Humano */
+    .th-grid { flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 0.7vh 0.8vw; align-content: flex-start; overflow: hidden; }
+    .th-card {
+      background: var(--navy-800);
+      border: 1px solid var(--navy-600);
+      border-radius: 0.7vh;
+      padding: 0.5vh 1vw;
       display: flex;
-      align-items: baseline;
-      gap: 0.4vw;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8vw;
+      flex: 1 1 auto;
     }
-    .num-chico {
-      font-size: clamp(1rem, 2.6vh, 1.8rem);
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-    .num-chico-label {
-      font-size: clamp(0.6rem, 1.15vh, 0.9rem);
-      color: var(--text-dim);
-    }
-    .card-estado {
-      margin-top: 0.4vh;
-      font-size: clamp(0.6rem, 1.2vh, 0.95rem);
-      color: var(--text-dim);
-    }
-    .monitor-footer {
-      flex: 0 0 auto;
-      text-align: center;
-      font-size: clamp(0.6rem, 1.1vh, 0.85rem);
-      color: #f3b8b8;
-      min-height: 1.6vh;
-    }
+    .th-numero { font-size: clamp(1.1rem, 3vh, 2.1rem); font-weight: 800; line-height: 1; }
+    .th-nombre { font-size: clamp(0.55rem, 1.05vh, 0.8rem); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.2vh; text-align: center; }
+    .th-empty { margin: auto; color: var(--text-dim); font-size: clamp(0.7rem, 1.3vh, 1rem); }
+
+    .monitor-footer { flex: 0 0 auto; text-align: center; font-size: clamp(0.55rem, 1vh, 0.8rem); color: #f3b8b8; min-height: 1.4vh; }
   </style>
 </head>
 <body>
@@ -160,67 +145,63 @@
       </div>
     </header>
 
-    <main class="monitor-grid">
+    <main class="big-row">
       <div class="card">
         <div class="card-title">Pacientes</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-pacientes-grande">0</div>
         <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
       </div>
-
       <div class="card">
         <div class="card-title">Traslados</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-traslados-grande">0</div>
         <div class="card-sub"><span class="num-chico" id="m-traslados-chico">0</span><span class="num-chico-label">hoy</span></div>
       </div>
-
-      <div class="card">
-        <div class="card-title">Fallecidos</div>
-        <div class="num-grande-label">Total histórico</div>
-        <div class="num-grande" id="m-fallecidos-grande">0</div>
-        <div class="card-sub"><span class="num-chico" id="m-fallecidos-chico">0</span><span class="num-chico-label">hoy</span></div>
-      </div>
-
       <div class="card">
         <div class="card-title">Combustible (L)</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-combustible-grande">0</div>
         <div class="card-sub"><span class="num-chico" id="m-combustible-chico">0</span><span class="num-chico-label">hoy</span></div>
       </div>
-
-      <div class="card">
-        <div class="card-title">Guardias de Prevención</div>
-        <div class="num-grande-label">Este mes</div>
-        <div class="num-grande" id="m-guardias-grande">0</div>
-        <div class="card-sub"><span class="num-chico" id="m-guardias-chico">0</span><span class="num-chico-label">este año</span></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Gestión de Riesgo</div>
-        <div class="num-grande-label">Este mes</div>
-        <div class="num-grande" id="m-inspeccion-grande">0</div>
-        <div class="card-sub"><span class="num-chico" id="m-inspeccion-chico">0</span><span class="num-chico-label">este año</span></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Río Limón</div>
-        <div class="num-grande-label">Nivel actual</div>
-        <div class="num-grande" id="m-hidro-grande">—</div>
-        <div class="card-sub"><span class="num-chico" id="m-hidro-chico">—</span><span class="num-chico-label">máx. hoy</span></div>
-        <div class="card-estado" id="m-hidro-estado">Sin datos</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Educación</div>
-        <div class="num-grande-label">Total histórico</div>
-        <div class="num-grande" id="m-educacion-grande">0</div>
-        <div class="card-sub"><span class="num-chico" id="m-educacion-chico">0</span><span class="num-chico-label">hoy</span></div>
-      </div>
     </main>
 
+    <section class="chart-row">
+      <div class="card chart-card">
+        <div class="card-title">Educación — Actividades este año</div>
+        <div class="chart-body" id="m-educacion-chart"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-title">Río Limón — Nivel del mes (0-9)</div>
+        <div class="chart-body" id="m-hidro-svg"></div>
+      </div>
+    </section>
+
+    <section class="th-row">
+      <p class="section-title">Talento Humano — Trabajan hoy</p>
+      <div class="th-grid" id="m-th-grid"><p class="th-empty">Cargando…</p></div>
+    </section>
+
+    <section class="small-row">
+      <div class="card small-card">
+        <div class="card-title">Fallecidos</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-fallecidos-total">0</div>
+      </div>
+      <div class="card small-card">
+        <div class="card-title">Guardias de Prevención</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-guardias-total">0</div>
+      </div>
+      <div class="card small-card">
+        <div class="card-title">Gestión de Riesgo</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-inspeccion-total">0</div>
+      </div>
+    </section>
+
     <footer class="monitor-footer">
-      <span id="m-conexion"></span><span id="m-error"></span>
+      <span id="m-conexion"></span><span id="m-error"></span><span id="m-th-error"></span>
     </footer>
   </div>
 
