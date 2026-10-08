@@ -124,16 +124,66 @@
     for (var i = 0; i < clases.length; i++) el.classList.add(clases[i]);
   }
 
-  function elegirAleatorioPonderado(excluir) {
+  /* ------------------------- Ritmo según la hora del día ------------------- */
+  // Un perrito de verdad no está igual de activo a las 3am que a las 10am —
+  // esto hace que de noche/madrugada duerma y descanse mucho más, que al
+  // mediodía le gane el sueño más seguido (siesta), y que de noche esté más
+  // "alerta" (como corresponde a un perro de guardia) en vez de corriendo.
+  function franjaHoraria() {
+    var h = new Date().getHours();
+    if (h < 6) return "madrugada";
+    if (h < 8) return "despertar";
+    if (h < 12) return "manana";
+    if (h < 14) return "siesta";
+    if (h < 18) return "tarde";
+    if (h < 22) return "noche";
+    return "tardeNoche";
+  }
+  var MULTIPLICADORES_HORA = {
+    madrugada: { dormir: 7, sentado: 2, correr: 0.15, trotar: 0.3, girar: 0.15, saltar: 0.15, revolcarse: 0.15, colaFeliz: 0.3, impaciente: 0.2, default: 0.35 },
+    despertar: { dormir: 1.2, bostezar: 3.5, estirarse: 3.5, sacudirse: 2, oreja: 2, alerta: 1.8, default: 1 },
+    manana: { default: 1, correr: 1.3, girar: 1.2, saltar: 1.2, cavar: 1.2, colaFeliz: 1.2, impaciente: 1.3 },
+    siesta: { dormir: 5, sentado: 2.5, bostezar: 1.6, jadear: 1.3, correr: 0.25, trotar: 0.4, girar: 0.25, saltar: 0.25, revolcarse: 0.3, default: 0.55 },
+    tarde: { default: 1, olfatear: 1.3, cavar: 1.2, caminar: 1.1 },
+    noche: { alerta: 2.2, ladrar: 1.6, olfatear: 1.2, correr: 0.5, saltar: 0.5, girar: 0.6, default: 0.85 },
+    tardeNoche: { dormir: 3, sentado: 2, bostezar: 2, correr: 0.25, trotar: 0.4, saltar: 0.25, girar: 0.25, default: 0.45 },
+  };
+  function multiplicadorHora(nombre) {
+    var tabla = MULTIPLICADORES_HORA[franjaHoraria()];
+    if (!tabla) return 1;
+    if (tabla.hasOwnProperty(nombre)) return tabla[nombre];
+    return tabla.hasOwnProperty("default") ? tabla["default"] : 1;
+  }
+
+  // Después de ciertos comportamientos, hay una continuación que tiene más
+  // sentido que un sorteo totalmente al azar (ej. después de dormir, lo
+  // normal es bostezar/estirarse antes de ponerse a caminar; después de
+  // correr, jadear; después de cavar, sacudirse la tierra).
+  var SIGUE_BIEN = {
+    dormir: ["bostezar", "estirarse"],
+    bostezar: ["estirarse"],
+    correr: ["jadear"],
+    trotar: ["jadear"],
+    cavar: ["sacudirse"],
+    olfatear: ["cavar", "alerta", "ladrar"],
+    revolcarse: ["sacudirse"],
+    saltar: ["colaFeliz"],
+    alerta: ["ladrar"],
+    rascarse: ["sacudirse"],
+  };
+
+  function elegirAleatorioPonderado(filtroTipo) {
     var nombres = [];
     var pesos = [];
     var totalPeso = 0;
     var nombre;
     for (nombre in ESTADOS) {
-      if (!ESTADOS.hasOwnProperty(nombre) || nombre === excluir) continue;
+      if (!ESTADOS.hasOwnProperty(nombre)) continue;
+      if (filtroTipo && ESTADOS[nombre].tipo !== filtroTipo) continue;
+      var peso = ESTADOS[nombre].peso * multiplicadorHora(nombre);
       nombres.push(nombre);
-      pesos.push(ESTADOS[nombre].peso);
-      totalPeso += ESTADOS[nombre].peso;
+      pesos.push(peso);
+      totalPeso += peso;
     }
     var r = Math.random() * totalPeso;
     var acumulado = 0;
@@ -142,10 +192,6 @@
       if (r <= acumulado) return nombres[i];
     }
     return nombres[nombres.length - 1];
-  }
-  function elegirSiguienteMovimiento() {
-    var opciones = ["caminar", "caminar", "caminar", "correr", "trotar"];
-    return opciones[Math.floor(Math.random() * opciones.length)];
   }
   function aleatorioEntre(rango) {
     return rango[0] + Math.random() * (rango[1] - rango[0]);
@@ -185,9 +231,11 @@
   var lineaActual = null; // {y,x1,x2} — la repisa donde están paradas las patas ahora
   var posX = window.innerWidth / 2;
   var posY = window.innerHeight / 2;
-  var destinoX = posX;
-  var destinoY = posY;
-  var saltandoEntreLineas = false;
+  // Puntos a recorrer en orden [{x,y,saltar}, ...] — cuando cambia de
+  // repisa SIEMPRE son dos puntos: primero un salto vertical corto (misma
+  // X) y después el recorrido horizontal por la repisa nueva. Así nunca
+  // cruza en diagonal "a través" de tarjetas que están en el medio.
+  var colaDestinos = [];
 
   // Arranca ya parado sobre una repisa real (nunca en el centro de la
   // pantalla "al aire"), si para cuando corre este script las tarjetas ya
@@ -199,8 +247,6 @@
     lineaActual = linea;
     posX = linea.x1 + Math.random() * Math.max(1, linea.x2 - linea.x1);
     posY = linea.y - piePerritoPx();
-    destinoX = posX;
-    destinoY = posY;
   })();
 
   function medidaPerrito() {
@@ -213,39 +259,44 @@
     return (window.innerHeight * 7.8) / 100;
   }
 
-  function elegirNuevoDestino() {
+  function armarRutaMovimiento() {
+    colaDestinos = [];
     if (!lineas.length) recalcularLineas();
     if (!lineas.length) {
       // Aún no hay tarjetas medibles (no debería pasar) — se queda quieto
       // donde está en vez de arriesgarse a "flotar".
-      destinoX = posX;
-      destinoY = posY;
+      colaDestinos.push({ x: posX, y: posY, saltar: false });
       return;
     }
     var m = medidaPerrito();
     // La mayoría de las veces sigue en la MISMA línea (camina de un lado a
-    // otro de esa repisa); de vez en cuando cambia a otra fila de tarjetas
-    // (con un salto corto, ver más abajo).
+    // otro de esa repisa); de vez en cuando cambia a otra fila de tarjetas.
     var cambiarLinea = !lineaActual || Math.random() < 0.3;
     var linea = cambiarLinea ? lineas[Math.floor(Math.random() * lineas.length)] : lineaActual;
-    saltandoEntreLineas = cambiarLinea && !!lineaActual && linea.y !== lineaActual.y;
+    var huboSalto = cambiarLinea && !!lineaActual && linea.y !== lineaActual.y;
 
     // Y de vez en cuando, en vez de quedarse dentro del ancho de las
     // tarjetas de esa fila, sigue de largo más allá del borde de la
     // pantalla — así "sale de los límites" y reaparece luego por otro lado,
     // pero siempre manteniéndose sobre la altura de una repisa real.
     var sale = Math.random() < 0.25;
-    var x;
+    var xFinal;
     if (sale) {
       var margenSalida = m.w * 2 + Math.random() * m.w * 3;
-      x = Math.random() < 0.5 ? linea.x1 - margenSalida : linea.x2 + margenSalida;
+      xFinal = Math.random() < 0.5 ? linea.x1 - margenSalida : linea.x2 + margenSalida;
     } else {
-      x = linea.x1 + Math.random() * Math.max(1, linea.x2 - linea.x1);
+      xFinal = linea.x1 + Math.random() * Math.max(1, linea.x2 - linea.x1);
     }
 
+    if (huboSalto) {
+      // Primero sube/baja DERECHO (misma X de donde está parado) a la
+      // repisa nueva, y recién después camina en horizontal — nunca cruza
+      // en diagonal por encima/a través de lo que haya en el medio.
+      var xDeSalto = Math.max(linea.x1, Math.min(linea.x2, posX));
+      colaDestinos.push({ x: xDeSalto, y: linea.y - piePerritoPx(), saltar: true });
+    }
+    colaDestinos.push({ x: xFinal, y: linea.y - piePerritoPx(), saltar: false });
     lineaActual = linea;
-    destinoX = x;
-    destinoY = linea.y - piePerritoPx();
   }
 
   function iniciarEstado(nombreEstado) {
@@ -254,7 +305,7 @@
     aplicarClases(nombreEstado);
     if (cfg.sonido) ladrar();
     if (cfg.tipo === "mover") {
-      elegirNuevoDestino();
+      armarRutaMovimiento();
     } else {
       finEstadoQuieto = new Date().getTime() + aleatorioEntre(cfg.duracion);
     }
@@ -262,22 +313,18 @@
 
   function siguienteEstado() {
     if (estadoActual && ESTADOS[estadoActual].tipo === "mover") {
-      iniciarEstado(elegirComportamientoQuieto());
-    } else {
-      iniciarEstado(elegirSiguienteMovimiento());
+      iniciarEstado(elegirAleatorioPonderado("quieto"));
+      return;
     }
-  }
-  // Tras un movimiento, el siguiente estado SIEMPRE es uno "quieto"
-  // (comportamiento); tras un comportamiento quieto, el siguiente SIEMPRE
-  // es un movimiento — así se alterna caminar/correr/trotar con las demás
-  // acciones, en vez de poder encadenar dos desplazamientos seguidos sin
-  // pausa ni dos acciones quietas seguidas.
-  function elegirComportamientoQuieto() {
-    var nombre;
-    do {
-      nombre = elegirAleatorioPonderado();
-    } while (ESTADOS[nombre].tipo === "mover");
-    return nombre;
+    // Después de un comportamiento quieto, a veces encadena directamente
+    // con una continuación que tiene sentido (ver SIGUE_BIEN) en vez de
+    // siempre volver a caminar — se ve más "vivo".
+    var sugeridos = estadoActual ? SIGUE_BIEN[estadoActual] : null;
+    if (sugeridos && sugeridos.length && Math.random() < 0.45) {
+      iniciarEstado(sugeridos[Math.floor(Math.random() * sugeridos.length)]);
+    } else {
+      iniciarEstado(elegirAleatorioPonderado("mover"));
+    }
   }
 
   function aplicarTransform() {
@@ -292,34 +339,38 @@
     ultimoTs = ts;
 
     if (!estadoActual) {
-      iniciarEstado(elegirSiguienteMovimiento());
+      iniciarEstado(elegirAleatorioPonderado("mover"));
     }
 
     var cfg = ESTADOS[estadoActual];
     if (cfg.tipo === "mover") {
-      var dx = destinoX - posX;
-      var dy = destinoY - posY;
-      var dist = Math.sqrt(dx * dx + dy * dy);
-      // Si está cambiando de repisa (dy != 0), va rápido y con pose de
-      // salto — un salto corto se ve intencional; arrastrarse despacio en
-      // diagonal por el vacío es justamente lo que se veía mal antes.
-      var velocidadVhSeg = saltandoEntreLineas ? 22 : cfg.velocidad;
-      var pasoMax = velocidadVhSeg * window.innerHeight * 0.01 * dt;
-      if (saltandoEntreLineas) el.classList.add("accion-salto");
-      if (dist <= pasoMax || dist === 0) {
-        posX = destinoX;
-        posY = destinoY;
-        aplicarTransform();
-        if (saltandoEntreLineas) {
-          saltandoEntreLineas = false;
-          el.classList.remove("accion-salto");
-        }
+      if (!colaDestinos.length) {
         siguienteEstado();
       } else {
-        if (Math.abs(dx) > 2) direccion = dx > 0 ? 1 : -1;
-        posX += (dx / dist) * pasoMax;
-        posY += (dy / dist) * pasoMax;
-        aplicarTransform();
+        var meta = colaDestinos[0];
+        var dx = meta.x - posX;
+        var dy = meta.y - posY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        // Si es un salto entre repisas, va rápido y con pose de salto — un
+        // salto corto se ve intencional; arrastrarse despacio en diagonal
+        // por el vacío es justamente lo que se veía mal antes.
+        var velocidadVhSeg = meta.saltar ? 22 : cfg.velocidad;
+        var pasoMax = velocidadVhSeg * window.innerHeight * 0.01 * dt;
+        if (meta.saltar) el.classList.add("accion-salto");
+        else el.classList.remove("accion-salto");
+        if (dist <= pasoMax || dist === 0) {
+          posX = meta.x;
+          posY = meta.y;
+          aplicarTransform();
+          colaDestinos.shift();
+          if (meta.saltar) el.classList.remove("accion-salto");
+          if (!colaDestinos.length) siguienteEstado();
+        } else {
+          if (Math.abs(dx) > 2) direccion = dx > 0 ? 1 : -1;
+          posX += (dx / dist) * pasoMax;
+          posY += (dy / dist) * pasoMax;
+          aplicarTransform();
+        }
       }
     } else {
       if (new Date().getTime() >= finEstadoQuieto) siguienteEstado();
