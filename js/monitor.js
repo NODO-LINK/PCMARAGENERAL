@@ -527,6 +527,34 @@
   function fechaEnRango(fechaISO, inicioISO, finISO) {
     return fechaISO >= inicioISO && fechaISO <= finISO;
   }
+  // El panel "¿Quién trabaja hoy?" de Gestión Humana SÍ incluye a quien está
+  // de reposo/permiso/vacaciones (solo lo marca en rojo como aviso); el
+  // monitor, a pedido explícito, los EXCLUYE del conteo — no están
+  // realmente trabajando aunque les tocara guardia.
+  function trabajadorEnReposoHoy(t, hoy) {
+    var lista = t.reposos || [];
+    for (var i = 0; i < lista.length; i++) {
+      if (fechaEnRango(hoy, lista[i].fechaInicio, lista[i].fechaFin)) return true;
+    }
+    return false;
+  }
+  function trabajadorEnPermisoHoy(t, hoy) {
+    var lista = t.permisos || [];
+    for (var i = 0; i < lista.length; i++) {
+      if (fechaEnRango(hoy, lista[i].fechaInicio, lista[i].fechaFin)) return true;
+    }
+    return false;
+  }
+  function trabajadorEnVacacionesHoy(t, hoy) {
+    var lista = t.vacaciones || [];
+    for (var i = 0; i < lista.length; i++) {
+      if (fechaEnRango(hoy, lista[i].fechaInicio, lista[i].fechaFin)) return true;
+    }
+    return false;
+  }
+  function trabajadorNoDisponibleHoy(t, hoy) {
+    return trabajadorEnReposoHoy(t, hoy) || trabajadorEnPermisoHoy(t, hoy) || trabajadorEnVacacionesHoy(t, hoy);
+  }
   function trabajadorTieneAdelantoHoy(t, hoy) {
     var lista = t.adelantos || [];
     for (var i = 0; i < lista.length; i++) {
@@ -676,7 +704,15 @@
       var grupo2 = buscarPorId(rrhhState.grupos, t2.grupoId);
       resultado.push({ trabajador: t2, grupo: grupo2 });
     }
-    return resultado;
+
+    // Quita del conteo a quien hoy está de reposo médico, permiso o
+    // vacaciones — a pedido explícito, aunque le tocara guardia o haya
+    // marcado asistencia, ya que no está realmente disponible.
+    var disponibles = [];
+    for (i = 0; i < resultado.length; i++) {
+      if (!trabajadorNoDisponibleHoy(resultado[i].trabajador, hoy)) disponibles.push(resultado[i]);
+    }
+    return disponibles;
   }
   function renderTalentoHumano() {
     var root = document.getElementById("m-th-grid");
