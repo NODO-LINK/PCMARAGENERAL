@@ -199,15 +199,53 @@
   function fmt(n) {
     return Number(n || 0).toLocaleString("es-VE");
   }
+
+  /* ------------------------- Animación de conteo en los números ----------- */
+  var pedirCuadro =
+    window.requestAnimationFrame ||
+    window.webkitRequestAnimationFrame ||
+    function (cb) {
+      return setTimeout(function () {
+        cb(new Date().getTime());
+      }, 16);
+    };
+  var ANIMACION_MS = 700;
+  var valoresAnimados = {}; // id del elemento -> último valor numérico mostrado
+  function animarNumero(el, valorNuevo) {
+    if (!el) return;
+    valorNuevo = Number(valorNuevo) || 0;
+    var idKey = el.id;
+    var yaTenia = Object.prototype.hasOwnProperty.call(valoresAnimados, idKey);
+    var valorAnterior = yaTenia ? valoresAnimados[idKey] : 0;
+    if (!yaTenia) {
+      // Primera vez que se pinta esta tarjeta: sin animación, solo mostrar.
+      valoresAnimados[idKey] = valorNuevo;
+      el.textContent = fmt(valorNuevo);
+      return;
+    }
+    if (valorAnterior === valorNuevo) return;
+    var inicio = null;
+    function paso(marcaTiempo) {
+      if (inicio === null) inicio = marcaTiempo;
+      var progreso = Math.min(1, (marcaTiempo - inicio) / ANIMACION_MS);
+      var valorActual = valorAnterior + (valorNuevo - valorAnterior) * progreso;
+      el.textContent = fmt(Math.round(valorActual));
+      if (progreso < 1) {
+        pedirCuadro(paso);
+      } else {
+        el.textContent = fmt(valorNuevo);
+        valoresAnimados[idKey] = valorNuevo;
+      }
+    }
+    pedirCuadro(paso);
+  }
+
   function setCard(id, grande, chico) {
-    var grandeEl = document.getElementById("m-" + id + "-grande");
-    var chicoEl = document.getElementById("m-" + id + "-chico");
-    if (grandeEl) grandeEl.textContent = fmt(grande);
-    if (chicoEl) chicoEl.textContent = fmt(chico);
+    animarNumero(document.getElementById("m-" + id + "-grande"), grande);
+    animarNumero(document.getElementById("m-" + id + "-chico"), chico);
   }
   function setTotalSolo(id, total) {
-    var el = document.getElementById("m-" + id + "-total");
-    if (el) el.textContent = fmt(total);
+    animarNumero(document.getElementById("m-" + id + "-total"), total);
   }
 
   /* ------------------------- Íconos (copiados de icons.js) ---------------- */
@@ -800,9 +838,20 @@
   function iniciarReloj() {
     var horaEl = document.getElementById("m-hora");
     var fechaEl = document.getElementById("m-fecha");
+    function pad2(n) {
+      n = String(n);
+      return n.length < 2 ? "0" + n : n;
+    }
     function tick() {
       var now = new Date();
-      if (horaEl) horaEl.textContent = now.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      if (horaEl) {
+        horaEl.innerHTML =
+          pad2(now.getHours()) +
+          '<span class="separador">:</span>' +
+          pad2(now.getMinutes()) +
+          '<span class="separador">:</span>' +
+          pad2(now.getSeconds());
+      }
       if (fechaEl) {
         var txt = now.toLocaleDateString("es-VE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
         fechaEl.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);

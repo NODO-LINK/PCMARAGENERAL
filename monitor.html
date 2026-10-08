@@ -12,10 +12,23 @@
       --navy-700: #13315C;
       --navy-600: #25476f;
       --text-dim: #9fb0c9;
-      --accent-ops: #10b981;
-      --accent-charts: #3b82f6;
-      --accent-th: #f59e0b;
-      --accent-totales: #94a3b8;
+      --accent-ops: #19e3a1;
+      --accent-charts: #3d9bff;
+      --accent-th: #ffc233;
+      --accent-totales: #b48cff;
+    }
+    @keyframes pulso-borde {
+      0%, 100% { box-shadow: 0 0 0.6vh 0 rgba(25, 227, 161, 0.25); }
+      50% { box-shadow: 0 0 1.6vh 0.2vh rgba(25, 227, 161, 0.55); }
+    }
+    @keyframes parpadeo {
+      0%, 45% { opacity: 1; }
+      50%, 95% { opacity: 0.15; }
+      100% { opacity: 1; }
+    }
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(0.4vh); }
+      to { opacity: 1; transform: translateY(0); }
     }
     * { box-sizing: border-box; }
     html, body {
@@ -50,6 +63,7 @@
     .monitor-brand-text p { margin: 0; font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); }
     .monitor-clock { text-align: right; }
     .monitor-clock .hora { font-size: clamp(1rem, 2.4vh, 1.9rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+    .monitor-clock .hora .separador { animation: parpadeo 1s step-start infinite; color: var(--accent-ops); }
     .monitor-clock .fecha { font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); text-transform: capitalize; }
 
     .section-title {
@@ -74,7 +88,8 @@
       border: 2px solid var(--accent-ops);
       border-radius: 1vh;
       padding: 0.5vh 0.7vw 0.7vh;
-      background: rgba(16, 185, 129, 0.05);
+      background: linear-gradient(135deg, rgba(25, 227, 161, 0.1), rgba(25, 227, 161, 0.02) 60%);
+      animation: pulso-borde 3.5s ease-in-out infinite;
     }
     .emergencia-section .section-title { margin: 0 0 0.4vh; }
     .emergencia-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
@@ -83,11 +98,12 @@
     .small-row { flex: 0.9 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8vh 1vw; }
 
     .card {
-      background: var(--navy-800);
+      background: linear-gradient(150deg, var(--navy-700) 0%, var(--navy-800) 55%);
       border: 1px solid var(--navy-600);
       border-left-width: 0.5vh;
       border-left-color: var(--accent, var(--navy-600));
       border-radius: 0.8vh;
+      box-shadow: 0 0 1.2vh -0.3vh var(--accent, transparent), inset 0 0 2vh -1vh var(--accent, transparent);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -96,6 +112,7 @@
       padding: 0.6vh 0.6vw;
       min-width: 0;
       min-height: 0;
+      animation: aparecer 0.5s ease both;
     }
     .card-title {
       display: flex;
@@ -109,14 +126,28 @@
       color: var(--text-dim);
       margin-bottom: 0.3vh;
     }
-    .card-title .card-icon { color: var(--accent, var(--text-dim)); flex: 0 0 auto; display: flex; }
+    .card-title .card-icon {
+      color: var(--accent, var(--text-dim));
+      background: var(--accent-soft, rgba(255, 255, 255, 0.08));
+      border-radius: 50%;
+      padding: 0.35vh;
+      flex: 0 0 auto;
+      display: flex;
+    }
     .card-icon svg { display: block; }
 
-    .accent-ops { --accent: var(--accent-ops); }
-    .accent-charts { --accent: var(--accent-charts); }
-    .accent-th { --accent: var(--accent-th); }
-    .accent-totales { --accent: var(--accent-totales); }
-    .num-grande { font-size: clamp(1.6rem, 5.6vh, 4rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .accent-ops { --accent: var(--accent-ops); --accent-soft: rgba(25, 227, 161, 0.2); }
+    .accent-charts { --accent: var(--accent-charts); --accent-soft: rgba(61, 155, 255, 0.2); }
+    .accent-th { --accent: var(--accent-th); --accent-soft: rgba(255, 194, 51, 0.2); }
+    .accent-totales { --accent: var(--accent-totales); --accent-soft: rgba(180, 140, 255, 0.2); }
+    .num-grande {
+      font-size: clamp(1.6rem, 5.6vh, 4rem);
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent, #ffffff);
+      text-shadow: 0 0 1.4vh var(--accent-soft, transparent);
+    }
     .num-grande-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); margin-bottom: 0.4vh; }
     .card-sub { margin-top: 0.4vh; display: flex; align-items: baseline; gap: 0.4vw; }
     .num-chico { font-size: clamp(0.9rem, 2.2vh, 1.5rem); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -132,9 +163,15 @@
     /* Barras (Educación) */
     #m-educacion-chart { flex: 1 1 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3vw; padding: 0 1vw; }
     .bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; width: 30%; }
-    .bar-value { font-size: clamp(0.8rem, 2vh, 1.3rem); font-weight: 700; margin-bottom: 0.3vh; }
+    .bar-value { font-size: clamp(0.8rem, 2vh, 1.3rem); font-weight: 700; margin-bottom: 0.3vh; color: var(--accent-charts); }
     .bar-track { flex: 1 1 0; width: 60%; min-width: 2vw; display: flex; align-items: flex-end; background: rgba(255,255,255,0.05); border-radius: 0.3vh 0.3vh 0 0; }
-    .bar-fill { width: 100%; background: linear-gradient(180deg, #4f86d6, #1D4E89); border-radius: 0.3vh 0.3vh 0 0; transition: height 0.4s ease; }
+    .bar-fill {
+      width: 100%;
+      background: linear-gradient(180deg, #7cc3ff, var(--accent-charts));
+      border-radius: 0.3vh 0.3vh 0 0;
+      transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 0 1vh -0.2vh var(--accent-charts);
+    }
     .bar-label { font-size: clamp(0.55rem, 1.1vh, 0.85rem); color: var(--text-dim); margin-top: 0.4vh; text-transform: uppercase; }
 
     #m-hidro-svg { flex: 1 1 0; width: 100%; display: flex; }
@@ -145,15 +182,22 @@
     .hbar-row { display: flex; align-items: center; gap: 0.5vw; }
     .hbar-label { flex: 0 0 28%; font-size: clamp(0.5rem, 1vh, 0.78rem); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hbar-track { flex: 1 1 0; height: 1.6vh; background: rgba(255,255,255,0.05); border-radius: 0.3vh; overflow: hidden; }
-    .hbar-fill { height: 100%; background: linear-gradient(90deg, #1D4E89, #4f86d6); border-radius: 0.3vh; transition: width 0.4s ease; }
-    .hbar-value { flex: 0 0 auto; min-width: 2.2vw; text-align: right; font-size: clamp(0.6rem, 1.15vh, 0.9rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .hbar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-ops), var(--accent-charts));
+      border-radius: 0.3vh;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 0 0.8vh -0.1vh var(--accent-charts);
+    }
+    .hbar-value { flex: 0 0 auto; min-width: 2.2vw; text-align: right; font-size: clamp(0.6rem, 1.15vh, 0.9rem); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent-ops); }
     .hbar-more { font-size: clamp(0.5rem, 0.95vh, 0.75rem); color: var(--text-dim); text-align: center; margin-top: 0.2vh; }
 
     /* Talento Humano */
     .th-grid { flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 0.7vh 0.8vw; align-content: flex-start; overflow: hidden; }
     .th-card {
-      background: var(--navy-800);
+      background: linear-gradient(150deg, var(--navy-700) 0%, var(--navy-800) 60%);
       border: 1px solid var(--navy-600);
+      border-top: 0.4vh solid var(--accent-th);
       border-radius: 0.7vh;
       padding: 0.5vh 1vw;
       display: flex;
@@ -162,8 +206,10 @@
       justify-content: center;
       min-width: 8vw;
       flex: 1 1 auto;
+      box-shadow: 0 0 1vh -0.3vh rgba(255, 194, 51, 0.35);
+      animation: aparecer 0.5s ease both;
     }
-    .th-numero { font-size: clamp(1.1rem, 3vh, 2.1rem); font-weight: 800; line-height: 1; }
+    .th-numero { font-size: clamp(1.1rem, 3vh, 2.1rem); font-weight: 800; line-height: 1; color: var(--accent-th); text-shadow: 0 0 1vh rgba(255, 194, 51, 0.35); }
     .th-nombre { font-size: clamp(0.55rem, 1.05vh, 0.8rem); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.2vh; text-align: center; }
     .th-empty { margin: auto; color: var(--text-dim); font-size: clamp(0.7rem, 1.3vh, 1rem); }
 
