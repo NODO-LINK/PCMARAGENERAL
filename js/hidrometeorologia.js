@@ -124,8 +124,11 @@ function renderChart() {
         {
           label: chartModo === "mensual" ? "Pico máximo mensual (msnm)" : "Nivel del Río Limón (msnm)",
           data,
-          borderColor: "#C81E1E",
-          backgroundColor: "rgba(200,30,30,0.1)",
+          // Color neutro para la línea (no implica alerta por sí sola): el
+          // color que sí importa es el de cada punto, que refleja su
+          // propio estado (normal/advertencia/alerta roja).
+          borderColor: "#13315C",
+          backgroundColor: "rgba(19,49,92,0.08)",
           tension: 0.3,
           fill: true,
           pointRadius: 5,
