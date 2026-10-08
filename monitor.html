@@ -588,7 +588,16 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-  <script src="./js/monitor.js"></script>
-  <script src="./js/monitor-mascota.js"></script>
+  <!--
+    IMPORTANTE: a diferencia del resto de la app (que tiene service-worker.js
+    con CACHE_NAME para forzar actualizaciones), esta página no tiene ningún
+    mecanismo de caché propio — y el navegador de la Smart TV cachea estos
+    archivos de forma muy agresiva (se vieron casos de código viejo
+    mostrándose incluso después de recargar varias veces). El query string
+    "?v=N" rompe ese caché al cambiar la URL del archivo; hay que SUBIR este
+    número cada vez que se edite monitor.js o monitor-mascota.js.
+  -->
+  <script src="./js/monitor.js?v=2"></script>
+  <script src="./js/monitor-mascota.js?v=2"></script>
 </body>
 </html>
