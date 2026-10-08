@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es-VE">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Monitor — Protección Civil</title>
+  <link rel="icon" href="./icons/icon-192.png" />
+  <style>
+    :root {
+      --navy-900: #071730;
+      --navy-800: #0B2545;
+      --navy-700: #13315C;
+      --navy-600: #25476f;
+      --text-dim: #9fb0c9;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: var(--navy-900);
+      color: #ffffff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .monitor-root {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      padding: 1.4vh 1.6vw;
+      gap: 1vh;
+    }
+    .monitor-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex: 0 0 auto;
+      padding-bottom: 0.6vh;
+      border-bottom: 2px solid var(--navy-700);
+    }
+    .monitor-brand {
+      display: flex;
+      align-items: center;
+      gap: 1vw;
+    }
+    .monitor-brand img {
+      height: 6vh;
+      width: 6vh;
+      object-fit: contain;
+    }
+    .monitor-brand-text h1 {
+      margin: 0;
+      font-size: clamp(1rem, 2.1vh, 1.8rem);
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+    .monitor-brand-text p {
+      margin: 0;
+      font-size: clamp(0.65rem, 1.3vh, 1rem);
+      color: var(--text-dim);
+    }
+    .monitor-clock {
+      text-align: right;
+    }
+    .monitor-clock .hora {
+      font-size: clamp(1.2rem, 3vh, 2.4rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .monitor-clock .fecha {
+      font-size: clamp(0.65rem, 1.3vh, 1rem);
+      color: var(--text-dim);
+      text-transform: capitalize;
+    }
+    .monitor-grid {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 1.3vh 1.2vw;
+    }
+    .card {
+      background: var(--navy-800);
+      border: 1px solid var(--navy-600);
+      border-radius: 0.9vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0.8vh 0.6vw;
+      min-width: 0;
+      min-height: 0;
+    }
+    .card-title {
+      font-size: clamp(0.7rem, 1.7vh, 1.15rem);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.4vh;
+    }
+    .num-grande {
+      font-size: clamp(1.8rem, 6.2vh, 4.6rem);
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .num-grande-label {
+      font-size: clamp(0.6rem, 1.15vh, 0.9rem);
+      color: var(--text-dim);
+      margin-bottom: 0.6vh;
+    }
+    .card-sub {
+      margin-top: 0.6vh;
+      display: flex;
+      align-items: baseline;
+      gap: 0.4vw;
+    }
+    .num-chico {
+      font-size: clamp(1rem, 2.6vh, 1.8rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .num-chico-label {
+      font-size: clamp(0.6rem, 1.15vh, 0.9rem);
+      color: var(--text-dim);
+    }
+    .card-estado {
+      margin-top: 0.4vh;
+      font-size: clamp(0.6rem, 1.2vh, 0.95rem);
+      color: var(--text-dim);
+    }
+    .monitor-footer {
+      flex: 0 0 auto;
+      text-align: center;
+      font-size: clamp(0.6rem, 1.1vh, 0.85rem);
+      color: #f3b8b8;
+      min-height: 1.6vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="monitor-root">
+    <header class="monitor-header">
+      <div class="monitor-brand">
+        <img src="./icons/icon-192.png" alt="Escudo de Protección Civil" />
+        <div class="monitor-brand-text">
+          <h1>PROTECCIÓN CIVIL</h1>
+          <p>Monitor de Estadísticas Operativas</p>
+        </div>
+      </div>
+      <div class="monitor-clock">
+        <div class="hora" id="m-hora">--:--:--</div>
+        <div class="fecha" id="m-fecha">—</div>
+      </div>
+    </header>
+
+    <main class="monitor-grid">
+      <div class="card">
+        <div class="card-title">Pacientes</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-pacientes-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Traslados</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-traslados-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-traslados-chico">0</span><span class="num-chico-label">hoy</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Fallecidos</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-fallecidos-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-fallecidos-chico">0</span><span class="num-chico-label">hoy</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Combustible (L)</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-combustible-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-combustible-chico">0</span><span class="num-chico-label">hoy</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Guardias de Prevención</div>
+        <div class="num-grande-label">Este mes</div>
+        <div class="num-grande" id="m-guardias-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-guardias-chico">0</span><span class="num-chico-label">este año</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Gestión de Riesgo</div>
+        <div class="num-grande-label">Este mes</div>
+        <div class="num-grande" id="m-inspeccion-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-inspeccion-chico">0</span><span class="num-chico-label">este año</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Río Limón</div>
+        <div class="num-grande-label">Nivel actual</div>
+        <div class="num-grande" id="m-hidro-grande">—</div>
+        <div class="card-sub"><span class="num-chico" id="m-hidro-chico">—</span><span class="num-chico-label">máx. hoy</span></div>
+        <div class="card-estado" id="m-hidro-estado">Sin datos</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Educación</div>
+        <div class="num-grande-label">Total histórico</div>
+        <div class="num-grande" id="m-educacion-grande">0</div>
+        <div class="card-sub"><span class="num-chico" id="m-educacion-chico">0</span><span class="num-chico-label">hoy</span></div>
+      </div>
+    </main>
+
+    <footer class="monitor-footer">
+      <span id="m-conexion"></span><span id="m-error"></span>
+    </footer>
+  </div>
+
+  <script type="module" src="./js/monitor.js"></script>
+</body>
+</html>
