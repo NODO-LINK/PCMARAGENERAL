@@ -220,6 +220,214 @@
     .th-empty { margin: auto; color: var(--text-dim); font-weight: 700; font-size: clamp(0.7rem, 1.3vh, 1rem); }
 
     .monitor-footer { flex: 0 0 auto; text-align: center; font-size: clamp(0.55rem, 1vh, 0.8rem); font-weight: 700; color: #f3b8b8; min-height: 1.4vh; }
+
+    /* ===================== Mascota: perrito K9 ========================== */
+    :root {
+      --beige: #d9b589;
+      --beige-claro: #ecd3ac;
+      --beige-oscuro: #a9784f;
+      --chaleco: var(--accent-orange);
+    }
+    .perrito {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 9vh;
+      height: 7.5vh;
+      z-index: 500;
+      pointer-events: none;
+      will-change: transform;
+    }
+    .p-sombra {
+      position: absolute;
+      left: 50%;
+      bottom: 0.3vh;
+      width: 6vh;
+      height: 0.9vh;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 50%;
+      transform: translateX(-50%);
+      filter: blur(0.3vh);
+      transition: width 0.3s ease, opacity 0.3s ease;
+    }
+    .p-cuerpo {
+      position: absolute;
+      left: 1.4vh;
+      top: 2.4vh;
+      width: 5.6vh;
+      height: 3.1vh;
+      border-radius: 45% 50% 48% 50%;
+      background: linear-gradient(160deg, var(--beige-claro) 0%, var(--beige) 55%, var(--beige-oscuro) 100%);
+      box-shadow: inset -0.3vh -0.3vh 0.6vh rgba(0, 0, 0, 0.25), inset 0.2vh 0.2vh 0.4vh rgba(255, 255, 255, 0.35);
+    }
+    .p-chaleco {
+      position: absolute;
+      left: 50%;
+      top: 35%;
+      transform: translate(-50%, -50%);
+      width: 3.4vh;
+      height: 1.7vh;
+      background: linear-gradient(160deg, #ff9142, var(--chaleco));
+      border-radius: 0.3vh;
+      box-shadow: 0 0.1vh 0.3vh rgba(0, 0, 0, 0.4);
+      color: #0B2545;
+      font-size: 0.8vh;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 0.03em;
+    }
+    .p-cola {
+      position: absolute;
+      left: 0.1vh;
+      top: 1.6vh;
+      width: 2.6vh;
+      height: 0.9vh;
+      background: linear-gradient(90deg, var(--beige-oscuro), var(--beige));
+      border-radius: 1vh;
+      transform-origin: 100% 50%;
+      animation: p-colear 0.5s ease-in-out infinite;
+    }
+    .p-pata {
+      position: absolute;
+      width: 0.95vh;
+      height: 2vh;
+      background: linear-gradient(180deg, var(--beige), var(--beige-oscuro));
+      border-radius: 0.4vh;
+      top: 4.9vh;
+      transform-origin: 50% 0%;
+    }
+    .p-pata-di { left: 2vh; }
+    .p-pata-ti { left: 3vh; animation-delay: 0.2s; }
+    .p-pata-dd { left: 5.2vh; animation-delay: 0.1s; }
+    .p-pata-td { left: 6.2vh; animation-delay: 0.3s; }
+    .p-cabeza {
+      position: absolute;
+      left: 5.6vh;
+      top: 1.1vh;
+      width: 3.2vh;
+      height: 3vh;
+      border-radius: 55% 55% 50% 50%;
+      background: linear-gradient(145deg, var(--beige-claro), var(--beige) 60%, var(--beige-oscuro));
+      box-shadow: inset -0.25vh -0.25vh 0.5vh rgba(0, 0, 0, 0.25);
+    }
+    .p-oreja {
+      position: absolute;
+      top: -0.3vh;
+      width: 1.1vh;
+      height: 1.8vh;
+      background: linear-gradient(180deg, var(--beige-oscuro), var(--beige));
+      border-radius: 40% 40% 50% 50%;
+      transform-origin: 50% 0%;
+    }
+    .p-oreja-i { left: 0.1vh; transform: rotate(-15deg); }
+    .p-oreja-d { right: 0.1vh; transform: rotate(15deg); }
+    .p-hocico {
+      position: absolute;
+      left: 2.6vh;
+      top: 1.5vh;
+      width: 1.3vh;
+      height: 1.1vh;
+      background: var(--beige-claro);
+      border-radius: 40%;
+      box-shadow: inset -0.15vh -0.1vh 0.25vh rgba(0, 0, 0, 0.2);
+    }
+    .p-hocico::after {
+      content: "";
+      position: absolute;
+      right: -0.05vh;
+      top: 0.25vh;
+      width: 0.45vh;
+      height: 0.35vh;
+      background: #3a2515;
+      border-radius: 50%;
+    }
+    .p-ojo { position: absolute; top: 0.9vh; width: 0.4vh; height: 0.4vh; background: #241509; border-radius: 50%; }
+    .p-ojo-i { left: 1vh; }
+    .p-ojo-d { left: 1.9vh; }
+    .p-lengua {
+      position: absolute;
+      left: 2.3vh;
+      top: 2.4vh;
+      width: 0.6vh;
+      height: 0.9vh;
+      background: #e06a7a;
+      border-radius: 0 0 0.5vh 0.5vh;
+      opacity: 0;
+      transform-origin: 50% 0%;
+    }
+    .p-zzz {
+      position: absolute;
+      right: -1.2vh;
+      top: -1.6vh;
+      font-size: 1.3vh;
+      font-weight: 800;
+      color: #cfe0ff;
+      opacity: 0;
+      text-shadow: 0 0 0.4vh rgba(170, 200, 255, 0.8);
+    }
+
+    /* --- Animaciones base de partes (se activan según el estado) --- */
+    @keyframes p-colear { 0%, 100% { transform: rotate(-18deg); } 50% { transform: rotate(18deg); } }
+    @keyframes p-colear-rapido { 0%, 100% { transform: rotate(-32deg); } 50% { transform: rotate(32deg); } }
+    @keyframes p-colear-lento { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+    @keyframes p-caminar { 0%, 100% { transform: rotate(22deg); } 50% { transform: rotate(-22deg); } }
+    @keyframes p-correr { 0%, 100% { transform: rotate(40deg); } 50% { transform: rotate(-40deg); } }
+    @keyframes p-rascar { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-55deg); } }
+    @keyframes p-cavar { 0%, 100% { transform: translateY(0) rotate(10deg); } 50% { transform: translateY(-0.4vh) rotate(-25deg); } }
+    @keyframes p-saludo { 0%, 60%, 100% { transform: rotate(0deg); } 80% { transform: rotate(-120deg); } }
+    @keyframes p-cabeza-oler { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-0.3vh, 0.6vh) rotate(-8deg); } }
+    @keyframes p-cabeza-ladear { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(14deg); } }
+    @keyframes p-cabeza-negar { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+    @keyframes p-cabeza-alerta { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.5vh); } }
+    @keyframes p-ladrar { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.4); } }
+    @keyframes p-jadeo { 0%, 100% { opacity: 0.9; height: 0.9vh; } 50% { opacity: 1; height: 1.3vh; } }
+    @keyframes p-bostezo { 0%, 80%, 100% { transform: scale(1); } 40% { transform: scale(1.3, 1.6); } }
+    @keyframes p-zzz-flotar { 0%, 100% { opacity: 0; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.6vh); } }
+    @keyframes p-respirar { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.04); } }
+    @keyframes p-salto { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-2.2vh); } 60% { transform: translateY(-2.2vh); } }
+    @keyframes p-girar { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes p-sacudir { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+    @keyframes p-estirar { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(1.25); } }
+    @keyframes p-revolcar { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg) translateY(0.5vh); } 100% { transform: rotate(360deg); } }
+    @keyframes p-pata-golpe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.5vh); } }
+    @keyframes p-oreja-mover { 0%, 100% { transform: rotate(-15deg); } 50% { transform: rotate(5deg); } }
+
+    .perrito.estado-sentado .p-cuerpo { height: 2.2vh; top: 3.3vh; border-radius: 55% 55% 60% 60%; }
+    .perrito.estado-sentado .p-pata { height: 1.1vh; top: 5.2vh; }
+    .perrito.estado-dormir .p-cuerpo { height: 1.8vh; top: 3.7vh; transform-origin: center; animation: p-respirar 2s ease-in-out infinite; }
+    .perrito.estado-dormir .p-pata { opacity: 0; }
+    .perrito.estado-dormir .p-cabeza { top: 2.6vh; transform: rotate(-20deg); }
+    .perrito.estado-dormir .p-cola { animation: none; transform: rotate(0deg); }
+    .perrito.estado-dormir .p-zzz { animation: p-zzz-flotar 2s ease-in-out infinite; }
+    .perrito.estado-dormir .p-sombra { width: 7vh; opacity: 0.5; }
+
+    .perrito.cola-rapida .p-cola { animation: p-colear-rapido 0.25s ease-in-out infinite; }
+    .perrito.cola-lenta .p-cola { animation: p-colear-lento 1.4s ease-in-out infinite; }
+
+    .perrito.mov-caminar .p-pata { animation: p-caminar 0.5s ease-in-out infinite; }
+    .perrito.mov-correr .p-pata { animation: p-correr 0.28s ease-in-out infinite; }
+    .perrito.mov-trotar .p-pata { animation: p-caminar 0.36s ease-in-out infinite; }
+
+    .perrito.accion-rascar .p-pata-ti { animation: p-rascar 0.35s ease-in-out infinite; }
+    .perrito.accion-cavar .p-pata-di, .perrito.accion-cavar .p-pata-dd { animation: p-cavar 0.3s ease-in-out infinite; }
+    .perrito.accion-saludo .p-pata-dd { animation: p-saludo 1.6s ease-in-out infinite; }
+    .perrito.accion-oler .p-cabeza { animation: p-cabeza-oler 0.7s ease-in-out infinite; }
+    .perrito.accion-ladear .p-cabeza { animation: p-cabeza-ladear 1.4s ease-in-out infinite; }
+    .perrito.accion-negar .p-cabeza { animation: p-cabeza-negar 0.5s ease-in-out infinite; }
+    .perrito.accion-alerta .p-cabeza { animation: p-cabeza-alerta 0.6s ease-in-out 2; }
+    .perrito.accion-alerta .p-oreja { animation: p-oreja-mover 0.4s ease-in-out 3; }
+    .perrito.accion-ladrar .p-hocico { animation: p-ladrar 0.3s ease-in-out 3; }
+    .perrito.accion-jadeo .p-lengua { opacity: 1; animation: p-jadeo 0.5s ease-in-out infinite; }
+    .perrito.accion-bostezo .p-cabeza { animation: p-bostezo 1.2s ease-in-out 1; }
+    .perrito.accion-salto { animation: p-salto 0.6s ease-in-out 1; }
+    .perrito.accion-girar { animation: p-girar 0.8s linear 1; }
+    .perrito.accion-sacudir { animation: p-sacudir 0.5s ease-in-out 2; }
+    .perrito.accion-estirar .p-cuerpo { animation: p-estirar 1.2s ease-in-out 1; }
+    .perrito.accion-revolcar { animation: p-revolcar 1.4s ease-in-out 1; }
+    .perrito.accion-impaciente .p-pata-di { animation: p-pata-golpe 0.3s ease-in-out 4; }
+    .perrito.accion-oreja .p-oreja-d { animation: p-oreja-mover 0.4s ease-in-out 2; }
   </style>
 </head>
 <body>
@@ -300,6 +508,29 @@
     </footer>
   </div>
 
+  <!-- Mascota K9: vive fuera de monitor-root (position:fixed) para poder
+       caminar libremente por toda la pantalla, incluso sobre las tarjetas. -->
+  <div class="perrito" id="perrito" aria-hidden="true">
+    <div class="p-sombra"></div>
+    <div class="p-cola"></div>
+    <div class="p-cuerpo">
+      <div class="p-chaleco">K9</div>
+    </div>
+    <div class="p-pata p-pata-ti"></div>
+    <div class="p-pata p-pata-di"></div>
+    <div class="p-pata p-pata-td"></div>
+    <div class="p-pata p-pata-dd"></div>
+    <div class="p-cabeza">
+      <div class="p-oreja p-oreja-i"></div>
+      <div class="p-oreja p-oreja-d"></div>
+      <div class="p-hocico"></div>
+      <div class="p-ojo p-ojo-i"></div>
+      <div class="p-ojo p-ojo-d"></div>
+      <div class="p-lengua"></div>
+      <div class="p-zzz">Z z z</div>
+    </div>
+  </div>
+
   <!--
     Scripts "compat" de Firebase (no ES-module): a diferencia del resto de
     la app (que usa el SDK modular con import/export), este monitor carga
@@ -310,5 +541,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
   <script src="./js/monitor.js"></script>
+  <script src="./js/monitor-mascota.js"></script>
 </body>
 </html>
