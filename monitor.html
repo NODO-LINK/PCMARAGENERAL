@@ -12,6 +12,10 @@
       --navy-700: #13315C;
       --navy-600: #25476f;
       --text-dim: #9fb0c9;
+      --accent-ops: #10b981;
+      --accent-charts: #3b82f6;
+      --accent-th: #f59e0b;
+      --accent-totales: #94a3b8;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -49,14 +53,18 @@
     .monitor-clock .fecha { font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); text-transform: capitalize; }
 
     .section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5vw;
       font-size: clamp(0.6rem, 1.15vh, 0.9rem);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--text-dim);
+      color: var(--accent-th);
       flex: 0 0 auto;
       margin: 0.1vh 0;
     }
+    .section-title .card-icon { color: var(--accent-th); display: flex; }
 
     .big-row { flex: 2.3 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1vh 1vw; }
     .chart-row { flex: 2.6 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
@@ -66,6 +74,8 @@
     .card {
       background: var(--navy-800);
       border: 1px solid var(--navy-600);
+      border-left-width: 0.5vh;
+      border-left-color: var(--card-accent, var(--navy-600));
       border-radius: 0.8vh;
       display: flex;
       flex-direction: column;
@@ -77,6 +87,10 @@
       min-height: 0;
     }
     .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5vw;
       font-size: clamp(0.65rem, 1.5vh, 1.05rem);
       font-weight: 700;
       letter-spacing: 0.02em;
@@ -84,6 +98,13 @@
       color: var(--text-dim);
       margin-bottom: 0.3vh;
     }
+    .card-title .card-icon { color: var(--card-accent, var(--text-dim)); flex: 0 0 auto; display: flex; }
+    .card-icon svg { display: block; }
+
+    .accent-ops { --card-accent: var(--accent-ops); }
+    .accent-charts { --card-accent: var(--accent-charts); }
+    .accent-th { --card-accent: var(--accent-th); }
+    .accent-totales { --card-accent: var(--accent-totales); }
     .num-grande { font-size: clamp(1.6rem, 5.6vh, 4rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
     .num-grande-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); margin-bottom: 0.4vh; }
     .card-sub { margin-top: 0.4vh; display: flex; align-items: baseline; gap: 0.4vw; }
@@ -155,14 +176,14 @@
     </header>
 
     <main class="big-row">
-      <div class="card">
-        <div class="card-title">Pacientes</div>
+      <div class="card accent-ops">
+        <div class="card-title"><span class="card-icon" data-micon="emergencia"></span>Pacientes</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-pacientes-grande">0</div>
         <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
       </div>
-      <div class="card">
-        <div class="card-title">Combustible (L)</div>
+      <div class="card accent-ops">
+        <div class="card-title"><span class="card-icon" data-micon="combustible"></span>Combustible (L)</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-combustible-grande">0</div>
         <div class="card-sub"><span class="num-chico" id="m-combustible-chico">0</span><span class="num-chico-label">hoy</span></div>
@@ -170,38 +191,38 @@
     </main>
 
     <section class="chart-row">
-      <div class="card chart-card">
-        <div class="card-title">Traslados por institución</div>
+      <div class="card chart-card accent-charts">
+        <div class="card-title"><span class="card-icon" data-micon="traslados"></span>Traslados por institución</div>
         <div class="chart-body" id="m-traslados-chart"></div>
       </div>
-      <div class="card chart-card">
-        <div class="card-title">Educación — Actividades este año</div>
+      <div class="card chart-card accent-charts">
+        <div class="card-title"><span class="card-icon" data-micon="graduacion"></span>Educación — Actividades este año</div>
         <div class="chart-body" id="m-educacion-chart"></div>
       </div>
-      <div class="card chart-card">
-        <div class="card-title">Río Limón — Nivel del mes (0-9)</div>
+      <div class="card chart-card accent-charts">
+        <div class="card-title"><span class="card-icon" data-micon="ola"></span>Río Limón — Nivel del mes (0-9)</div>
         <div class="chart-body" id="m-hidro-svg"></div>
       </div>
     </section>
 
     <section class="th-row">
-      <p class="section-title">Talento Humano — Trabajan hoy</p>
+      <p class="section-title"><span class="card-icon" data-micon="usuario"></span>Talento Humano — Trabajan hoy</p>
       <div class="th-grid" id="m-th-grid"><p class="th-empty">Cargando…</p></div>
     </section>
 
     <section class="small-row">
-      <div class="card small-card">
-        <div class="card-title">Fallecidos</div>
+      <div class="card small-card accent-totales">
+        <div class="card-title"><span class="card-icon" data-micon="fallecidos"></span>Fallecidos</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-fallecidos-total">0</div>
       </div>
-      <div class="card small-card">
-        <div class="card-title">Guardias de Prevención</div>
+      <div class="card small-card accent-totales">
+        <div class="card-title"><span class="card-icon" data-micon="escudo"></span>Guardias de Prevención</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-guardias-total">0</div>
       </div>
-      <div class="card small-card">
-        <div class="card-title">Gestión de Riesgo</div>
+      <div class="card small-card accent-totales">
+        <div class="card-title"><span class="card-icon" data-micon="buscar"></span>Gestión de Riesgo</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-inspeccion-total">0</div>
       </div>

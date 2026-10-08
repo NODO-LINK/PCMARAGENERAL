@@ -30,6 +30,7 @@
  * -----------------------------------------------------------------------
  */
 import { firebaseConfig, COLLECTIONS, NIVEL_HIDRO_MAX } from "./config.js";
+import { getIcon } from "./icons.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
@@ -89,6 +90,25 @@ function isSameMonth(a, b) {
 function isSameYear(a, b) {
   return a.getFullYear() === b.getFullYear();
 }
+// Íconos propios del monitor que no existen en el set compartido de
+// icons.js (Traslados y Fallecidos no tienen ícono de navegación propio en
+// la app principal, ya que viven como sub-pestañas dentro de "Emergencias").
+const ICONOS_LOCALES = {
+  traslados: `<path d="M3 7h13"/><path d="m12 3 4 4-4 4"/><path d="M21 17H8"/><path d="m12 21-4-4 4-4"/>`,
+  fallecidos: `<path d="M12 2c1.2 1.6 1.8 2.8 1.8 4a1.8 1.8 0 1 1-3.6 0c0-1.2.6-2.4 1.8-4z" fill="currentColor" stroke="none"/><rect x="10" y="8" width="4" height="13" rx="1"/>`,
+};
+function iconoMonitor(nombre, size = 18) {
+  if (ICONOS_LOCALES[nombre]) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONOS_LOCALES[nombre]}</svg>`;
+  }
+  return getIcon(nombre, { size });
+}
+function pintarIconos() {
+  document.querySelectorAll("[data-micon]").forEach((el) => {
+    el.innerHTML = iconoMonitor(el.dataset.micon, Number(el.dataset.miconSize) || 18);
+  });
+}
+
 function escapeHTML(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -475,6 +495,7 @@ function iniciarEstadoConexion() {
   actualizar();
 }
 
+pintarIconos();
 iniciarReloj();
 iniciarEstadoConexion();
 
