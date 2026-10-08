@@ -91,7 +91,17 @@ function leerCSV(file, aliasMap) {
         const nComas = (primeraLineaConContenido.match(/,/g) || []).length;
         const nPuntoYComa = (primeraLineaConContenido.match(/;/g) || []).length;
         const FS = nPuntoYComa > nComas ? ";" : ",";
-        const wb = window.XLSX.read(texto, { type: "string", FS, cellDates: true });
+        // OJO: `raw: true` aquí a propósito (y SIN `cellDates`). Sin esto,
+        // SheetJS igual intenta adivinar qué celdas de texto "parecen"
+        // fecha/número y las convierte con su propio criterio — para una
+        // fecha ambigua tipo "12/08/2026" la interpreta a la americana
+        // (MM/DD) y la cambia de día/mes en silencio para cualquier día
+        // ≤ 12, ANTES de que `parsearFechaLegado` llegue a verla. Con
+        // `raw: true` todas las celdas quedan como el texto tal cual venía
+        // en el archivo, y cada importador las convierte él mismo
+        // (`Number(...)` para los campos numéricos, `parsearFechaLegado`
+        // —día/mes/año a la venezolana— para las fechas).
+        const wb = window.XLSX.read(texto, { type: "string", FS, raw: true });
         const hoja = wb.Sheets[wb.SheetNames[0]];
         const filasCrudas = window.XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "" });
         resolve(extraerFilas(filasCrudas, aliasMap));
