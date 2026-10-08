@@ -165,6 +165,16 @@
     .chart-card { align-items: stretch; justify-content: flex-start; }
     .chart-card .card-title { text-align: center; }
     .chart-body { flex: 1 1 0; min-height: 0; width: 100%; display: flex; }
+    .chart-total-badge {
+      font-size: clamp(0.55rem, 1.1vh, 0.85rem);
+      font-weight: 800;
+      color: var(--accent, #ffffff);
+      background: var(--accent-soft, rgba(255, 255, 255, 0.08));
+      border-radius: 999px;
+      padding: 0.1vh 0.7vw;
+      text-transform: none;
+      letter-spacing: normal;
+    }
 
     /* Barras (Educación) */
     #m-educacion-chart { flex: 1 1 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3vw; padding: 0 1vw; }
@@ -487,9 +497,10 @@
           <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
         </div>
         <div class="card chart-card accent-ops">
-          <div class="card-title"><span class="card-icon" data-micon="traslados"></span>Traslados</div>
-          <div class="num-grande-label">Total histórico</div>
-          <div class="num-grande" id="m-traslados-total" style="font-size: clamp(1.1rem, 3vh, 2.1rem);">0</div>
+          <div class="card-title">
+            <span class="card-icon" data-micon="traslados"></span>Traslados
+            <span class="chart-total-badge">Total: <span id="m-traslados-total">0</span></span>
+          </div>
           <div class="chart-body" id="m-traslados-chart"></div>
         </div>
         <div class="card small-card accent-ops">

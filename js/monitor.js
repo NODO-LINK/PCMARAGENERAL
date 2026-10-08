@@ -359,7 +359,7 @@
     orden.sort(function (a, b) {
       return counts[b] - counts[a];
     });
-    var TOP_N = 8;
+    var TOP_N = 6;
     var max = counts[orden[0]];
     var limite = Math.min(TOP_N, orden.length);
     var html = "";
