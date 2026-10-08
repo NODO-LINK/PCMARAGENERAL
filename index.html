@@ -414,7 +414,13 @@
             </div>
           </div>
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4 lg:col-span-2">
-            <h3 class="font-semibold text-slate-700 mb-3">Tendencia de nivel (últimas lecturas)</h3>
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h3 class="font-semibold text-slate-700">Tendencia de nivel</h3>
+              <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-xs font-semibold">
+                <button type="button" id="hidro-chart-modo-diario" class="px-3 py-1.5 bg-navy-700 text-white">Diario</button>
+                <button type="button" id="hidro-chart-modo-mensual" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Por mes (picos)</button>
+              </div>
+            </div>
             <canvas id="chart-hidro" height="200"></canvas>
           </div>
         </div>

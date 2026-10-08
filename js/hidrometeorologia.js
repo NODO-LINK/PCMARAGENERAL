@@ -17,19 +17,43 @@
 import { db, doc, getDoc, setDoc, serverTimestamp, collection, getDocs, writeBatch } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
-import { createHistorial, formatDate, parseLocalDate, escapeHTML, toast, confirmDialog } from "./ui.js";
+import { createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, toast, confirmDialog } from "./ui.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
 
 let lecturas = [];
 let umbrales = { ...UMBRALES_HIDRO_DEFAULT };
 let chart = null;
+let chartModo = "diario"; // "diario" | "mensual"
 
 function calcularEstado(nivel) {
   if (nivel === null || nivel === undefined || isNaN(nivel)) return { label: "Sin datos", color: "slate" };
   if (nivel >= umbrales.alerta) return { label: "ALERTA ROJA", color: "red" };
   if (nivel >= umbrales.advertencia) return { label: "ADVERTENCIA", color: "amber" };
   return { label: "NORMAL", color: "emerald" };
+}
+
+// Equivalente en hex de los colores de estado, para los puntos del gráfico
+// (Chart.js no entiende las clases de Tailwind usadas en el resto de la UI).
+const COLOR_HEX_ESTADO = {
+  emerald: "#059669",
+  amber: "#d97706",
+  red: "#dc2626",
+  slate: "#94a3b8",
+};
+
+// Para la vista "Por mes": el pico (nivel más alto) de cada mes con lecturas.
+function picosPorMes(lecturasTodas) {
+  const porMes = new Map(); // "YYYY-MM" -> { fecha, nivel }
+  lecturasTodas.forEach((l) => {
+    const d = toDate(l.fecha);
+    const nivel = Number(l.nivel);
+    if (!d || isNaN(d.getTime()) || isNaN(nivel)) return;
+    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const actual = porMes.get(clave);
+    if (!actual || nivel > actual.nivel) porMes.set(clave, { fecha: d, nivel });
+  });
+  return [...porMes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => v);
 }
 
 // Formato "YYYY-MM-DD" en hora LOCAL, tal como lo espera un input date
@@ -77,9 +101,19 @@ function renderDashboard() {
 function renderChart() {
   const canvas = document.getElementById("chart-hidro");
   if (!canvas || !window.Chart) return;
-  const ultimos = [...lecturas].slice(0, 20).reverse();
-  const labels = ultimos.map((l) => formatDate(l.fecha));
-  const data = ultimos.map((l) => Number(l.nivel));
+
+  let labels, data, coloresPuntos;
+  if (chartModo === "mensual") {
+    const picos = picosPorMes(lecturas);
+    labels = picos.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
+    data = picos.map((p) => p.nivel);
+    coloresPuntos = picos.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
+  } else {
+    const ultimos = [...lecturas].slice(0, 20).reverse();
+    labels = ultimos.map((l) => formatDate(l.fecha));
+    data = ultimos.map((l) => Number(l.nivel));
+    coloresPuntos = ultimos.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
+  }
 
   if (chart) chart.destroy();
   chart = new window.Chart(canvas.getContext("2d"), {
@@ -88,13 +122,15 @@ function renderChart() {
       labels,
       datasets: [
         {
-          label: "Nivel del Río Limón (msnm)",
+          label: chartModo === "mensual" ? "Pico máximo mensual (msnm)" : "Nivel del Río Limón (msnm)",
           data,
           borderColor: "#C81E1E",
           backgroundColor: "rgba(200,30,30,0.1)",
           tension: 0.3,
           fill: true,
-          pointRadius: 3,
+          pointRadius: 5,
+          pointBackgroundColor: coloresPuntos,
+          pointBorderColor: coloresPuntos,
           stepped: false,
         },
       ],
@@ -223,6 +259,32 @@ export async function initHidrometeorologia() {
 
   setupImportacionHidro();
   setupVaciarHidro();
+  setupModoChart();
+}
+
+function setupModoChart() {
+  const btnDiario = document.getElementById("hidro-chart-modo-diario");
+  const btnMensual = document.getElementById("hidro-chart-modo-mensual");
+  if (!btnDiario || !btnMensual) return;
+
+  const ACTIVO = "px-3 py-1.5 bg-navy-700 text-white";
+  const INACTIVO = "px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50";
+  function actualizarBotones() {
+    btnDiario.className = chartModo === "diario" ? ACTIVO : INACTIVO;
+    btnMensual.className = chartModo === "mensual" ? ACTIVO : INACTIVO;
+  }
+
+  btnDiario.addEventListener("click", () => {
+    chartModo = "diario";
+    actualizarBotones();
+    renderChart();
+  });
+  btnMensual.addEventListener("click", () => {
+    chartModo = "mensual";
+    actualizarBotones();
+    renderChart();
+  });
+  actualizarBotones();
 }
 
 /* ---------------------------------------------------------------------- */
