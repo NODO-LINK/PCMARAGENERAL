@@ -7,7 +7,7 @@
   <link rel="icon" href="./icons/icon-192.png" />
   <style>
     :root {
-      --navy-900: #071730;
+      --navy-900: #050f24;
       --navy-800: #0B2545;
       --navy-700: #13315C;
       --navy-600: #25476f;
@@ -16,6 +16,7 @@
       --accent-charts: #3d9bff;
       --accent-th: #ffc233;
       --accent-totales: #b48cff;
+      --accent-orange: #ff7a1a;
     }
     @keyframes pulso-borde {
       0%, 100% { box-shadow: 0 0 0.6vh 0 rgba(25, 227, 161, 0.25); }
@@ -37,9 +38,11 @@
       height: 100%;
       width: 100%;
       overflow: hidden;
-      background: var(--navy-900);
+      background: radial-gradient(ellipse at 50% 0%, var(--navy-700) 0%, var(--navy-900) 65%);
+      background-color: var(--navy-900);
       color: #ffffff;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-weight: 600;
     }
     .monitor-root {
       display: flex;
@@ -54,24 +57,26 @@
       align-items: center;
       justify-content: space-between;
       flex: 0 0 auto;
-      padding-bottom: 0.5vh;
-      border-bottom: 2px solid var(--navy-700);
+      padding: 1vh 1.2vw;
+      border-radius: 0.9vh;
+      background: linear-gradient(120deg, #ff9142, var(--accent-orange) 55%, #e8600a);
+      box-shadow: 0 0.6vh 1.6vh -0.4vh rgba(255, 122, 26, 0.65), 0 0.2vh 0 0 rgba(255, 255, 255, 0.15) inset;
     }
     .monitor-brand { display: flex; align-items: center; gap: 1vw; }
-    .monitor-brand img { height: 4.2vh; width: 4.2vh; object-fit: contain; }
-    .monitor-brand-text h1 { margin: 0; font-size: clamp(0.9rem, 1.8vh, 1.5rem); font-weight: 800; letter-spacing: 0.03em; }
-    .monitor-brand-text p { margin: 0; font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); }
+    .monitor-brand img { height: 4.2vh; width: 4.2vh; object-fit: contain; filter: drop-shadow(0 0.3vh 0.4vh rgba(0, 0, 0, 0.45)); }
+    .monitor-brand-text h1 { margin: 0; font-size: clamp(0.9rem, 1.8vh, 1.5rem); font-weight: 900; letter-spacing: 0.03em; color: #0B2545; text-shadow: 0 0.15vh 0 rgba(255, 255, 255, 0.3); }
+    .monitor-brand-text p { margin: 0; font-size: clamp(0.6rem, 1.1vh, 0.85rem); font-weight: 700; color: #0B2545; opacity: 0.85; }
     .monitor-clock { text-align: right; }
-    .monitor-clock .hora { font-size: clamp(1rem, 2.4vh, 1.9rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-    .monitor-clock .hora .separador { animation: parpadeo 1s step-start infinite; color: var(--accent-ops); }
-    .monitor-clock .fecha { font-size: clamp(0.6rem, 1.1vh, 0.85rem); color: var(--text-dim); text-transform: capitalize; }
+    .monitor-clock .hora { font-size: clamp(1rem, 2.4vh, 1.9rem); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; color: #0B2545; }
+    .monitor-clock .hora .separador { animation: parpadeo 1s step-start infinite; color: #13315C; }
+    .monitor-clock .fecha { font-size: clamp(0.6rem, 1.1vh, 0.85rem); font-weight: 700; color: #0B2545; opacity: 0.85; text-transform: capitalize; }
 
     .section-title {
       display: flex;
       align-items: center;
       gap: 0.5vw;
       font-size: clamp(0.6rem, 1.15vh, 0.9rem);
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--accent, var(--text-dim));
@@ -89,6 +94,7 @@
       border-radius: 1vh;
       padding: 0.5vh 0.7vw 0.7vh;
       background: linear-gradient(135deg, rgba(25, 227, 161, 0.1), rgba(25, 227, 161, 0.02) 60%);
+      box-shadow: 0 0.8vh 2vh -0.6vh rgba(0, 0, 0, 0.5);
       animation: pulso-borde 3.5s ease-in-out infinite;
     }
     .emergencia-section .section-title { margin: 0 0 0.4vh; }
@@ -103,7 +109,7 @@
       border-left-width: 0.5vh;
       border-left-color: var(--accent, var(--navy-600));
       border-radius: 0.8vh;
-      box-shadow: 0 0 1.2vh -0.3vh var(--accent, transparent), inset 0 0 2vh -1vh var(--accent, transparent);
+      box-shadow: 0 0.8vh 1.8vh -0.5vh rgba(0, 0, 0, 0.55), 0 0 1.2vh -0.3vh var(--accent, transparent), inset 0 0 2vh -1vh var(--accent, transparent);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -120,7 +126,7 @@
       justify-content: center;
       gap: 0.5vw;
       font-size: clamp(0.65rem, 1.5vh, 1.05rem);
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--text-dim);
@@ -142,16 +148,16 @@
     .accent-totales { --accent: var(--accent-totales); --accent-soft: rgba(180, 140, 255, 0.2); }
     .num-grande {
       font-size: clamp(1.6rem, 5.6vh, 4rem);
-      font-weight: 800;
+      font-weight: 900;
       line-height: 1;
       font-variant-numeric: tabular-nums;
       color: var(--accent, #ffffff);
-      text-shadow: 0 0 1.4vh var(--accent-soft, transparent);
+      text-shadow: 0 0 1.8vh var(--accent-soft, transparent), 0 0.2vh 0.3vh rgba(0, 0, 0, 0.5);
     }
-    .num-grande-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); margin-bottom: 0.4vh; }
+    .num-grande-label { font-size: clamp(0.55rem, 1vh, 0.8rem); font-weight: 700; color: var(--text-dim); margin-bottom: 0.4vh; }
     .card-sub { margin-top: 0.4vh; display: flex; align-items: baseline; gap: 0.4vw; }
-    .num-chico { font-size: clamp(0.9rem, 2.2vh, 1.5rem); font-weight: 700; font-variant-numeric: tabular-nums; }
-    .num-chico-label { font-size: clamp(0.55rem, 1vh, 0.8rem); color: var(--text-dim); }
+    .num-chico { font-size: clamp(0.9rem, 2.2vh, 1.5rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+    .num-chico-label { font-size: clamp(0.55rem, 1vh, 0.8rem); font-weight: 700; color: var(--text-dim); }
 
     .small-card .num-grande { font-size: clamp(1.3rem, 3.6vh, 2.6rem); }
     .small-card .card-title { font-size: clamp(0.55rem, 1.1vh, 0.85rem); }
@@ -172,7 +178,7 @@
       transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
       box-shadow: 0 0 1vh -0.2vh var(--accent-charts);
     }
-    .bar-label { font-size: clamp(0.55rem, 1.1vh, 0.85rem); color: var(--text-dim); margin-top: 0.4vh; text-transform: uppercase; }
+    .bar-label { font-size: clamp(0.55rem, 1.1vh, 0.85rem); font-weight: 700; color: var(--text-dim); margin-top: 0.4vh; text-transform: uppercase; }
 
     #m-hidro-svg { flex: 1 1 0; width: 100%; display: flex; }
     #m-hidro-svg svg { width: 100%; height: 100%; }
@@ -180,7 +186,7 @@
     /* Barras horizontales (Traslados por institución) */
     #m-traslados-chart { flex: 1 1 0; width: 100%; display: flex; flex-direction: column; justify-content: center; gap: 0.5vh; padding: 0 0.4vw; overflow: hidden; }
     .hbar-row { display: flex; align-items: center; gap: 0.5vw; }
-    .hbar-label { flex: 0 0 28%; font-size: clamp(0.5rem, 1vh, 0.78rem); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hbar-label { flex: 0 0 28%; font-size: clamp(0.5rem, 1vh, 0.78rem); font-weight: 700; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hbar-track { flex: 1 1 0; height: 1.6vh; background: rgba(255,255,255,0.05); border-radius: 0.3vh; overflow: hidden; }
     .hbar-fill {
       height: 100%;
@@ -190,7 +196,7 @@
       box-shadow: 0 0 0.8vh -0.1vh var(--accent-charts);
     }
     .hbar-value { flex: 0 0 auto; min-width: 2.2vw; text-align: right; font-size: clamp(0.6rem, 1.15vh, 0.9rem); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent-ops); }
-    .hbar-more { font-size: clamp(0.5rem, 0.95vh, 0.75rem); color: var(--text-dim); text-align: center; margin-top: 0.2vh; }
+    .hbar-more { font-size: clamp(0.5rem, 0.95vh, 0.75rem); font-weight: 700; color: var(--text-dim); text-align: center; margin-top: 0.2vh; }
 
     /* Talento Humano */
     .th-grid { flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 0.7vh 0.8vw; align-content: flex-start; overflow: hidden; }
@@ -206,14 +212,14 @@
       justify-content: center;
       min-width: 8vw;
       flex: 1 1 auto;
-      box-shadow: 0 0 1vh -0.3vh rgba(255, 194, 51, 0.35);
+      box-shadow: 0 0.5vh 1.2vh -0.4vh rgba(0, 0, 0, 0.5), 0 0 1vh -0.3vh rgba(255, 194, 51, 0.35);
       animation: aparecer 0.5s ease both;
     }
-    .th-numero { font-size: clamp(1.1rem, 3vh, 2.1rem); font-weight: 800; line-height: 1; color: var(--accent-th); text-shadow: 0 0 1vh rgba(255, 194, 51, 0.35); }
-    .th-nombre { font-size: clamp(0.55rem, 1.05vh, 0.8rem); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.2vh; text-align: center; }
-    .th-empty { margin: auto; color: var(--text-dim); font-size: clamp(0.7rem, 1.3vh, 1rem); }
+    .th-numero { font-size: clamp(1.1rem, 3vh, 2.1rem); font-weight: 900; line-height: 1; color: var(--accent-th); text-shadow: 0 0 1vh rgba(255, 194, 51, 0.35); }
+    .th-nombre { font-size: clamp(0.55rem, 1.05vh, 0.8rem); font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.2vh; text-align: center; }
+    .th-empty { margin: auto; color: var(--text-dim); font-weight: 700; font-size: clamp(0.7rem, 1.3vh, 1rem); }
 
-    .monitor-footer { flex: 0 0 auto; text-align: center; font-size: clamp(0.55rem, 1vh, 0.8rem); color: #f3b8b8; min-height: 1.4vh; }
+    .monitor-footer { flex: 0 0 auto; text-align: center; font-size: clamp(0.55rem, 1vh, 0.8rem); font-weight: 700; color: #f3b8b8; min-height: 1.4vh; }
   </style>
 </head>
 <body>
