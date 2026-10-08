@@ -233,6 +233,15 @@
     </footer>
   </div>
 
-  <script type="module" src="./js/monitor.js"></script>
+  <!--
+    Scripts "compat" de Firebase (no ES-module): a diferencia del resto de
+    la app (que usa el SDK modular con import/export), este monitor carga
+    Firebase como scripts clásicos para poder correr en el navegador de
+    Smart TV antiguos que no soportan <script type="module">.
+  -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="./js/monitor.js"></script>
 </body>
 </html>

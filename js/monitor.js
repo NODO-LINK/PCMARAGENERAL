@@ -2,9 +2,20 @@
  * monitor.js
  * -----------------------------------------------------------------------
  * Lógica del Monitor de estadísticas (pantalla fija pensada para TV, sin
- * scroll ni zoom). Es una página independiente de la app principal: no
- * importa data.js/auth.js/ui.js/router.js para mantenerse lo más liviana
- * posible (debe correr en el navegador de un Smart TV modesto).
+ * scroll ni zoom).
+ *
+ * IMPORTANTE — escrito deliberadamente en JavaScript "clásico" (ES5: var,
+ * function(), concatenación de strings, sin arrow functions, sin
+ * let/const, sin template literals, sin optional chaining/nullish
+ * coalescing, sin "type=module"): el navegador de algunos Smart TV es tan
+ * viejo que ni siquiera ejecuta un <script type="module"> (lo ignora en
+ * silencio, sin error) ni entiende sintaxis de JavaScript moderna. Por eso
+ * este archivo se carga como script normal y usa el SDK "compat" de
+ * Firebase (firebase-app-compat.js / firebase-auth-compat.js /
+ * firebase-firestore-compat.js, cargados en monitor.html), que expone un
+ * único objeto global `firebase` en vez de imports ES6. No se importa
+ * nada de config.js/icons.js (eso también requeriría módulos): los pocos
+ * valores que hacen falta de ahí están copiados aquí abajo a propósito.
  *
  * Conecta a DOS proyectos Firebase:
  *  - El de Protección Civil (pcmarageneral): pacientes, traslados,
@@ -21,501 +32,648 @@
  * La sección de Talento Humano REPLICA la lógica de "¿Quién trabaja hoy?"
  * de la app Gestión Humana (NODO-LINK/Gestionhumana, función
  * calcularQuienTrabajaHoy() en su index.html) para que el conteo coincida
- * exactamente con lo que esa app muestra: trabajadores activos programados
- * hoy según su horario (rotativo de grupo, rotativo individual, calendario
- * específico u horario semanal), restando adelantos ya compensados y
- * sumando coberturas de cambios de guardia — SIN restar quienes están de
- * reposo/permiso/vacaciones/sancionados (esa app tampoco los resta del
- * conteo, solo los marca como conflicto en la tarjeta de cada persona).
+ * exactamente con lo que esa app muestra.
  * -----------------------------------------------------------------------
  */
-import { firebaseConfig, COLLECTIONS, NIVEL_HIDRO_MAX } from "./config.js";
-import { getIcon } from "./icons.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+(function () {
+  "use strict";
 
-/* ------------------------- Proyecto Protección Civil --------------------- */
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-/* ------------------------- Proyecto Gestión Humana (RRHH) ----------------- */
-// App Firebase SEPARADA (otro proyecto): se inicializa con un nombre propio
-// ("rrhh") para no chocar con la app principal de arriba.
-const rrhhFirebaseConfig = {
-  apiKey: "AIzaSyAEAsudVzGY30TpQ2MATMX8T2YyFAHmuF8",
-  authDomain: "proteccion-civil-24fee.firebaseapp.com",
-  databaseURL: "https://proteccion-civil-24fee-default-rtdb.firebaseio.com",
-  projectId: "proteccion-civil-24fee",
-  storageBucket: "proteccion-civil-24fee.firebasestorage.app",
-  messagingSenderId: "438564269926",
-  appId: "1:438564269926:web:a67b73a12baadbd45662a7",
-  measurementId: "G-JKR7T85JZ9",
-};
-const rrhhApp = initializeApp(rrhhFirebaseConfig, "rrhh");
-const rrhhAuth = getAuth(rrhhApp);
-const rrhhDb = getFirestore(rrhhApp);
-
-const state = {
-  pacientes: [],
-  traslados: [],
-  fallecidos: [],
-  guardias: [],
-  combustible: [],
-  educacion: [],
-  inspecciones: [],
-  hidro: [],
-};
-const rrhhState = { trabajadores: [], grupos: [], cambiosGuardia: [] };
-
-/* ------------------------- Utilidades generales --------------------------- */
-function toDate(value) {
-  if (!value) return null;
-  if (value.toDate) return value.toDate(); // Firestore Timestamp
-  if (value instanceof Date) return value;
-  if (typeof value === "string") {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  }
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-}
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function isSameMonth(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-function isSameYear(a, b) {
-  return a.getFullYear() === b.getFullYear();
-}
-// Íconos propios del monitor que no existen en el set compartido de
-// icons.js (Traslados y Fallecidos no tienen ícono de navegación propio en
-// la app principal, ya que viven como sub-pestañas dentro de "Emergencias").
-const ICONOS_LOCALES = {
-  traslados: `<path d="M3 7h13"/><path d="m12 3 4 4-4 4"/><path d="M21 17H8"/><path d="m12 21-4-4 4-4"/>`,
-  fallecidos: `<path d="M12 2c1.2 1.6 1.8 2.8 1.8 4a1.8 1.8 0 1 1-3.6 0c0-1.2.6-2.4 1.8-4z" fill="currentColor" stroke="none"/><rect x="10" y="8" width="4" height="13" rx="1"/>`,
-};
-function iconoMonitor(nombre, size = 18) {
-  if (ICONOS_LOCALES[nombre]) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONOS_LOCALES[nombre]}</svg>`;
-  }
-  return getIcon(nombre, { size });
-}
-function pintarIconos() {
-  document.querySelectorAll("[data-micon]").forEach((el) => {
-    el.innerHTML = iconoMonitor(el.dataset.micon, Number(el.dataset.miconSize) || 18);
-  });
-}
-
-function escapeHTML(str) {
-  return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function sumByPeriod(rows, valueFn, dateField = "fecha") {
-  const now = new Date();
-  let hoy = 0,
-    mes = 0,
-    anio = 0;
-  rows.forEach((r) => {
-    const d = toDate(r[dateField]);
-    const v = valueFn(r);
-    if (d && isSameDay(d, now)) hoy += v;
-    if (d && isSameMonth(d, now)) mes += v;
-    if (d && isSameYear(d, now)) anio += v;
-  });
-  const total = rows.reduce((s, r) => s + valueFn(r), 0);
-  return { hoy, mes, anio, total };
-}
-function countByPeriod(rows, dateField = "fecha") {
-  return sumByPeriod(rows, () => 1, dateField);
-}
-
-// La Lista Diaria de Pacientes guarda cantidades por planilla, no un
-// registro por persona: hay que sumar los campos, igual que en el
-// Dashboard principal (js/dashboard.js).
-function personasPlanilla(r) {
-  return (Number(r.ninos) || 0) + (Number(r.adolescentes) || 0) + (Number(r.adultos) || 0);
-}
-// Los registros marcados como conteo histórico/manual antiguo se excluyen,
-// igual que en el Dashboard.
-function pacientesValidos() {
-  return state.pacientes.filter((r) => r.registroLegado !== "si");
-}
-
-const fmt = (n) => Number(n || 0).toLocaleString("es-VE");
-
-function setCard(id, grande, chico) {
-  const grandeEl = document.getElementById(`m-${id}-grande`);
-  const chicoEl = document.getElementById(`m-${id}-chico`);
-  if (grandeEl) grandeEl.textContent = fmt(grande);
-  if (chicoEl) chicoEl.textContent = fmt(chico);
-}
-function setTotalSolo(id, total) {
-  const el = document.getElementById(`m-${id}-total`);
-  if (el) el.textContent = fmt(total);
-}
-
-/* ------------------------- Gráfica de barras: Traslados por institución ----- */
-// Total histórico de traslados, agrupado por institución de destino.
-function renderTrasladosChart() {
-  const counts = {};
-  state.traslados.forEach((r) => {
-    const nombre = r.institucionNombre || r.centroDestino || "Sin institución";
-    counts[nombre] = (counts[nombre] || 0) + 1;
-  });
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-  const root = document.getElementById("m-traslados-chart");
-  if (!root) return;
-  if (!entries.length) {
-    root.innerHTML = `<p class="th-empty">Sin traslados registrados</p>`;
+  if (typeof firebase === "undefined") {
+    var errEl0 = document.getElementById("m-error");
+    if (errEl0) errEl0.textContent = "No se pudo cargar Firebase (revise la conexión a internet del TV).";
     return;
   }
 
-  const TOP_N = 8;
-  const max = entries[0][1];
-  const visibles = entries.slice(0, TOP_N);
-  const restantes = entries.length - visibles.length;
+  /* ------------------------- Proyecto Protección Civil ------------------- */
+  // Copiado de js/config.js (no se puede usar import aquí).
+  var firebaseConfig = {
+    apiKey: "AIzaSyBvv3wz0bpuDJgBFZO9FLJpK094SlCSXY8",
+    authDomain: "pcmarageneral.firebaseapp.com",
+    projectId: "pcmarageneral",
+    storageBucket: "pcmarageneral.firebasestorage.app",
+    messagingSenderId: "515128369762",
+    appId: "1:515128369762:web:3e4ce50b81ed96e075e73b",
+    measurementId: "G-P13KHK9M0H",
+  };
+  var COLLECTIONS = {
+    PACIENTES: "pacientes",
+    TRASLADOS: "traslados",
+    FALLECIDOS: "fallecidos",
+    GUARDIAS: "guardias",
+    DESPACHOS_COMBUSTIBLE: "despachosCombustible",
+    EDUCACION: "educacion",
+    INSPECCIONES: "gestionRiesgoInspeccion",
+    HIDRO_LECTURAS: "hidroLecturas",
+  };
+  var NIVEL_HIDRO_MAX = 9;
 
-  root.innerHTML =
-    visibles
-      .map(
-        ([nombre, total]) => `
-    <div class="hbar-row">
-      <div class="hbar-label" title="${escapeHTML(nombre)}">${escapeHTML(nombre)}</div>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${(total / max) * 100}%"></div></div>
-      <div class="hbar-value">${fmt(total)}</div>
-    </div>`
-      )
-      .join("") + (restantes > 0 ? `<div class="hbar-more">+ ${restantes} institución(es) más</div>` : "");
-}
+  var app = firebase.initializeApp(firebaseConfig);
+  var auth = app.auth();
+  var db = app.firestore();
 
-/* ------------------------- Gráfica de barras: Educación -------------------- */
-// Simulacros vs. Formación (actividades sin simulacro), del año en curso.
-function renderEducacionChart() {
-  const now = new Date();
-  const esteAnio = state.educacion.filter((r) => {
-    const d = toDate(r.fecha);
-    return d && isSameYear(d, now);
-  });
-  const simulacros = esteAnio.filter((r) => /^s[ií]$/i.test(String(r.simulacro || "").trim())).length;
-  const formacion = esteAnio.length - simulacros;
-  const max = Math.max(simulacros, formacion, 1);
+  /* ------------------------- Proyecto Gestión Humana (RRHH) -------------- */
+  var rrhhFirebaseConfig = {
+    apiKey: "AIzaSyAEAsudVzGY30TpQ2MATMX8T2YyFAHmuF8",
+    authDomain: "proteccion-civil-24fee.firebaseapp.com",
+    databaseURL: "https://proteccion-civil-24fee-default-rtdb.firebaseio.com",
+    projectId: "proteccion-civil-24fee",
+    storageBucket: "proteccion-civil-24fee.firebasestorage.app",
+    messagingSenderId: "438564269926",
+    appId: "1:438564269926:web:a67b73a12baadbd45662a7",
+    measurementId: "G-JKR7T85JZ9",
+  };
+  var rrhhApp = firebase.initializeApp(rrhhFirebaseConfig, "rrhh");
+  var rrhhAuth = rrhhApp.auth();
+  var rrhhDb = rrhhApp.firestore();
 
-  const barra = (label, value) => `
-    <div class="bar-col">
-      <div class="bar-value">${fmt(value)}</div>
-      <div class="bar-track"><div class="bar-fill" style="height:${(value / max) * 100}%"></div></div>
-      <div class="bar-label">${label}</div>
-    </div>`;
+  var state = {
+    pacientes: [],
+    traslados: [],
+    fallecidos: [],
+    guardias: [],
+    combustible: [],
+    educacion: [],
+    inspecciones: [],
+    hidro: [],
+  };
+  var rrhhState = { trabajadores: [], grupos: [], cambiosGuardia: [] };
 
-  const root = document.getElementById("m-educacion-chart");
-  if (root) root.innerHTML = barra("Simulacros", simulacros) + barra("Formación", formacion);
-}
-
-/* ------------------------- Gráfica de línea: Río Limón ---------------------- */
-// Nivel (0 a NIVEL_HIDRO_MAX) de todas las lecturas del mes en curso.
-function renderHidroChart() {
-  const now = new Date();
-  const esteMes = state.hidro
-    .filter((r) => {
-      const d = toDate(r.fecha);
-      return d && isSameMonth(d, now);
-    })
-    .sort((a, b) => (toDate(a.fecha)?.getTime() || 0) - (toDate(b.fecha)?.getTime() || 0));
-
-  const root = document.getElementById("m-hidro-svg");
-  if (!root) return;
-
-  if (!esteMes.length) {
-    root.innerHTML = `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#9fb0c9" font-size="13">Sin lecturas este mes</text>`;
-    return;
+  /* ------------------------- Utilidades generales ------------------------- */
+  function toDate(value) {
+    if (!value) return null;
+    if (typeof value.toDate === "function") return value.toDate(); // Firestore Timestamp
+    if (value instanceof Date) return value;
+    if (typeof value === "string") {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    return d;
   }
-
-  const W = 600,
-    H = 220,
-    PAD = 28;
-  const n = esteMes.length;
-  const puntos = esteMes.map((r, idx) => {
-    const x = n === 1 ? W / 2 : PAD + (idx * (W - 2 * PAD)) / (n - 1);
-    const nivel = Math.max(0, Math.min(NIVEL_HIDRO_MAX, Number(r.nivel) || 0));
-    const y = H - PAD - (nivel / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const lineasGuia = [0, 3, 6, 9]
-    .filter((n0) => n0 <= NIVEL_HIDRO_MAX)
-    .map((n0) => {
-      const y = H - PAD - (n0 / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
-      return `<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="#25476f" stroke-width="1"/><text x="4" y="${y - 3}" fill="#9fb0c9" font-size="11">${n0}</text>`;
-    })
-    .join("");
-
-  root.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%">
-      ${lineasGuia}
-      <polyline points="${puntos.join(" ")}" fill="none" stroke="#e5484d" stroke-width="2.5" />
-    </svg>`;
-}
-
-/* ------------------------- Talento Humano (proyecto RRHH) ------------------ */
-// Fecha local (nunca toISOString/UTC: en Venezuela, UTC-4, eso adelanta el
-// día desde las 8:00pm hora local) — igual que todayISO() en Gestión Humana.
-function todayISOLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function diasEntre(fechaInicioISO, fechaHoyISO) {
-  const inicio = new Date(fechaInicioISO + "T00:00:00");
-  const hoy = new Date(fechaHoyISO + "T00:00:00");
-  return Math.floor((hoy - inicio) / 86400000);
-}
-function posicionEnCiclo(grupo, fechaHoyISO) {
-  const cicloDias = (Number(grupo.diasTrabajo) || 0) + (Number(grupo.diasDescanso) || 0);
-  if (cicloDias <= 0 || !grupo.fechaInicio) return { posicion: 0, cicloDias: 0 };
-  const diff = diasEntre(grupo.fechaInicio, fechaHoyISO);
-  const posicion = ((diff % cicloDias) + cicloDias) % cicloDias;
-  return { posicion, cicloDias };
-}
-function grupoTrabajaHoy(grupo, fechaHoyISO) {
-  if (grupo.tipoCiclo === "sin_horario") return false;
-  if (grupo.tipoCiclo === "semanal") {
-    const diaSemana = new Date(fechaHoyISO + "T00:00:00").getDay();
-    return (grupo.diasSemana || []).includes(diaSemana);
+  function isSameDay(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
-  const { posicion, cicloDias } = posicionEnCiclo(grupo, fechaHoyISO);
-  if (cicloDias === 0) return false;
-  return posicion < Number(grupo.diasTrabajo);
-}
-function fechaEnRango(fechaISO, inicioISO, finISO) {
-  return fechaISO >= inicioISO && fechaISO <= finISO;
-}
-function trabajadorEnReposoHoy(t, hoy) {
-  return (t.reposos || []).find((r) => fechaEnRango(hoy, r.fechaInicio, r.fechaFin));
-}
-function trabajadorEnPermisoHoy(t, hoy) {
-  return (t.permisos || []).find((p) => fechaEnRango(hoy, p.fechaInicio, p.fechaFin));
-}
-function trabajadorEnVacacionesHoy(t, hoy) {
-  return (t.vacaciones || []).find((v) => fechaEnRango(hoy, v.fechaInicio, v.fechaFin));
-}
-function trabajadorTieneAdelantoHoy(t, hoy) {
-  return (t.adelantos || []).find((a) => a.fechaCompensada === hoy);
-}
-function trabajadorCubiertoEnFecha(trabajadorId, fechaISO) {
-  return rrhhState.cambiosGuardia.find(
-    (c) => (c.cubiertoId === trabajadorId && c.fecha === fechaISO) || (c.tipo === "cambio" && c.cubreId === trabajadorId && c.fechaReciproca === fechaISO)
-  );
-}
-function trabajadorCubreEnFecha(trabajadorId, fechaISO) {
-  return rrhhState.cambiosGuardia.find(
-    (c) => (c.cubreId === trabajadorId && c.fecha === fechaISO) || (c.tipo === "cambio" && c.cubiertoId === trabajadorId && c.fechaReciproca === fechaISO)
-  );
-}
-function trabajadorAsignadoHoy(t, hoy) {
-  if (t.tipoAsignacion === "rotativo") {
-    const grupo = rrhhState.grupos.find((g) => g.id === t.grupoId);
-    return grupo ? grupoTrabajaHoy(grupo, hoy) : false;
+  function isSameMonth(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
   }
-  if (t.tipoAsignacion === "rotativo_individual") {
-    if (!t.fechaInicioCiclo) return false;
-    const { posicion, cicloDias } = posicionEnCiclo({ diasTrabajo: t.diasTrabajo, diasDescanso: t.diasDescanso, fechaInicio: t.fechaInicioCiclo }, hoy);
-    if (cicloDias === 0) return false;
-    return posicion < Number(t.diasTrabajo);
+  function isSameYear(a, b) {
+    return a.getFullYear() === b.getFullYear();
   }
-  if (t.tipoAsignacion === "calendario") return (t.diasCalendario || []).includes(hoy);
-  if (t.tipoAsignacion === "horario_semanal") {
-    const diaSemana = new Date(hoy + "T00:00:00").getDay();
-    return (t.diasSemana || []).includes(diaSemana);
-  }
-  return false;
-}
-// Réplica fiel de calcularQuienTrabajaHoy() de Gestión Humana (solo la parte
-// de programación por horario + coberturas + inclusiones manuales; se omite
-// a propósito la parte de "marcó asistencia sin estar programado", ya que no
-// leemos aquí los registros de asistencia real, solo la programación).
-function calcularQuienTrabajaHoy(fechaISO = todayISOLocal()) {
-  const hoy = fechaISO;
-  const resultado = [];
-  const idsIncluidos = new Set();
-
-  rrhhState.trabajadores
-    .filter((t) => t.estatus === "activo")
-    .forEach((t) => {
-      const cubierto = trabajadorCubiertoEnFecha(t.id, hoy);
-      const cubreInfo = trabajadorCubreEnFecha(t.id, hoy);
-      const programadoNormal = trabajadorAsignadoHoy(t, hoy) && !trabajadorTieneAdelantoHoy(t, hoy) && !cubierto;
-      if (!programadoNormal && !cubreInfo) return;
-      const grupo = rrhhState.grupos.find((g) => g.id === t.grupoId);
-      resultado.push({ trabajador: t, grupo });
-      idsIncluidos.add(t.id);
+  function escapeHTML(str) {
+    if (str === undefined || str === null) str = "";
+    str = String(str);
+    return str.replace(/[&<>"']/g, function (c) {
+      if (c === "&") return "&amp;";
+      if (c === "<") return "&lt;";
+      if (c === ">") return "&gt;";
+      if (c === '"') return "&quot;";
+      return "&#39;";
     });
+  }
 
-  rrhhState.trabajadores
-    .filter((t) => t.estatus === "activo" && !idsIncluidos.has(t.id))
-    .forEach((t) => {
-      const inclusion = (t.inclusionesManuales || []).find((i) => i.fecha === hoy);
-      if (!inclusion) return;
-      const grupo = rrhhState.grupos.find((g) => g.id === t.grupoId);
-      resultado.push({ trabajador: t, grupo });
+  function sumByPeriod(rows, valueFn, dateField) {
+    dateField = dateField || "fecha";
+    var now = new Date();
+    var hoy = 0,
+      mes = 0,
+      anio = 0,
+      total = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var d = toDate(r[dateField]);
+      var v = valueFn(r);
+      total += v;
+      if (d && isSameDay(d, now)) hoy += v;
+      if (d && isSameMonth(d, now)) mes += v;
+      if (d && isSameYear(d, now)) anio += v;
+    }
+    return { hoy: hoy, mes: mes, anio: anio, total: total };
+  }
+  function countByPeriod(rows, dateField) {
+    return sumByPeriod(
+      rows,
+      function () {
+        return 1;
+      },
+      dateField
+    );
+  }
+  // La Lista Diaria de Pacientes guarda cantidades por planilla, no un
+  // registro por persona: hay que sumar los campos, igual que en el
+  // Dashboard principal (js/dashboard.js).
+  function personasPlanilla(r) {
+    return (Number(r.ninos) || 0) + (Number(r.adolescentes) || 0) + (Number(r.adultos) || 0);
+  }
+  // Los registros marcados como conteo histórico/manual antiguo se excluyen,
+  // igual que en el Dashboard.
+  function pacientesValidos() {
+    var out = [];
+    for (var i = 0; i < state.pacientes.length; i++) {
+      if (state.pacientes[i].registroLegado !== "si") out.push(state.pacientes[i]);
+    }
+    return out;
+  }
+
+  function fmt(n) {
+    return Number(n || 0).toLocaleString("es-VE");
+  }
+  function setCard(id, grande, chico) {
+    var grandeEl = document.getElementById("m-" + id + "-grande");
+    var chicoEl = document.getElementById("m-" + id + "-chico");
+    if (grandeEl) grandeEl.textContent = fmt(grande);
+    if (chicoEl) chicoEl.textContent = fmt(chico);
+  }
+  function setTotalSolo(id, total) {
+    var el = document.getElementById("m-" + id + "-total");
+    if (el) el.textContent = fmt(total);
+  }
+
+  /* ------------------------- Íconos (copiados de icons.js) ---------------- */
+  var RAW_ICONS = {
+    emergencia: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+    combustible:
+      '<path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 11h8"/><path d="M14 8h2.5l2.5 2.5V17a1.5 1.5 0 0 1-3 0v-3"/><path d="M2 21h14"/>',
+    ola: '<path d="M2 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 20c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+    graduacion: '<path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M6 10.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-5.5"/><path d="M22 8v6"/>',
+    buscar: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>',
+    escudo: '<path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"/>',
+    traslados: '<path d="M3 7h13"/><path d="m12 3 4 4-4 4"/><path d="M21 17H8"/><path d="m12 21-4-4 4-4"/>',
+    fallecidos:
+      '<path d="M12 2c1.2 1.6 1.8 2.8 1.8 4a1.8 1.8 0 1 1-3.6 0c0-1.2.6-2.4 1.8-4z" fill="currentColor" stroke="none"/><rect x="10" y="8" width="4" height="13" rx="1"/>',
+  };
+  function iconoMonitor(nombre, size) {
+    size = size || 18;
+    var paths = RAW_ICONS[nombre];
+    if (!paths) return "";
+    return (
+      '<svg width="' +
+      size +
+      '" height="' +
+      size +
+      '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      paths +
+      "</svg>"
+    );
+  }
+  function pintarIconos() {
+    var els = document.querySelectorAll("[data-micon]");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var size = Number(el.getAttribute("data-micon-size")) || 18;
+      el.innerHTML = iconoMonitor(el.getAttribute("data-micon"), size);
+    }
+  }
+
+  /* ------------------------- Gráfica: Traslados por institución ----------- */
+  function renderTrasladosChart() {
+    var counts = {};
+    var orden = [];
+    for (var i = 0; i < state.traslados.length; i++) {
+      var r = state.traslados[i];
+      var nombre = r.institucionNombre || r.centroDestino || "Sin institución";
+      if (!(nombre in counts)) {
+        counts[nombre] = 0;
+        orden.push(nombre);
+      }
+      counts[nombre] += 1;
+    }
+    var root = document.getElementById("m-traslados-chart");
+    if (!root) return;
+    if (orden.length === 0) {
+      root.innerHTML = '<p class="th-empty">Sin traslados registrados</p>';
+      return;
+    }
+    orden.sort(function (a, b) {
+      return counts[b] - counts[a];
     });
-
-  return resultado;
-}
-
-function renderTalentoHumano() {
-  const root = document.getElementById("m-th-grid");
-  if (!root) return;
-  if (!rrhhState.trabajadores.length) {
-    root.innerHTML = `<p class="th-empty">Cargando Talento Humano…</p>`;
-    return;
+    var TOP_N = 8;
+    var max = counts[orden[0]];
+    var limite = Math.min(TOP_N, orden.length);
+    var html = "";
+    for (var j = 0; j < limite; j++) {
+      var nombre2 = orden[j];
+      var total = counts[nombre2];
+      var pct = (total / max) * 100;
+      html +=
+        '<div class="hbar-row">' +
+        '<div class="hbar-label" title="' +
+        escapeHTML(nombre2) +
+        '">' +
+        escapeHTML(nombre2) +
+        "</div>" +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' +
+        pct +
+        '%"></div></div>' +
+        '<div class="hbar-value">' +
+        fmt(total) +
+        "</div>" +
+        "</div>";
+    }
+    var restantes = orden.length - limite;
+    if (restantes > 0) html += '<div class="hbar-more">+ ' + restantes + " institución(es) más</div>";
+    root.innerHTML = html;
   }
-  const hoyList = calcularQuienTrabajaHoy();
-  const buckets = {};
-  hoyList.forEach((item) => {
-    const nombre = item.grupo?.nombre || "Sin grupo";
-    buckets[nombre] = (buckets[nombre] || 0) + 1;
-  });
-  const categorias = Object.keys(buckets).sort((a, b) => {
-    if (a === "Sin grupo") return 1;
-    if (b === "Sin grupo") return -1;
-    return a.localeCompare(b, "es");
-  });
-  if (!categorias.length) {
-    root.innerHTML = `<p class="th-empty">Nadie tiene guardia asignada para hoy.</p>`;
-    return;
+
+  /* ------------------------- Gráfica: Educación (barras) ------------------ */
+  function renderEducacionChart() {
+    var now = new Date();
+    var simulacros = 0,
+      totalAnio = 0;
+    for (var i = 0; i < state.educacion.length; i++) {
+      var r = state.educacion[i];
+      var d = toDate(r.fecha);
+      if (d && isSameYear(d, now)) {
+        totalAnio += 1;
+        if (/^s[ií]$/i.test(String(r.simulacro || "").replace(/^\s+|\s+$/g, ""))) simulacros += 1;
+      }
+    }
+    var formacion = totalAnio - simulacros;
+    var max = Math.max(simulacros, formacion, 1);
+    function barra(label, value) {
+      return (
+        '<div class="bar-col">' +
+        '<div class="bar-value">' +
+        fmt(value) +
+        "</div>" +
+        '<div class="bar-track"><div class="bar-fill" style="height:' +
+        (value / max) * 100 +
+        '%"></div></div>' +
+        '<div class="bar-label">' +
+        label +
+        "</div>" +
+        "</div>"
+      );
+    }
+    var root = document.getElementById("m-educacion-chart");
+    if (root) root.innerHTML = barra("Simulacros", simulacros) + barra("Formación", formacion);
   }
-  root.innerHTML = categorias
-    .map(
-      (cat) => `
-    <div class="th-card">
-      <div class="th-numero">${fmt(buckets[cat])}</div>
-      <div class="th-nombre">${escapeHTML(cat)}</div>
-    </div>`
-    )
-    .join("");
-}
 
-/* ------------------------- Render general (Protección Civil) --------------- */
-function renderAll() {
-  const p = sumByPeriod(pacientesValidos(), personasPlanilla);
-  setCard("pacientes", p.total, p.hoy);
+  /* ------------------------- Gráfica: Río Limón (línea) -------------------- */
+  function renderHidroChart() {
+    var now = new Date();
+    var esteMes = [];
+    for (var i = 0; i < state.hidro.length; i++) {
+      var r = state.hidro[i];
+      var d = toDate(r.fecha);
+      if (d && isSameMonth(d, now)) esteMes.push(r);
+    }
+    esteMes.sort(function (a, b) {
+      var da = toDate(a.fecha);
+      var db2 = toDate(b.fecha);
+      var ta = da ? da.getTime() : 0;
+      var tb = db2 ? db2.getTime() : 0;
+      return ta - tb;
+    });
+    var root = document.getElementById("m-hidro-svg");
+    if (!root) return;
+    if (esteMes.length === 0) {
+      root.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#9fb0c9" font-size="13">Sin lecturas este mes</text>';
+      return;
+    }
+    var W = 600,
+      H = 220,
+      PAD = 28;
+    var n = esteMes.length;
+    var puntos = [];
+    for (var k = 0; k < n; k++) {
+      var x = n === 1 ? W / 2 : PAD + (k * (W - 2 * PAD)) / (n - 1);
+      var nivel = Number(esteMes[k].nivel) || 0;
+      if (nivel < 0) nivel = 0;
+      if (nivel > NIVEL_HIDRO_MAX) nivel = NIVEL_HIDRO_MAX;
+      var y = H - PAD - (nivel / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
+      puntos.push(x.toFixed(1) + "," + y.toFixed(1));
+    }
+    var guias = [0, 3, 6, 9];
+    var lineasGuia = "";
+    for (var g = 0; g < guias.length; g++) {
+      var n0 = guias[g];
+      if (n0 > NIVEL_HIDRO_MAX) continue;
+      var yGuia = H - PAD - (n0 / NIVEL_HIDRO_MAX) * (H - 2 * PAD);
+      lineasGuia +=
+        '<line x1="' +
+        PAD +
+        '" y1="' +
+        yGuia +
+        '" x2="' +
+        (W - PAD) +
+        '" y2="' +
+        yGuia +
+        '" stroke="#25476f" stroke-width="1"/><text x="4" y="' +
+        (yGuia - 3) +
+        '" fill="#9fb0c9" font-size="11">' +
+        n0 +
+        "</text>";
+    }
+    root.innerHTML =
+      '<svg viewBox="0 0 ' +
+      W +
+      " " +
+      H +
+      '" preserveAspectRatio="none" style="width:100%;height:100%">' +
+      lineasGuia +
+      '<polyline points="' +
+      puntos.join(" ") +
+      '" fill="none" stroke="#e5484d" stroke-width="2.5" />' +
+      "</svg>";
+  }
 
-  const c = sumByPeriod(state.combustible, (r) => Number(r.litros) || 0);
-  setCard("combustible", c.total, c.hoy);
+  /* ------------------------- Talento Humano (proyecto RRHH) --------------- */
+  // Fecha local (nunca toISOString/UTC: en Venezuela, UTC-4, eso adelanta el
+  // día desde las 8:00pm hora local) — igual que todayISO() en Gestión Humana.
+  function todayISOLocal() {
+    var d = new Date();
+    function pad(x) {
+      x = String(x);
+      return x.length < 2 ? "0" + x : x;
+    }
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function diasEntre(fechaInicioISO, fechaHoyISO) {
+    var inicio = new Date(fechaInicioISO + "T00:00:00");
+    var hoy = new Date(fechaHoyISO + "T00:00:00");
+    return Math.floor((hoy.getTime() - inicio.getTime()) / 86400000);
+  }
+  function posicionEnCiclo(grupo, fechaHoyISO) {
+    var cicloDias = (Number(grupo.diasTrabajo) || 0) + (Number(grupo.diasDescanso) || 0);
+    if (cicloDias <= 0 || !grupo.fechaInicio) return { posicion: 0, cicloDias: 0 };
+    var diff = diasEntre(grupo.fechaInicio, fechaHoyISO);
+    var posicion = ((diff % cicloDias) + cicloDias) % cicloDias;
+    return { posicion: posicion, cicloDias: cicloDias };
+  }
+  function grupoTrabajaHoy(grupo, fechaHoyISO) {
+    if (grupo.tipoCiclo === "sin_horario") return false;
+    if (grupo.tipoCiclo === "semanal") {
+      var diaSemana = new Date(fechaHoyISO + "T00:00:00").getDay();
+      var dias = grupo.diasSemana || [];
+      return dias.indexOf(diaSemana) !== -1;
+    }
+    var res = posicionEnCiclo(grupo, fechaHoyISO);
+    if (res.cicloDias === 0) return false;
+    return res.posicion < Number(grupo.diasTrabajo);
+  }
+  function fechaEnRango(fechaISO, inicioISO, finISO) {
+    return fechaISO >= inicioISO && fechaISO <= finISO;
+  }
+  function trabajadorTieneAdelantoHoy(t, hoy) {
+    var lista = t.adelantos || [];
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].fechaCompensada === hoy) return lista[i];
+    }
+    return null;
+  }
+  function buscarPorId(lista, id) {
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].id === id) return lista[i];
+    }
+    return null;
+  }
+  function trabajadorCubiertoEnFecha(trabajadorId, fechaISO) {
+    var lista = rrhhState.cambiosGuardia;
+    for (var i = 0; i < lista.length; i++) {
+      var c = lista[i];
+      if (c.cubiertoId === trabajadorId && c.fecha === fechaISO) return c;
+      if (c.tipo === "cambio" && c.cubreId === trabajadorId && c.fechaReciproca === fechaISO) return c;
+    }
+    return null;
+  }
+  function trabajadorCubreEnFecha(trabajadorId, fechaISO) {
+    var lista = rrhhState.cambiosGuardia;
+    for (var i = 0; i < lista.length; i++) {
+      var c = lista[i];
+      if (c.cubreId === trabajadorId && c.fecha === fechaISO) return c;
+      if (c.tipo === "cambio" && c.cubiertoId === trabajadorId && c.fechaReciproca === fechaISO) return c;
+    }
+    return null;
+  }
+  function trabajadorAsignadoHoy(t, hoy) {
+    if (t.tipoAsignacion === "rotativo") {
+      var grupo = buscarPorId(rrhhState.grupos, t.grupoId);
+      return grupo ? grupoTrabajaHoy(grupo, hoy) : false;
+    }
+    if (t.tipoAsignacion === "rotativo_individual") {
+      if (!t.fechaInicioCiclo) return false;
+      var res = posicionEnCiclo({ diasTrabajo: t.diasTrabajo, diasDescanso: t.diasDescanso, fechaInicio: t.fechaInicioCiclo }, hoy);
+      if (res.cicloDias === 0) return false;
+      return res.posicion < Number(t.diasTrabajo);
+    }
+    if (t.tipoAsignacion === "calendario") {
+      var dias = t.diasCalendario || [];
+      return dias.indexOf(hoy) !== -1;
+    }
+    if (t.tipoAsignacion === "horario_semanal") {
+      var diaSemana = new Date(hoy + "T00:00:00").getDay();
+      var diasS = t.diasSemana || [];
+      return diasS.indexOf(diaSemana) !== -1;
+    }
+    return false;
+  }
+  // Réplica fiel de calcularQuienTrabajaHoy() de Gestión Humana (solo la
+  // parte de programación por horario + coberturas + inclusiones manuales;
+  // se omite a propósito la parte de "marcó asistencia sin estar
+  // programado", ya que no leemos aquí los registros de asistencia real).
+  function calcularQuienTrabajaHoy(fechaISO) {
+    var hoy = fechaISO || todayISOLocal();
+    var resultado = [];
+    var idsIncluidos = {};
+    var i;
+    for (i = 0; i < rrhhState.trabajadores.length; i++) {
+      var t = rrhhState.trabajadores[i];
+      if (t.estatus !== "activo") continue;
+      var cubierto = trabajadorCubiertoEnFecha(t.id, hoy);
+      var cubreInfo = trabajadorCubreEnFecha(t.id, hoy);
+      var programadoNormal = trabajadorAsignadoHoy(t, hoy) && !trabajadorTieneAdelantoHoy(t, hoy) && !cubierto;
+      if (!programadoNormal && !cubreInfo) continue;
+      var grupo = buscarPorId(rrhhState.grupos, t.grupoId);
+      resultado.push({ trabajador: t, grupo: grupo });
+      idsIncluidos[t.id] = true;
+    }
+    for (i = 0; i < rrhhState.trabajadores.length; i++) {
+      var t2 = rrhhState.trabajadores[i];
+      if (t2.estatus !== "activo" || idsIncluidos[t2.id]) continue;
+      var inclusiones = t2.inclusionesManuales || [];
+      var inclusion = null;
+      for (var k = 0; k < inclusiones.length; k++) {
+        if (inclusiones[k].fecha === hoy) {
+          inclusion = inclusiones[k];
+          break;
+        }
+      }
+      if (!inclusion) continue;
+      var grupo2 = buscarPorId(rrhhState.grupos, t2.grupoId);
+      resultado.push({ trabajador: t2, grupo: grupo2 });
+    }
+    return resultado;
+  }
+  function renderTalentoHumano() {
+    var root = document.getElementById("m-th-grid");
+    if (!root) return;
+    if (rrhhState.trabajadores.length === 0) {
+      root.innerHTML = '<p class="th-empty">Cargando Talento Humano…</p>';
+      return;
+    }
+    var hoyList = calcularQuienTrabajaHoy();
+    var buckets = {};
+    var orden = [];
+    for (var i = 0; i < hoyList.length; i++) {
+      var item = hoyList[i];
+      var nombre = (item.grupo && item.grupo.nombre) || "Sin grupo";
+      if (!(nombre in buckets)) {
+        buckets[nombre] = 0;
+        orden.push(nombre);
+      }
+      buckets[nombre] += 1;
+    }
+    if (orden.length === 0) {
+      root.innerHTML = '<p class="th-empty">Nadie tiene guardia asignada para hoy.</p>';
+      return;
+    }
+    orden.sort(function (a, b) {
+      if (a === "Sin grupo") return 1;
+      if (b === "Sin grupo") return -1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    var html = "";
+    for (var j = 0; j < orden.length; j++) {
+      var cat = orden[j];
+      html += '<div class="th-card"><div class="th-numero">' + fmt(buckets[cat]) + '</div><div class="th-nombre">' + escapeHTML(cat) + "</div></div>";
+    }
+    root.innerHTML = html;
+  }
 
-  const f = countByPeriod(state.fallecidos);
-  setTotalSolo("fallecidos", f.total);
+  /* ------------------------- Render general (Protección Civil) ------------ */
+  function renderAll() {
+    var p = sumByPeriod(pacientesValidos(), personasPlanilla);
+    setCard("pacientes", p.total, p.hoy);
 
-  const g = countByPeriod(state.guardias);
-  setTotalSolo("guardias", g.total);
+    var c = sumByPeriod(state.combustible, function (r) {
+      return Number(r.litros) || 0;
+    });
+    setCard("combustible", c.total, c.hoy);
 
-  const i = countByPeriod(state.inspecciones);
-  setTotalSolo("inspeccion", i.total);
+    var f = countByPeriod(state.fallecidos);
+    setTotalSolo("fallecidos", f.total);
 
-  renderTrasladosChart();
-  renderEducacionChart();
-  renderHidroChart();
-}
+    var g = countByPeriod(state.guardias);
+    setTotalSolo("guardias", g.total);
 
-/* ------------------------- Suscripciones ------------------------------------ */
-function suscribir(nombreColeccion, key) {
-  onSnapshot(
-    collection(db, nombreColeccion),
-    (snap) => {
-      state[key] = snap.docs.map((d) => d.data());
-      renderAll();
-    },
-    (err) => console.error(`Monitor: error leyendo "${nombreColeccion}":`, err)
-  );
-}
-function iniciarSuscripciones() {
-  suscribir(COLLECTIONS.PACIENTES, "pacientes");
-  suscribir(COLLECTIONS.TRASLADOS, "traslados");
-  suscribir(COLLECTIONS.FALLECIDOS, "fallecidos");
-  suscribir(COLLECTIONS.GUARDIAS, "guardias");
-  suscribir(COLLECTIONS.DESPACHOS_COMBUSTIBLE, "combustible");
-  suscribir(COLLECTIONS.EDUCACION, "educacion");
-  suscribir(COLLECTIONS.INSPECCIONES, "inspecciones");
-  suscribir(COLLECTIONS.HIDRO_LECTURAS, "hidro");
-}
+    var insp = countByPeriod(state.inspecciones);
+    setTotalSolo("inspeccion", insp.total);
 
-function suscribirRRHH(nombreColeccion, key) {
-  onSnapshot(
-    collection(rrhhDb, nombreColeccion),
-    (snap) => {
-      rrhhState[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderTrasladosChart();
+    renderEducacionChart();
+    renderHidroChart();
+  }
+
+  /* ------------------------- Suscripciones --------------------------------- */
+  function suscribir(nombreColeccion, key) {
+    db.collection(nombreColeccion).onSnapshot(
+      function (snap) {
+        var rows = [];
+        snap.forEach(function (doc) {
+          rows.push(doc.data());
+        });
+        state[key] = rows;
+        renderAll();
+      },
+      function (err) {
+        console.error('Monitor: error leyendo "' + nombreColeccion + '":', err);
+      }
+    );
+  }
+  function iniciarSuscripciones() {
+    suscribir(COLLECTIONS.PACIENTES, "pacientes");
+    suscribir(COLLECTIONS.TRASLADOS, "traslados");
+    suscribir(COLLECTIONS.FALLECIDOS, "fallecidos");
+    suscribir(COLLECTIONS.GUARDIAS, "guardias");
+    suscribir(COLLECTIONS.DESPACHOS_COMBUSTIBLE, "combustible");
+    suscribir(COLLECTIONS.EDUCACION, "educacion");
+    suscribir(COLLECTIONS.INSPECCIONES, "inspecciones");
+    suscribir(COLLECTIONS.HIDRO_LECTURAS, "hidro");
+  }
+
+  function suscribirRRHH(nombreColeccion, key) {
+    rrhhDb.collection(nombreColeccion).onSnapshot(
+      function (snap) {
+        var rows = [];
+        snap.forEach(function (doc) {
+          var data = doc.data();
+          data.id = doc.id;
+          rows.push(data);
+        });
+        rrhhState[key] = rows;
+        renderTalentoHumano();
+      },
+      function (err) {
+        console.error('Monitor: error leyendo RRHH "' + nombreColeccion + '":', err);
+        var el = document.getElementById("m-th-error");
+        if (el) el.textContent = "No se pudo leer Talento Humano (verifique el inicio de sesión anónimo y los permisos en el proyecto proteccion-civil-24fee).";
+      }
+    );
+  }
+  function iniciarSuscripcionesRRHH() {
+    suscribirRRHH("rrhh_trabajadores", "trabajadores");
+    suscribirRRHH("rrhh_grupos", "grupos");
+    suscribirRRHH("rrhh_cambios_guardia", "cambiosGuardia");
+  }
+
+  /* ------------------------- Reloj y estado de conexión --------------------- */
+  function iniciarReloj() {
+    var horaEl = document.getElementById("m-hora");
+    var fechaEl = document.getElementById("m-fecha");
+    function tick() {
+      var now = new Date();
+      if (horaEl) horaEl.textContent = now.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      if (fechaEl) {
+        var txt = now.toLocaleDateString("es-VE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+        fechaEl.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+      }
+    }
+    tick();
+    setInterval(tick, 1000);
+    // También recalcula Talento Humano y las gráficas por periodo cada
+    // minuto, para que crucen la medianoche/el cambio de mes sin necesitar
+    // un nuevo evento de Firestore.
+    setInterval(function () {
       renderTalentoHumano();
-    },
-    (err) => {
-      console.error(`Monitor: error leyendo RRHH "${nombreColeccion}":`, err);
-      const el = document.getElementById("m-th-error");
-      if (el) el.textContent = "No se pudo leer Talento Humano (verifique el inicio de sesión anónimo y los permisos en el proyecto proteccion-civil-24fee).";
+      renderAll();
+    }, 60000);
+  }
+
+  function iniciarEstadoConexion() {
+    var el = document.getElementById("m-conexion");
+    function actualizar() {
+      if (!el) return;
+      el.textContent = navigator.onLine ? "" : "SIN CONEXIÓN — mostrando los últimos datos recibidos";
     }
-  );
-}
-function iniciarSuscripcionesRRHH() {
-  suscribirRRHH("rrhh_trabajadores", "trabajadores");
-  suscribirRRHH("rrhh_grupos", "grupos");
-  suscribirRRHH("rrhh_cambios_guardia", "cambiosGuardia");
-}
+    window.addEventListener("online", actualizar);
+    window.addEventListener("offline", actualizar);
+    actualizar();
+  }
 
-/* ------------------------- Reloj y estado de conexión ----------------------- */
-function iniciarReloj() {
-  const horaEl = document.getElementById("m-hora");
-  const fechaEl = document.getElementById("m-fecha");
-  function tick() {
-    const now = new Date();
-    if (horaEl) horaEl.textContent = now.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    if (fechaEl) {
-      const txt = now.toLocaleDateString("es-VE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-      fechaEl.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+  pintarIconos();
+  iniciarReloj();
+  iniciarEstadoConexion();
+
+  auth.signInAnonymously().catch(function (err) {
+    console.error("Monitor: falló el inicio de sesión anónimo (Protección Civil)", err);
+    var el = document.getElementById("m-error");
+    if (el) {
+      el.textContent =
+        "No se pudo conectar. Verifique que el inicio de sesión Anónimo esté habilitado en Firebase (Authentication → Sign-in method) y que haya conexión a internet.";
     }
-  }
-  tick();
-  setInterval(tick, 1000);
-  // El reloj también dispara el recálculo de Talento Humano y de las
-  // gráficas por periodo, para que crucen la medianoche/el cambio de mes
-  // sin necesitar un nuevo evento de Firestore.
-  setInterval(() => {
-    renderTalentoHumano();
-    renderAll();
-  }, 60000);
-}
+  });
+  auth.onAuthStateChanged(function (user) {
+    if (user) iniciarSuscripciones();
+  });
 
-function iniciarEstadoConexion() {
-  const el = document.getElementById("m-conexion");
-  function actualizar() {
-    if (!el) return;
-    el.textContent = navigator.onLine ? "" : "SIN CONEXIÓN — mostrando los últimos datos recibidos";
-  }
-  window.addEventListener("online", actualizar);
-  window.addEventListener("offline", actualizar);
-  actualizar();
-}
-
-pintarIconos();
-iniciarReloj();
-iniciarEstadoConexion();
-
-signInAnonymously(auth).catch((err) => {
-  console.error("Monitor: falló el inicio de sesión anónimo (Protección Civil)", err);
-  const el = document.getElementById("m-error");
-  if (el) {
-    el.textContent =
-      "No se pudo conectar. Verifique que el inicio de sesión Anónimo esté habilitado en Firebase (Authentication → Sign-in method) y que haya conexión a internet.";
-  }
-});
-onAuthStateChanged(auth, (user) => {
-  if (user) iniciarSuscripciones();
-});
-
-signInAnonymously(rrhhAuth).catch((err) => {
-  console.error("Monitor: falló el inicio de sesión anónimo (RRHH)", err);
-  const el = document.getElementById("m-th-error");
-  if (el) el.textContent = "No se pudo conectar con Talento Humano. Verifique el inicio de sesión Anónimo en el proyecto proteccion-civil-24fee.";
-});
-onAuthStateChanged(rrhhAuth, (user) => {
-  if (user) iniciarSuscripcionesRRHH();
-});
+  rrhhAuth.signInAnonymously().catch(function (err) {
+    console.error("Monitor: falló el inicio de sesión anónimo (RRHH)", err);
+    var el = document.getElementById("m-th-error");
+    if (el) el.textContent = "No se pudo conectar con Talento Humano. Verifique el inicio de sesión Anónimo en el proyecto proteccion-civil-24fee.";
+  });
+  rrhhAuth.onAuthStateChanged(function (user) {
+    if (user) iniciarSuscripcionesRRHH();
+  });
+})();
