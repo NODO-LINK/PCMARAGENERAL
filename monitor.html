@@ -66,7 +66,17 @@
     }
     .section-title .card-icon { color: var(--accent, var(--text-dim)); display: flex; }
 
-    .emergencia-section { flex: 2.6 1 0; min-height: 0; display: flex; flex-direction: column; }
+    .emergencia-section {
+      flex: 2.6 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 2px solid var(--accent-ops);
+      border-radius: 1vh;
+      padding: 0.5vh 0.7vw 0.7vh;
+      background: rgba(16, 185, 129, 0.05);
+    }
+    .emergencia-section .section-title { margin: 0 0 0.4vh; }
     .emergencia-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
     .chart-row { flex: 2.6 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
     .th-row { flex: 1.6 1 0; min-height: 0; display: flex; flex-direction: column; }
