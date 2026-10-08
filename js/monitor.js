@@ -137,6 +137,41 @@ function setTotalSolo(id, total) {
   if (el) el.textContent = fmt(total);
 }
 
+/* ------------------------- Gráfica de barras: Traslados por institución ----- */
+// Total histórico de traslados, agrupado por institución de destino.
+function renderTrasladosChart() {
+  const counts = {};
+  state.traslados.forEach((r) => {
+    const nombre = r.institucionNombre || r.centroDestino || "Sin institución";
+    counts[nombre] = (counts[nombre] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  const root = document.getElementById("m-traslados-chart");
+  if (!root) return;
+  if (!entries.length) {
+    root.innerHTML = `<p class="th-empty">Sin traslados registrados</p>`;
+    return;
+  }
+
+  const TOP_N = 8;
+  const max = entries[0][1];
+  const visibles = entries.slice(0, TOP_N);
+  const restantes = entries.length - visibles.length;
+
+  root.innerHTML =
+    visibles
+      .map(
+        ([nombre, total]) => `
+    <div class="hbar-row">
+      <div class="hbar-label" title="${escapeHTML(nombre)}">${escapeHTML(nombre)}</div>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${(total / max) * 100}%"></div></div>
+      <div class="hbar-value">${fmt(total)}</div>
+    </div>`
+      )
+      .join("") + (restantes > 0 ? `<div class="hbar-more">+ ${restantes} institución(es) más</div>` : "");
+}
+
 /* ------------------------- Gráfica de barras: Educación -------------------- */
 // Simulacros vs. Formación (actividades sin simulacro), del año en curso.
 function renderEducacionChart() {
@@ -347,9 +382,6 @@ function renderAll() {
   const p = sumByPeriod(pacientesValidos(), personasPlanilla);
   setCard("pacientes", p.total, p.hoy);
 
-  const t = countByPeriod(state.traslados);
-  setCard("traslados", t.total, t.hoy);
-
   const c = sumByPeriod(state.combustible, (r) => Number(r.litros) || 0);
   setCard("combustible", c.total, c.hoy);
 
@@ -362,6 +394,7 @@ function renderAll() {
   const i = countByPeriod(state.inspecciones);
   setTotalSolo("inspeccion", i.total);
 
+  renderTrasladosChart();
   renderEducacionChart();
   renderHidroChart();
 }

@@ -58,8 +58,8 @@
       margin: 0.1vh 0;
     }
 
-    .big-row { flex: 2.5 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
-    .chart-row { flex: 2.3 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1vh 1vw; }
+    .big-row { flex: 2.3 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1vh 1vw; }
+    .chart-row { flex: 2.6 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh 1vw; }
     .th-row { flex: 1.6 1 0; min-height: 0; display: flex; flex-direction: column; }
     .small-row { flex: 1.1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8vh 1vw; }
 
@@ -108,6 +108,15 @@
     #m-hidro-svg { flex: 1 1 0; width: 100%; display: flex; }
     #m-hidro-svg svg { width: 100%; height: 100%; }
 
+    /* Barras horizontales (Traslados por institución) */
+    #m-traslados-chart { flex: 1 1 0; width: 100%; display: flex; flex-direction: column; justify-content: center; gap: 0.5vh; padding: 0 0.4vw; overflow: hidden; }
+    .hbar-row { display: flex; align-items: center; gap: 0.5vw; }
+    .hbar-label { flex: 0 0 28%; font-size: clamp(0.5rem, 1vh, 0.78rem); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hbar-track { flex: 1 1 0; height: 1.6vh; background: rgba(255,255,255,0.05); border-radius: 0.3vh; overflow: hidden; }
+    .hbar-fill { height: 100%; background: linear-gradient(90deg, #1D4E89, #4f86d6); border-radius: 0.3vh; transition: width 0.4s ease; }
+    .hbar-value { flex: 0 0 auto; min-width: 2.2vw; text-align: right; font-size: clamp(0.6rem, 1.15vh, 0.9rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .hbar-more { font-size: clamp(0.5rem, 0.95vh, 0.75rem); color: var(--text-dim); text-align: center; margin-top: 0.2vh; }
+
     /* Talento Humano */
     .th-grid { flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 0.7vh 0.8vw; align-content: flex-start; overflow: hidden; }
     .th-card {
@@ -153,12 +162,6 @@
         <div class="card-sub"><span class="num-chico" id="m-pacientes-chico">0</span><span class="num-chico-label">hoy</span></div>
       </div>
       <div class="card">
-        <div class="card-title">Traslados</div>
-        <div class="num-grande-label">Total histórico</div>
-        <div class="num-grande" id="m-traslados-grande">0</div>
-        <div class="card-sub"><span class="num-chico" id="m-traslados-chico">0</span><span class="num-chico-label">hoy</span></div>
-      </div>
-      <div class="card">
         <div class="card-title">Combustible (L)</div>
         <div class="num-grande-label">Total histórico</div>
         <div class="num-grande" id="m-combustible-grande">0</div>
@@ -167,6 +170,10 @@
     </main>
 
     <section class="chart-row">
+      <div class="card chart-card">
+        <div class="card-title">Traslados por institución</div>
+        <div class="chart-body" id="m-traslados-chart"></div>
+      </div>
       <div class="card chart-card">
         <div class="card-title">Educación — Actividades este año</div>
         <div class="chart-body" id="m-educacion-chart"></div>
