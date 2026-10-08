@@ -18,10 +18,10 @@
       --accent-totales: #b48cff;
       --accent-orange: #ff7a1a;
     }
-    @keyframes pulso-borde {
-      0%, 100% { box-shadow: 0 0 0.6vh 0 rgba(25, 227, 161, 0.25); }
-      50% { box-shadow: 0 0 1.6vh 0.2vh rgba(25, 227, 161, 0.55); }
-    }
+    /* Nota de rendimiento: animar "box-shadow" obliga al navegador a
+       repintar en cada cuadro (no es compositable como transform/opacity),
+       lo cual es caro en un Smart TV con GPU débil — por eso el brillo del
+       recuadro de Módulo de Emergencia ya NO se anima, solo queda fijo. */
     @keyframes parpadeo {
       0%, 45% { opacity: 1; }
       50%, 95% { opacity: 0.15; }
@@ -94,8 +94,7 @@
       border-radius: 1vh;
       padding: 0.5vh 0.7vw 0.7vh;
       background: linear-gradient(135deg, rgba(25, 227, 161, 0.1), rgba(25, 227, 161, 0.02) 60%);
-      box-shadow: 0 0.8vh 2vh -0.6vh rgba(0, 0, 0, 0.5);
-      animation: pulso-borde 3.5s ease-in-out infinite;
+      box-shadow: 0 0.8vh 2vh -0.6vh rgba(0, 0, 0, 0.5), 0 0 1.1vh 0.1vh rgba(25, 227, 161, 0.4);
     }
     .emergencia-section .section-title { margin: 0 0 0.4vh; }
     .emergencia-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr 0.5fr; gap: 1vh 1vw; }
@@ -255,17 +254,16 @@
        (translate) por JavaScript en cada cuadro; si una animación CSS
        también le pusiera "transform" al mismo elemento, una pisaría a la
        otra y el perrito "saltaba" a una posición equivocada. */
-    .p-interior { position: relative; width: 100%; height: 100%; }
+    .p-interior { position: relative; width: 100%; height: 100%; will-change: transform; }
     .p-sombra {
       position: absolute;
       left: 50%;
       bottom: 0.1vh;
-      width: 6vh;
-      height: 0.8vh;
-      background: rgba(0, 0, 0, 0.4);
+      width: 5.2vh;
+      height: 0.7vh;
+      background: rgba(0, 0, 0, 0.3);
       border-radius: 50%;
       transform: translateX(-50%);
-      filter: blur(0.25vh);
       transition: width 0.3s ease, opacity 0.3s ease;
     }
     .p-cuerpo {
@@ -307,6 +305,7 @@
       border-radius: 1vh 1vh 1vh 0.2vh;
       transform-origin: 90% 60%;
       animation: p-colear 0.5s ease-in-out infinite;
+      will-change: transform;
     }
     .p-pata {
       position: absolute;
@@ -317,6 +316,7 @@
       border-radius: 0.5vh;
       top: 5.5vh;
       transform-origin: 50% 0%;
+      will-change: transform;
     }
     .p-pata-ti { left: 2.3vh; }
     .p-pata-di { left: 3.5vh; animation-delay: 0.2s; }
@@ -331,6 +331,7 @@
       border-radius: 50%;
       background: linear-gradient(150deg, var(--beige-claro), var(--beige) 65%);
       border: 0.16vh solid var(--trazo);
+      will-change: transform;
     }
     .p-oreja {
       position: absolute;
@@ -341,6 +342,7 @@
       border: 0.13vh solid var(--trazo);
       border-radius: 40% 40% 50% 50%;
       transform-origin: 50% 10%;
+      will-change: transform;
     }
     .p-oreja-i { left: 0.2vh; transform: rotate(-20deg); }
     .p-oreja-d { right: 0.2vh; transform: rotate(20deg); }
