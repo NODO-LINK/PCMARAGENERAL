@@ -86,6 +86,27 @@
   var rrhhAuth = rrhhApp.auth();
   var rrhhDb = rrhhApp.firestore();
 
+  /* ------------------------- Proyecto de Asistencia (marcaciones) ---------- */
+  // Un TERCER proyecto Firebase: la app que registra las marcaciones reales
+  // de entrada/salida (huella/tarjeta). Gestión Humana lo usa para detectar
+  // a alguien que trabajó hoy "por arreglo" sin quedar programado
+  // formalmente (ni por horario, ni por cambio de guardia, ni agregado a
+  // mano) — si no se cruza con esto, esas personas no aparecen en el
+  // monitor aunque sí salgan en la pantalla de Gestión Humana. Config
+  // copiada de NODO-LINK/Gestionhumana (asistenciaConfig en su index.html).
+  var asistenciaFirebaseConfig = {
+    apiKey: "AIzaSyCY3IS6fS21gdOWXfCYU7IJOyq-GcNQg8Q",
+    authDomain: "asistencias-6f64c.firebaseapp.com",
+    databaseURL: "https://asistencias-6f64c-default-rtdb.firebaseio.com",
+    projectId: "asistencias-6f64c",
+    storageBucket: "asistencias-6f64c.firebasestorage.app",
+    messagingSenderId: "307076098538",
+    appId: "1:307076098538:web:ff4dc6e775dcfb3f312a93",
+  };
+  var asistenciaApp = firebase.initializeApp(asistenciaFirebaseConfig, "asistencia");
+  var asistenciaAuth = asistenciaApp.auth();
+  var asistenciaDb = asistenciaApp.firestore();
+
   var state = {
     pacientes: [],
     traslados: [],
@@ -96,7 +117,7 @@
     inspecciones: [],
     hidro: [],
   };
-  var rrhhState = { trabajadores: [], grupos: [], cambiosGuardia: [] };
+  var rrhhState = { trabajadores: [], grupos: [], cambiosGuardia: [], asistenciaManual: [], asistExternasHoy: [] };
 
   /* ------------------------- Utilidades generales ------------------------- */
   function toDate(value) {
@@ -226,6 +247,57 @@
     }
   }
 
+  /* ------------------------- Abreviación de nombres largos ----------------- */
+  var MAPA_ACENTOS = { á: "a", é: "e", í: "i", ó: "o", ú: "u", Á: "A", É: "E", Í: "I", Ó: "O", Ú: "U", ñ: "n", Ñ: "N", ü: "u", Ü: "U" };
+  function quitarAcentosLocal(s) {
+    s = String(s || "");
+    var out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i);
+      out += MAPA_ACENTOS[c] || c;
+    }
+    return out;
+  }
+  // Prefijos genéricos que no distinguen una institución de otra en la TV
+  // (si hay 5 "Hospital X", mostrar solo "Hospital" no ayuda a nadie) — se
+  // quitan dejando el nombre propio. Ordenados del más largo/específico al
+  // más corto para no cortar de más.
+  var PREFIJOS_INSTITUCION = [
+    "hospital universitario",
+    "hospital general",
+    "hospital central",
+    "hospital",
+    "centro de salud integral",
+    "centro de diagnostico integral",
+    "centro de salud",
+    "centro clinico",
+    "centro medico",
+    "ambulatorio urbano",
+    "ambulatorio rural",
+    "ambulatorio",
+    "instituto autonomo",
+    "instituto",
+    "policlinica",
+    "clinica",
+    "maternidad",
+  ];
+  var LARGO_MAX_ABREVIATURA = 20;
+  function abreviarInstitucion(nombreOriginal) {
+    var nombre = String(nombreOriginal || "").replace(/^\s+|\s+$/g, "");
+    if (!nombre) return nombre;
+    var plano = quitarAcentosLocal(nombre).toLowerCase();
+    for (var i = 0; i < PREFIJOS_INSTITUCION.length; i++) {
+      var pref = PREFIJOS_INSTITUCION[i];
+      if (plano.indexOf(pref) === 0) {
+        var resto = nombre.substring(pref.length).replace(/^[\s.,:-]+/, "");
+        if (resto) nombre = resto;
+        break;
+      }
+    }
+    if (nombre.length > LARGO_MAX_ABREVIATURA) nombre = nombre.substring(0, LARGO_MAX_ABREVIATURA - 1) + "…";
+    return nombre;
+  }
+
   /* ------------------------- Gráfica: Traslados por institución ----------- */
   function renderTrasladosChart() {
     var counts = {};
@@ -261,7 +333,7 @@
         '<div class="hbar-label" title="' +
         escapeHTML(nombre2) +
         '">' +
-        escapeHTML(nombre2) +
+        escapeHTML(abreviarInstitucion(nombre2)) +
         "</div>" +
         '<div class="hbar-track"><div class="hbar-fill" style="width:' +
         pct +
@@ -469,10 +541,55 @@
     }
     return false;
   }
-  // Réplica fiel de calcularQuienTrabajaHoy() de Gestión Humana (solo la
-  // parte de programación por horario + coberturas + inclusiones manuales;
-  // se omite a propósito la parte de "marcó asistencia sin estar
-  // programado", ya que no leemos aquí los registros de asistencia real).
+  // Normaliza cédulas para poder comparar aunque vengan con puntos, guiones
+  // o espacios distintos entre apps (ej: "V-12.345.678" vs "12345678"), y
+  // quita el prefijo de nacionalidad (V/E) — igual que normalizarCedula()
+  // en Gestión Humana.
+  function normalizarCedula(valor) {
+    var s = String(valor || "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+    return s.replace(/^[VE]/, "");
+  }
+  function buscarTrabajadorPorCedula(cedulaNormalizada) {
+    for (var i = 0; i < rrhhState.trabajadores.length; i++) {
+      var t = rrhhState.trabajadores[i];
+      if (t.estatus === "activo" && normalizarCedula(t.cedula) === cedulaNormalizada) return t;
+    }
+    return null;
+  }
+  // Cédulas de quienes marcaron asistencia real hoy (app de marcaciones +
+  // correcciones/agregados manuales de RRHH), replicando recomputarAsistencia()
+  // de Gestión Humana lo suficiente para esta sola pregunta: "¿esta cédula
+  // marcó hoy?" — no hace falta reconstruir hora de entrada/salida aquí.
+  function cedulasQueMarcaronHoy() {
+    var hoyISO = todayISOLocal();
+    var now = new Date();
+    var ocultas = {};
+    var correcciones = {};
+    var i;
+    for (i = 0; i < rrhhState.asistenciaManual.length; i++) {
+      var m = rrhhState.asistenciaManual[i];
+      if (m.corrigeId && m.oculta) ocultas[m.corrigeId] = true;
+      else if (m.corrigeId) correcciones[m.corrigeId] = true;
+    }
+    var set = {};
+    for (i = 0; i < rrhhState.asistExternasHoy.length; i++) {
+      var a = rrhhState.asistExternasHoy[i];
+      if (ocultas[a.id] || correcciones[a.id]) continue;
+      var ced = normalizarCedula(a.cedula);
+      if (ced) set[ced] = true;
+    }
+    for (i = 0; i < rrhhState.asistenciaManual.length; i++) {
+      var m2 = rrhhState.asistenciaManual[i];
+      if (m2.corrigeId) continue; // es una corrección/ocultamiento, no una marca nueva
+      if (m2.fecha !== hoyISO) continue;
+      var ced2 = normalizarCedula(m2.cedula);
+      if (ced2) set[ced2] = true;
+    }
+    return set;
+  }
+  // Réplica fiel de calcularQuienTrabajaHoy() de Gestión Humana: programación
+  // por horario + coberturas + inclusiones manuales + quien marcó asistencia
+  // real hoy sin estar programado (ej. personal de otro grupo "por arreglo").
   function calcularQuienTrabajaHoy(fechaISO) {
     var hoy = fechaISO || todayISOLocal();
     var resultado = [];
@@ -489,6 +606,22 @@
       resultado.push({ trabajador: t, grupo: grupo });
       idsIncluidos[t.id] = true;
     }
+
+    // Segunda pasada: quien marcó asistencia real hoy aunque no le tocaba ni
+    // cubría a nadie formalmente (ej. paramédico/personal de otro grupo que
+    // viene "por arreglo" sin quedar registrado como cobertura ni inclusión
+    // manual) — sin esto, esas personas faltan en el monitor aunque sí
+    // aparezcan en la pantalla "¿Quién trabaja hoy?" de Gestión Humana.
+    var marcaronHoy = cedulasQueMarcaronHoy();
+    for (var cedulaMarcada in marcaronHoy) {
+      if (!marcaronHoy.hasOwnProperty(cedulaMarcada)) continue;
+      var tMarcado = buscarTrabajadorPorCedula(cedulaMarcada);
+      if (!tMarcado || idsIncluidos[tMarcado.id]) continue;
+      var grupoMarcado = buscarPorId(rrhhState.grupos, tMarcado.grupoId);
+      resultado.push({ trabajador: tMarcado, grupo: grupoMarcado });
+      idsIncluidos[tMarcado.id] = true;
+    }
+
     for (i = 0; i < rrhhState.trabajadores.length; i++) {
       var t2 = rrhhState.trabajadores[i];
       if (t2.estatus !== "activo" || idsIncluidos[t2.id]) continue;
@@ -553,7 +686,7 @@
     setCard("combustible", c.total, c.hoy);
 
     var f = countByPeriod(state.fallecidos);
-    setTotalSolo("fallecidos", f.total);
+    setCard("fallecidos", f.total, f.hoy);
 
     var g = countByPeriod(state.guardias);
     setTotalSolo("guardias", g.total);
@@ -616,6 +749,51 @@
     suscribirRRHH("rrhh_trabajadores", "trabajadores");
     suscribirRRHH("rrhh_grupos", "grupos");
     suscribirRRHH("rrhh_cambios_guardia", "cambiosGuardia");
+
+    var hoyISO = todayISOLocal();
+    rrhhDb
+      .collection("rrhh_asistencia_manual")
+      .where("fecha", "==", hoyISO)
+      .onSnapshot(
+        function (snap) {
+          var rows = [];
+          snap.forEach(function (doc) {
+            var data = doc.data();
+            data.id = doc.id;
+            rows.push(data);
+          });
+          rrhhState.asistenciaManual = rows;
+          renderTalentoHumano();
+        },
+        function (err) {
+          console.error('Monitor: error leyendo RRHH "rrhh_asistencia_manual":', err);
+        }
+      );
+  }
+
+  function iniciarSuscripcionAsistencia() {
+    var inicioHoy = new Date();
+    inicioHoy.setHours(0, 0, 0, 0);
+    asistenciaDb
+      .collection("attendance")
+      .where("timestamp", ">=", inicioHoy)
+      .onSnapshot(
+        function (snap) {
+          var rows = [];
+          snap.forEach(function (doc) {
+            var data = doc.data();
+            data.id = doc.id;
+            rows.push(data);
+          });
+          rrhhState.asistExternasHoy = rows;
+          renderTalentoHumano();
+        },
+        function (err) {
+          console.error('Monitor: error leyendo asistencia ("attendance"):', err);
+          var el = document.getElementById("m-th-error");
+          if (el) el.textContent = "No se pudo leer la asistencia real (verifique el inicio de sesión anónimo en el proyecto asistencias-6f64c).";
+        }
+      );
   }
 
   /* ------------------------- Reloj y estado de conexión --------------------- */
@@ -675,5 +853,14 @@
   });
   rrhhAuth.onAuthStateChanged(function (user) {
     if (user) iniciarSuscripcionesRRHH();
+  });
+
+  asistenciaAuth.signInAnonymously().catch(function (err) {
+    console.error("Monitor: falló el inicio de sesión anónimo (asistencia)", err);
+    var el = document.getElementById("m-th-error");
+    if (el) el.textContent = "No se pudo conectar con la asistencia real. Verifique el inicio de sesión Anónimo en el proyecto asistencias-6f64c.";
+  });
+  asistenciaAuth.onAuthStateChanged(function (user) {
+    if (user) iniciarSuscripcionAsistencia();
   });
 })();
