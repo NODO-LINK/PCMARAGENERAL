@@ -24,7 +24,7 @@ import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtil
 let lecturas = [];
 let umbrales = { ...UMBRALES_HIDRO_DEFAULT };
 let chart = null;
-let chartModo = "diario"; // "diario" | "mensual"
+let chartModo = "diario"; // "diario" | "mes" (promedio) | "picos" (máximo)
 
 function calcularEstado(nivel) {
   if (nivel === null || nivel === undefined || isNaN(nivel)) return { label: "Sin datos", color: "slate" };
@@ -42,7 +42,7 @@ const COLOR_HEX_ESTADO = {
   slate: "#94a3b8",
 };
 
-// Para la vista "Por mes": el pico (nivel más alto) de cada mes con lecturas.
+// Para la vista "Picos del mes": el pico (nivel más alto) de cada mes con lecturas.
 function picosPorMes(lecturasTodas) {
   const porMes = new Map(); // "YYYY-MM" -> { fecha, nivel }
   lecturasTodas.forEach((l) => {
@@ -54,6 +54,27 @@ function picosPorMes(lecturasTodas) {
     if (!actual || nivel > actual.nivel) porMes.set(clave, { fecha: d, nivel });
   });
   return [...porMes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => v);
+}
+
+// Para la vista "Mes (promedio)": el nivel promedio de cada mes con lecturas.
+function promediosPorMes(lecturasTodas) {
+  const porMes = new Map(); // "YYYY-MM" -> { fecha, suma, cantidad }
+  lecturasTodas.forEach((l) => {
+    const d = toDate(l.fecha);
+    const nivel = Number(l.nivel);
+    if (!d || isNaN(d.getTime()) || isNaN(nivel)) return;
+    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const actual = porMes.get(clave);
+    if (actual) {
+      actual.suma += nivel;
+      actual.cantidad += 1;
+    } else {
+      porMes.set(clave, { fecha: d, suma: nivel, cantidad: 1 });
+    }
+  });
+  return [...porMes.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([, v]) => ({ fecha: v.fecha, nivel: Math.round((v.suma / v.cantidad) * 100) / 100 }));
 }
 
 // Formato "YYYY-MM-DDTHH:MM" en hora LOCAL, tal como lo espera un input
@@ -102,17 +123,25 @@ function renderChart() {
   const canvas = document.getElementById("chart-hidro");
   if (!canvas || !window.Chart) return;
 
-  let labels, data, coloresPuntos;
-  if (chartModo === "mensual") {
+  let labels, data, coloresPuntos, datasetLabel;
+  if (chartModo === "picos") {
     const picos = picosPorMes(lecturas);
     labels = picos.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
     data = picos.map((p) => p.nivel);
     coloresPuntos = picos.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
+    datasetLabel = "Pico máximo mensual (msnm)";
+  } else if (chartModo === "mes") {
+    const promedios = promediosPorMes(lecturas);
+    labels = promedios.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
+    data = promedios.map((p) => p.nivel);
+    coloresPuntos = promedios.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
+    datasetLabel = "Nivel promedio mensual (msnm)";
   } else {
     const ultimos = [...lecturas].slice(0, 20).reverse();
     labels = ultimos.map((l) => formatDate(l.fecha, true));
     data = ultimos.map((l) => Number(l.nivel));
     coloresPuntos = ultimos.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
+    datasetLabel = "Nivel del Río Limón (msnm)";
   }
 
   if (chart) chart.destroy();
@@ -122,7 +151,7 @@ function renderChart() {
       labels,
       datasets: [
         {
-          label: chartModo === "mensual" ? "Pico máximo mensual (msnm)" : "Nivel del Río Limón (msnm)",
+          label: datasetLabel,
           data,
           // Color neutro para la línea (no implica alerta por sí sola): el
           // color que sí importa es el de cada punto, que refleja su
@@ -267,26 +296,27 @@ export async function initHidrometeorologia() {
 
 function setupModoChart() {
   const btnDiario = document.getElementById("hidro-chart-modo-diario");
-  const btnMensual = document.getElementById("hidro-chart-modo-mensual");
-  if (!btnDiario || !btnMensual) return;
+  const btnMes = document.getElementById("hidro-chart-modo-mes");
+  const btnPicos = document.getElementById("hidro-chart-modo-picos");
+  if (!btnDiario || !btnMes || !btnPicos) return;
 
   const ACTIVO = "px-3 py-1.5 bg-navy-700 text-white";
   const INACTIVO = "px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50";
   function actualizarBotones() {
     btnDiario.className = chartModo === "diario" ? ACTIVO : INACTIVO;
-    btnMensual.className = chartModo === "mensual" ? ACTIVO : INACTIVO;
+    btnMes.className = chartModo === "mes" ? ACTIVO : INACTIVO;
+    btnPicos.className = chartModo === "picos" ? ACTIVO : INACTIVO;
   }
 
-  btnDiario.addEventListener("click", () => {
-    chartModo = "diario";
+  function elegirModo(modo) {
+    chartModo = modo;
     actualizarBotones();
     renderChart();
-  });
-  btnMensual.addEventListener("click", () => {
-    chartModo = "mensual";
-    actualizarBotones();
-    renderChart();
-  });
+  }
+
+  btnDiario.addEventListener("click", () => elegirModo("diario"));
+  btnMes.addEventListener("click", () => elegirModo("mes"));
+  btnPicos.addEventListener("click", () => elegirModo("picos"));
   actualizarBotones();
 }
 
