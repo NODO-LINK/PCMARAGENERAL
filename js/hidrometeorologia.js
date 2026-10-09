@@ -738,9 +738,12 @@ function parsearGridFluviometria(grid) {
   for (let f = 0; f < grid.length; f++) {
     const celdas = grid[f] || [];
 
-    const idxMes = celdas.findIndex((c) => /^mes\s*[:.]?$/.test(normalizarTexto(c)));
+    // El encabezado puede venir como una sola celda ("Mes: Octubre 2026") o
+    // partido ("Mes:" en una celda y "Octubre 2026" en la siguiente).
+    const idxMes = celdas.findIndex((c) => /^mes\b\s*[:.]?/.test(normalizarTexto(c)));
     if (idxMes !== -1) {
-      const resto = normalizarTexto(celdas.slice(idxMes + 1).join(" "));
+      const restoMismaCelda = String(celdas[idxMes]).replace(/^\s*mes\s*[:.]?/i, "");
+      const resto = normalizarTexto([restoMismaCelda, ...celdas.slice(idxMes + 1)].join(" "));
       const mesEncontrado = Object.keys(MESES_IMPORT).find((k) => new RegExp(`\\b${k}\\b`).test(resto));
       const anioEncontrado = resto.match(/(20\d{2})/);
       if (mesEncontrado) mesActual = MESES_IMPORT[mesEncontrado];
@@ -1329,10 +1332,13 @@ function setupLluviaForm() {
 /* Subtabs Fluviometría / Pluviometría                                     */
 /* ======================================================================= */
 function setupSubtabsHidro() {
-  const tabs = document.querySelectorAll("#view-hidro .subtab-btn");
+  // Se buscan por su data-subtab (y no dentro de #view-hidro) porque esta
+  // misma lógica corre también en rio-limon.html, que no tiene ese contenedor.
+  const SUBTABS_HIDRO = ["fluviometria", "pluviometria"];
+  const tabs = document.querySelectorAll(SUBTABS_HIDRO.map((n) => `.subtab-btn[data-subtab="${n}"]`).join(","));
   tabs.forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll("#view-hidro .subtab-panel").forEach((p) => p.classList.add("hidden"));
+      SUBTABS_HIDRO.forEach((n) => document.getElementById(`panel-${n}`)?.classList.add("hidden"));
       document.getElementById(`panel-${btn.dataset.subtab}`)?.classList.remove("hidden");
       tabs.forEach((b) => b.classList.toggle("subtab-active", b === btn));
       if (btn.dataset.subtab === "fluviometria") {
