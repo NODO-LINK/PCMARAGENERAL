@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Río Limón — Hidrometeorología — Protección Civil</title>
 <meta name="description" content="Acceso restringido: registro y seguimiento del nivel del Río Limón (Hidrometeorología)." />
 <meta name="theme-color" content="#0B2545" />
@@ -186,7 +186,11 @@
         </div>
       </div>
 
-      <div id="historial-hidro"></div>
+      <button type="button" id="btn-toggle-historial-hidro" class="w-full flex items-center justify-between bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-50">
+        <span>Ver historial de lecturas</span>
+        <span id="historial-hidro-chevron" class="text-slate-400 transition-transform">▸</span>
+      </button>
+      <div id="historial-hidro" class="hidden mt-2"></div>
     </div>
   </main>
 </div>
