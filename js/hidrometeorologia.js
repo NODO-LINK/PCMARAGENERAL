@@ -198,7 +198,7 @@ function renderChart() {
     fechasCompletas = delMes.map((l) => formatDate(l.fecha, true));
     data = delMes.map((l) => Number(l.nivel));
     coloresPuntos = delMes.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
-    datasetLabel = nombreMes ? `Nivel en ${nombreMes} (msnm)` : "Nivel del Río Limón (msnm)";
+    datasetLabel = nombreMes ? `Nivel en ${nombreMes}` : "Nivel del Río Limón";
 
     if (resumenEl) {
       if (!claveSeleccionada) {
@@ -210,7 +210,7 @@ function renderChart() {
         const minimo = Math.min(...niveles);
         const maximo = Math.max(...niveles);
         const promedio = Math.round((niveles.reduce((a, b) => a + b, 0) / niveles.length) * 100) / 100;
-        resumenEl.textContent = `${delMes.length} lectura(s) en ${nombreMes} — Mínimo: ${minimo} msnm · Máximo: ${maximo} msnm · Promedio: ${promedio} msnm`;
+        resumenEl.textContent = `${delMes.length} lectura(s) en ${nombreMes} — Mínimo: ${minimo} · Máximo: ${maximo} · Promedio: ${promedio}`;
       }
     }
   } else if (chartModo === "picos") {
@@ -218,20 +218,20 @@ function renderChart() {
     labels = picos.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
     data = picos.map((p) => p.nivel);
     coloresPuntos = picos.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
-    datasetLabel = "Pico máximo mensual (msnm)";
+    datasetLabel = "Pico máximo mensual";
   } else if (chartModo === "mes") {
     const promedios = promediosPorMes(lecturas);
     labels = promedios.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
     data = promedios.map((p) => p.nivel);
     coloresPuntos = promedios.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
-    datasetLabel = "Nivel promedio mensual (msnm)";
+    datasetLabel = "Nivel promedio mensual";
   } else {
     const deHoy = lecturasDeHoy(lecturas);
     labels = deHoy.map((_, i) => String(i + 1));
     fechasCompletas = deHoy.map((l) => formatDate(l.fecha, true));
     data = deHoy.map((l) => Number(l.nivel));
     coloresPuntos = deHoy.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
-    datasetLabel = "Nivel del Río Limón — Hoy (msnm)";
+    datasetLabel = "Nivel del Río Limón — Hoy";
   }
 
   if (chart) chart.destroy();
@@ -278,7 +278,7 @@ function renderChart() {
           min: NIVEL_HIDRO_MIN,
           max: NIVEL_HIDRO_MAX,
           ticks: { stepSize: 1 },
-          title: { display: true, text: "Nivel (msnm)" },
+          title: { display: true, text: "Nivel" },
         },
       },
     },
@@ -335,7 +335,7 @@ export async function initHidrometeorologia() {
     title: "Historial de Lecturas — Río Limón",
     columns: [
       { key: "fecha", label: "Fecha y hora", format: (r) => formatDate(r.fecha, true) },
-      { key: "nivel", label: "Nivel (msnm)" },
+      { key: "nivel", label: "Nivel" },
       { key: "estado", label: "Estado" },
       { key: "responsable", label: "Responsable" },
     ],
@@ -357,7 +357,7 @@ export async function initHidrometeorologia() {
       if (!row) return;
       const ok = await confirmDialog({
         title: "Eliminar lectura",
-        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (${row.nivel} msnm). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
+        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (nivel ${row.nivel}). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
       });
       if (!ok) return;
       try {
@@ -529,7 +529,7 @@ function renderPreviewImportacionHidro(filas) {
         <thead class="bg-slate-50 text-slate-600 sticky top-0">
           <tr>
             <th class="text-left px-2 py-1.5">Fecha</th>
-            <th class="text-left px-2 py-1.5">Nivel (msnm)</th>
+            <th class="text-left px-2 py-1.5">Nivel</th>
             <th class="text-left px-2 py-1.5">Estado</th>
           </tr>
         </thead>
