@@ -13,7 +13,7 @@
  * -----------------------------------------------------------------------
  */
 import { db, doc, getDocs, setDoc, updateDoc, deleteDoc, serverTimestamp, collection, writeBatch } from "./firebase.js";
-import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX, DEFAULT_RIO_ID, DEFAULT_RIO_NOMBRE } from "./config.js";
+import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX, DEFAULT_RIO_ID, DEFAULT_RIO_NOMBRE, WINDY_API_KEY } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
 import { createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, toast, confirmDialog, printAdHoc } from "./ui.js";
 import { isAdmin, isHidro, getCurrentUser, getResponsableLabel } from "./auth.js";
@@ -1100,34 +1100,59 @@ function renderChartPluvio() {
 let modoUbicarEstacionArmado = false;
 let marcadorTemporalNuevaEstacion = null;
 
+let windyMapaIntentado = false;
+
+// A diferencia del widget <iframe> de "Pronóstico del tiempo" (que es de
+// otro dominio y no se puede tocar desde afuera), este mapa usa la API
+// "Map Forecast" de Windy.com: nos entrega un mapa Leaflet REAL sobre el
+// que sí podemos dibujar nuestros propios marcadores de estaciones, con la
+// capa de lluvia de Windy puesta debajo — así se ven ambas cosas juntas.
+// Requiere una WINDY_API_KEY configurada en js/config.js (gratuita, ver
+// comentario ahí); sin ella el mapa no puede cargar.
 function inicializarMapaPluvioSiHaceFalta() {
   const contenedor = document.getElementById("mapa-pluvio");
-  if (!contenedor || mapaPluvio || !window.L) return;
-  mapaPluvio = window.L.map(contenedor, { gestureHandling: true }).setView([10.064, -72.568], 8);
-  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 18,
-  }).addTo(mapaPluvio);
-  capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
-  renderMarcadoresPluvio();
-  setTimeout(() => mapaPluvio?.invalidateSize(), 150);
+  if (!contenedor || mapaPluvio) return;
 
-  // Clic en el mapa: solo hace algo si el modo "ubicar estación nueva" está
-  // armado (botón "📍 Marcar..."); un clic normal para ver/arrastrar un
-  // marcador existente no dispara esto.
-  mapaPluvio.on("click", (evento) => {
-    if (!modoUbicarEstacionArmado) return;
-    modoUbicarEstacionArmado = false;
-    const { lat, lng } = evento.latlng;
-    if (marcadorTemporalNuevaEstacion) mapaPluvio.removeLayer(marcadorTemporalNuevaEstacion);
-    marcadorTemporalNuevaEstacion = window.L.marker([lat, lng], { opacity: 0.75 }).addTo(mapaPluvio).bindPopup("Ubicación de la nueva estación — complete el nombre abajo.").openPopup();
-    const form = document.getElementById("form-nueva-estacion-pluvio");
-    if (form) {
-      form.elements["lat"].value = lat.toFixed(6);
-      form.elements["lon"].value = lng.toFixed(6);
-      form.elements["nombre"]?.focus();
+  if (!WINDY_API_KEY) {
+    contenedor.innerHTML =
+      '<p class="text-sm text-red-600 p-3">Falta configurar la clave de la API de Windy (WINDY_API_KEY en js/config.js) para mostrar este mapa. Ver instrucciones en ese archivo.</p>';
+    return;
+  }
+  if (!window.windyInit) {
+    // libBoot.js (script de Windy) puede no haber cargado todavía; se
+    // reintenta la próxima vez que se entre a la pestaña Pluviometría.
+    if (!windyMapaIntentado) {
+      windyMapaIntentado = true;
+      setTimeout(() => {
+        windyMapaIntentado = false;
+      }, 3000);
     }
-    toast('Ubicación marcada. Escriba el nombre y presione "Agregar estación".', "success");
+    return;
+  }
+
+  window.windyInit({ key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
+    mapaPluvio = windyAPI.map;
+    capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
+    renderMarcadoresPluvio();
+    setTimeout(() => mapaPluvio?.invalidateSize(), 150);
+
+    // Clic en el mapa: solo hace algo si el modo "ubicar estación nueva"
+    // está armado (botón "📍 Marcar..."); un clic normal para ver/arrastrar
+    // un marcador existente no dispara esto.
+    mapaPluvio.on("click", (evento) => {
+      if (!modoUbicarEstacionArmado) return;
+      modoUbicarEstacionArmado = false;
+      const { lat, lng } = evento.latlng;
+      if (marcadorTemporalNuevaEstacion) mapaPluvio.removeLayer(marcadorTemporalNuevaEstacion);
+      marcadorTemporalNuevaEstacion = window.L.marker([lat, lng], { opacity: 0.75 }).addTo(mapaPluvio).bindPopup("Ubicación de la nueva estación — complete el nombre abajo.").openPopup();
+      const form = document.getElementById("form-nueva-estacion-pluvio");
+      if (form) {
+        form.elements["lat"].value = lat.toFixed(6);
+        form.elements["lon"].value = lng.toFixed(6);
+        form.elements["nombre"]?.focus();
+      }
+      toast('Ubicación marcada. Escriba el nombre y presione "Agregar estación".', "success");
+    });
   });
 }
 

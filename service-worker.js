@@ -12,7 +12,7 @@
 // Es lo que fuerza al navegador a descartar el caché viejo — si no se sube,
 // los usuarios pueden seguir viendo código desactualizado por días, incluso
 // después de recargar la página, hasta que limpien el caché a mano.
-const CACHE_NAME = "pc-gestion-shell-v62";
+const CACHE_NAME = "pc-gestion-shell-v63";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -65,7 +65,7 @@ self.addEventListener("activate", (event) => {
 // actualización en segundo plano para el resto del app shell estático.
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  const isRemoteApi = url.origin.includes("googleapis.com") || url.origin.includes("firebaseio.com") || url.origin.includes("gstatic.com") || url.origin.includes("cdn.");
+  const isRemoteApi = url.origin.includes("googleapis.com") || url.origin.includes("firebaseio.com") || url.origin.includes("gstatic.com") || url.origin.includes("cdn.") || url.origin.includes("windy.com");
 
   if (event.request.method !== "GET" || isRemoteApi) return; // dejar pasar sin interceptar
 

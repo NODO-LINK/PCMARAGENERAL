@@ -100,6 +100,16 @@ export const NIVEL_HIDRO_MAX = 9;
 export const DEFAULT_RIO_ID = "limon";
 export const DEFAULT_RIO_NOMBRE = "Río Limón";
 
+// Clave de la API "Map Forecast" de Windy.com — necesaria para que el mapa
+// de estaciones de Pluviometría sea un mapa real de Windy (con la capa de
+// lluvia) y a la vez pueda mostrar los marcadores propios de cada estación
+// (esto NO es posible con el widget <iframe> de Windy usado en "Pronóstico
+// del tiempo", porque un iframe de otro dominio no se puede modificar desde
+// afuera). Es gratuita para uso no comercial: se obtiene creando una cuenta
+// en https://api.windy.com → sección "API keys" → generar una clave de tipo
+// "Map Forecast API" → pegarla aquí. Sin esta clave, ese mapa no carga.
+export const WINDY_API_KEY = "";
+
 // Tipos de combustible fijos para el módulo de Despacho de Combustible.
 export const TIPOS_COMBUSTIBLE = ["Gasolina", "Diesel"];
 

@@ -40,10 +40,10 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js"></script>
+<!-- Mapa de estaciones de Pluviometría: API de mapas de Windy.com (incluye su
+     propio Leaflet interno, por eso ya no se carga leaflet.js por separado;
+     requiere WINDY_API_KEY en js/config.js — ver comentario ahí). -->
+<script src="https://api.windy.com/assets/map-forecast/libBoot.js"></script>
 <link rel="stylesheet" href="./css/styles.css" />
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased">
@@ -564,10 +564,10 @@
 
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
             <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
-              <h3 class="font-semibold text-slate-700">Mapa de estaciones</h3>
+              <h3 class="font-semibold text-slate-700">Mapa de estaciones — lluvia (Windy)</h3>
               <button type="button" id="btn-marcar-estacion-mapa" class="role-admin-only hidden px-3 py-1.5 text-xs rounded-md bg-navy-700 text-white hover:bg-navy-800">📍 Marcar nueva estación en el mapa</button>
             </div>
-            <p class="text-xs text-slate-500 mb-3">Toque una estación para ver sus datos (también la selecciona abajo). <span class="role-admin-only hidden">Arrastre un punto para reubicarlo, o use el botón de arriba para ubicar una estación nueva tocando el mapa en vez de escribir las coordenadas.</span></p>
+            <p class="text-xs text-slate-500 mb-3">Capa de lluvia de Windy.com de fondo, con las estaciones propias encima. Toque una estación para ver sus datos (también la selecciona abajo). <span class="role-admin-only hidden">Arrastre un punto para reubicarlo, o use el botón de arriba para ubicar una estación nueva tocando el mapa en vez de escribir las coordenadas.</span></p>
             <div id="mapa-pluvio" class="rounded-md border border-slate-200" style="height: 350px;"></div>
           </div>
 
