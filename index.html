@@ -557,8 +557,11 @@
           </div>
 
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
-            <h3 class="font-semibold text-slate-700 mb-1">Mapa de estaciones</h3>
-            <p class="text-xs text-slate-500 mb-3">Toque una estación en el mapa para ver sus datos (también selecciona esa estación abajo).</p>
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+              <h3 class="font-semibold text-slate-700">Mapa de estaciones</h3>
+              <button type="button" id="btn-marcar-estacion-mapa" class="role-admin-only hidden px-3 py-1.5 text-xs rounded-md bg-navy-700 text-white hover:bg-navy-800">📍 Marcar nueva estación en el mapa</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Toque una estación para ver sus datos (también la selecciona abajo). <span class="role-admin-only hidden">Arrastre un punto para reubicarlo, o use el botón de arriba para ubicar una estación nueva tocando el mapa en vez de escribir las coordenadas.</span></p>
             <div id="mapa-pluvio" class="rounded-md border border-slate-200" style="height: 350px;"></div>
           </div>
 

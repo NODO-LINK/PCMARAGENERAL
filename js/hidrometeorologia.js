@@ -1019,6 +1019,10 @@ function setupEstacionForm() {
       });
       toast(`Estación "${nombre}" agregada.`, "success");
       form.reset();
+      if (marcadorTemporalNuevaEstacion) {
+        mapaPluvio?.removeLayer(marcadorTemporalNuevaEstacion);
+        marcadorTemporalNuevaEstacion = null;
+      }
     } catch (err) {
       console.error(err);
       toast("No se pudo agregar la estación.", "error");
@@ -1090,6 +1094,12 @@ function renderChartPluvio() {
 // Se inicializa recién la primera vez que se entra a la pestaña Pluviometría
 // (no al cargar la página): Leaflet calcula mal el tamaño de un mapa que
 // arranca oculto (display:none), por eso no se crea de una vez.
+// Modo "tocar el mapa para ubicar una estación nueva" (ver
+// setupMarcarEstacionBtn): se arma con un botón, se usa una sola vez por
+// clic y se desarma solo.
+let modoUbicarEstacionArmado = false;
+let marcadorTemporalNuevaEstacion = null;
+
 function inicializarMapaPluvioSiHaceFalta() {
   const contenedor = document.getElementById("mapa-pluvio");
   if (!contenedor || mapaPluvio || !window.L) return;
@@ -1101,25 +1111,48 @@ function inicializarMapaPluvioSiHaceFalta() {
   capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
   renderMarcadoresPluvio();
   setTimeout(() => mapaPluvio?.invalidateSize(), 150);
+
+  // Clic en el mapa: solo hace algo si el modo "ubicar estación nueva" está
+  // armado (botón "📍 Marcar..."); un clic normal para ver/arrastrar un
+  // marcador existente no dispara esto.
+  mapaPluvio.on("click", (evento) => {
+    if (!modoUbicarEstacionArmado) return;
+    modoUbicarEstacionArmado = false;
+    const { lat, lng } = evento.latlng;
+    if (marcadorTemporalNuevaEstacion) mapaPluvio.removeLayer(marcadorTemporalNuevaEstacion);
+    marcadorTemporalNuevaEstacion = window.L.marker([lat, lng], { opacity: 0.75 }).addTo(mapaPluvio).bindPopup("Ubicación de la nueva estación — complete el nombre abajo.").openPopup();
+    const form = document.getElementById("form-nueva-estacion-pluvio");
+    if (form) {
+      form.elements["lat"].value = lat.toFixed(6);
+      form.elements["lon"].value = lng.toFixed(6);
+      form.elements["nombre"]?.focus();
+    }
+    toast('Ubicación marcada. Escriba el nombre y presione "Agregar estación".', "success");
+  });
 }
 
 // Un marcador por estación con coordenadas cargadas; al tocarlo muestra un
 // recuadro con sus datos Y además selecciona esa estación en el resto de
-// la pantalla (dashboard, gráfico, historial de abajo).
+// la pantalla (dashboard, gráfico, historial de abajo). El administrador
+// puede además ARRASTRAR el punto para reubicarlo (se guarda solo al
+// soltar, sin pedir confirmación aparte — igual que los demás campos
+// editables en línea de este módulo).
 function renderMarcadoresPluvio() {
   if (!mapaPluvio || !capaMarcadoresPluvio) return;
   capaMarcadoresPluvio.clearLayers();
+  const admin = isAdmin();
   estaciones.forEach((e) => {
     const lat = Number(e.lat);
     const lon = Number(e.lon);
     if (e.lat === null || e.lat === undefined || e.lon === null || e.lon === undefined || isNaN(lat) || isNaN(lon)) return;
     const stats = estadisticasEstacion(e.id);
-    const marcador = window.L.marker([lat, lon]).addTo(capaMarcadoresPluvio);
+    const marcador = window.L.marker([lat, lon], { draggable: admin }).addTo(capaMarcadoresPluvio);
     marcador.bindPopup(
       `<strong>${escapeHTML(e.nombre)}</strong><br/>` +
         `Lluvia de hoy: ${stats.lluviaHoy} mm/m²<br/>` +
         `Lluvia del mes: ${stats.lluviaMes} mm/m²<br/>` +
-        `Última lectura: ${stats.ultima ? escapeHTML(formatDate(stats.ultima.fecha)) : "Sin lecturas"}`
+        `Última lectura: ${stats.ultima ? escapeHTML(formatDate(stats.ultima.fecha)) : "Sin lecturas"}` +
+        (admin ? '<br/><span style="color:#64748b;font-size:11px;">Arrastre el punto para reubicar.</span>' : "")
     );
     marcador.on("click", () => {
       estacionSeleccionadaId = e.id;
@@ -1127,6 +1160,28 @@ function renderMarcadoresPluvio() {
       renderPluviometriaDashboard();
       construirHistorialPluvio();
     });
+    if (admin) {
+      marcador.on("dragend", async () => {
+        const pos = marcador.getLatLng();
+        try {
+          await updateDoc(doc(db, COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, e.id), { lat: pos.lat, lon: pos.lng });
+          toast(`Ubicación de "${e.nombre}" actualizada.`, "success");
+        } catch (err) {
+          console.error(err);
+          toast("No se pudo actualizar la ubicación.", "error");
+        }
+      });
+    }
+  });
+}
+
+function setupMarcarEstacionBtn() {
+  const btn = document.getElementById("btn-marcar-estacion-mapa");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    if (!mapaPluvio) return;
+    modoUbicarEstacionArmado = true;
+    toast("Toque un punto del mapa para ubicar la nueva estación.", "info");
   });
 }
 
@@ -1287,4 +1342,5 @@ export async function initHidrometeorologia() {
   setupEstacionForm();
   setupEstacionSelector();
   setupLluviaForm();
+  setupMarcarEstacionBtn();
 }
