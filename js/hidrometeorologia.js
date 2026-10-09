@@ -36,6 +36,8 @@ let lluvias = []; // TODAS las lecturas de pluviometría, de todas las estacione
 let chartPluvio = null;
 let seedEstacionesIntentado = false;
 let historialPluvio = null;
+let mapaPluvio = null;
+let capaMarcadoresPluvio = null;
 
 const COLOR_HEX_ESTADO = {
   emerald: "#059669",
@@ -912,6 +914,25 @@ function lluviasDeEstacion() {
   return lluvias.filter((l) => l.estacionId === estacionSeleccionadaId);
 }
 
+// Estadísticas de CUALQUIER estación (no solo la seleccionada) — usado por
+// el mapa, que muestra un resumen de cada una en su propio marcador.
+function estadisticasEstacion(estacionId) {
+  const deEstacion = lluvias.filter((l) => l.estacionId === estacionId);
+  const hoy = new Date();
+  const esHoy = (l) => {
+    const d = toDate(l.fecha);
+    return d && d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+  };
+  const esEsteMes = (l) => {
+    const d = toDate(l.fecha);
+    return d && d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth();
+  };
+  const lluviaHoy = Math.round(deEstacion.filter(esHoy).reduce((s, l) => s + (Number(l.lluvia) || 0), 0) * 100) / 100;
+  const lluviaMes = Math.round(deEstacion.filter(esEsteMes).reduce((s, l) => s + (Number(l.lluvia) || 0), 0) * 100) / 100;
+  const ultima = [...deEstacion].sort((a, b) => toDate(b.fecha).getTime() - toDate(a.fecha).getTime())[0];
+  return { lluviaHoy, lluviaMes, ultima };
+}
+
 async function seedEstacionEjemploSiVacio(rowsActuales) {
   // A diferencia de los ríos, no hay un nombre "obvio" para una estación
   // de lluvia por defecto — se deja vacío y el administrador crea las que
@@ -940,13 +961,36 @@ function renderEstacionesAdminTable() {
         (e) => `
     <tr class="border-t border-slate-100">
       <td class="px-3 py-1.5">${escapeHTML(e.nombre)}</td>
+      <td class="px-3 py-1.5">${
+        admin
+          ? `<input type="number" step="any" value="${e.lat ?? ""}" data-id="${e.id}" data-campo="lat" placeholder="Latitud" class="w-24 border border-slate-300 rounded px-1.5 py-1 text-xs input-coord-estacion" />`
+          : e.lat ?? "—"
+      }</td>
+      <td class="px-3 py-1.5">${
+        admin
+          ? `<input type="number" step="any" value="${e.lon ?? ""}" data-id="${e.id}" data-campo="lon" placeholder="Longitud" class="w-24 border border-slate-300 rounded px-1.5 py-1 text-xs input-coord-estacion" />`
+          : e.lon ?? "—"
+      }</td>
       <td class="px-3 py-1.5">${e.activo === false ? '<span class="text-red-600">Inactiva</span>' : '<span class="text-emerald-600">Activa</span>'}</td>
       <td class="px-3 py-1.5">${admin ? `<button data-id="${e.id}" data-act="toggle" class="text-navy-700 hover:underline text-xs">${e.activo === false ? "Activar" : "Desactivar"}</button>` : "—"}</td>
     </tr>`
       )
-      .join("") || `<tr><td colspan="3" class="px-3 py-4 text-center text-slate-400 text-xs">Sin estaciones registradas.</td></tr>`;
+      .join("") || `<tr><td colspan="5" class="px-3 py-4 text-center text-slate-400 text-xs">Sin estaciones registradas.</td></tr>`;
 
   if (admin) {
+    tbody.querySelectorAll(".input-coord-estacion").forEach((input) => {
+      input.addEventListener("change", async () => {
+        const valor = input.value === "" ? null : Number(input.value);
+        if (input.value !== "" && isNaN(valor)) return;
+        try {
+          await updateDoc(doc(db, COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, input.dataset.id), { [input.dataset.campo]: valor });
+          toast("Ubicación actualizada.", "success");
+        } catch (err) {
+          console.error(err);
+          toast("No se pudo actualizar la ubicación.", "error");
+        }
+      });
+    });
     tbody.querySelectorAll('[data-act="toggle"]').forEach((btn) => {
       btn.onclick = () => {
         const e = estaciones.find((x) => x.id === btn.dataset.id);
@@ -963,9 +1007,16 @@ function setupEstacionForm() {
     e.preventDefault();
     if (!isAdmin()) return;
     const nombre = form.elements["nombre"].value.trim();
+    const latStr = form.elements["lat"]?.value;
+    const lonStr = form.elements["lon"]?.value;
     if (!nombre) return;
     try {
-      await createRecord(COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, { nombre, activo: true });
+      await createRecord(COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, {
+        nombre,
+        lat: latStr === "" || latStr === undefined ? null : Number(latStr),
+        lon: lonStr === "" || lonStr === undefined ? null : Number(lonStr),
+        activo: true,
+      });
       toast(`Estación "${nombre}" agregada.`, "success");
       form.reset();
     } catch (err) {
@@ -1032,6 +1083,50 @@ function renderChartPluvio() {
       plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true, title: { display: true, text: "mm/m²" } } },
     },
+  });
+}
+
+/* --------------------------- Mapa de estaciones -------------------------- */
+// Se inicializa recién la primera vez que se entra a la pestaña Pluviometría
+// (no al cargar la página): Leaflet calcula mal el tamaño de un mapa que
+// arranca oculto (display:none), por eso no se crea de una vez.
+function inicializarMapaPluvioSiHaceFalta() {
+  const contenedor = document.getElementById("mapa-pluvio");
+  if (!contenedor || mapaPluvio || !window.L) return;
+  mapaPluvio = window.L.map(contenedor).setView([10.064, -72.568], 8);
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(mapaPluvio);
+  capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
+  renderMarcadoresPluvio();
+  setTimeout(() => mapaPluvio?.invalidateSize(), 150);
+}
+
+// Un marcador por estación con coordenadas cargadas; al tocarlo muestra un
+// recuadro con sus datos Y además selecciona esa estación en el resto de
+// la pantalla (dashboard, gráfico, historial de abajo).
+function renderMarcadoresPluvio() {
+  if (!mapaPluvio || !capaMarcadoresPluvio) return;
+  capaMarcadoresPluvio.clearLayers();
+  estaciones.forEach((e) => {
+    const lat = Number(e.lat);
+    const lon = Number(e.lon);
+    if (e.lat === null || e.lat === undefined || e.lon === null || e.lon === undefined || isNaN(lat) || isNaN(lon)) return;
+    const stats = estadisticasEstacion(e.id);
+    const marcador = window.L.marker([lat, lon]).addTo(capaMarcadoresPluvio);
+    marcador.bindPopup(
+      `<strong>${escapeHTML(e.nombre)}</strong><br/>` +
+        `Lluvia de hoy: ${stats.lluviaHoy} mm/m²<br/>` +
+        `Lluvia del mes: ${stats.lluviaMes} mm/m²<br/>` +
+        `Última lectura: ${stats.ultima ? escapeHTML(formatDate(stats.ultima.fecha)) : "Sin lecturas"}`
+    );
+    marcador.on("click", () => {
+      estacionSeleccionadaId = e.id;
+      renderEstacionSelector();
+      renderPluviometriaDashboard();
+      construirHistorialPluvio();
+    });
   });
 }
 
@@ -1120,6 +1215,12 @@ function setupSubtabsHidro() {
       document.querySelectorAll("#view-hidro .subtab-panel").forEach((p) => p.classList.add("hidden"));
       document.getElementById(`panel-${btn.dataset.subtab}`)?.classList.remove("hidden");
       tabs.forEach((b) => b.classList.toggle("subtab-active", b === btn));
+      if (btn.dataset.subtab === "pluviometria") {
+        inicializarMapaPluvioSiHaceFalta();
+        // El mapa ya puede existir de una visita anterior a esta pestaña,
+        // pero mientras estuvo oculto Leaflet no sabe su tamaño real.
+        mapaPluvio?.invalidateSize();
+      }
     });
   });
 }
@@ -1173,12 +1274,14 @@ export async function initHidrometeorologia() {
     renderEstacionSelector();
     renderPluviometriaDashboard();
     construirHistorialPluvio();
+    renderMarcadoresPluvio();
   });
 
   subscribeCollection(COLLECTIONS.PLUVIOMETRIA_LECTURAS, "fecha", (rows) => {
     lluvias = rows;
     renderPluviometriaDashboard();
     historialPluvio?.render();
+    renderMarcadoresPluvio();
   });
 
   setupEstacionForm();
