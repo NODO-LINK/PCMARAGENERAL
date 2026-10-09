@@ -1090,6 +1090,39 @@ function renderChartPluvio() {
   });
 }
 
+// Envoltorio con diagnóstico alrededor de window.windyInit: una clave
+// inválida o con el dominio no autorizado (ver api.windy.com → esa clave →
+// lápiz de editar → "restriction") puede dejar el mapa en blanco SIN
+// llamar de vuelta y sin lanzar ningún error visible — y como este entorno
+// no tiene acceso a windy.com para probarlo en vivo, hace falta que el
+// propio usuario vea el motivo exacto. Esto deja un aviso en el recuadro
+// del mapa (y en la consola del navegador, F12) si Windy no responde a
+// tiempo o lanza un error, en vez de quedar en blanco sin pista alguna.
+function windyInitConDiagnostico(contenedor, opciones, alListo) {
+  let resuelto = false;
+  const avisoTimeout = setTimeout(() => {
+    if (resuelto) return;
+    resuelto = true;
+    console.error("Windy no respondió a tiempo con estas opciones (revise la clave y su restricción de dominio en api.windy.com):", opciones);
+    contenedor.innerHTML =
+      '<p class="text-sm text-red-600 p-3">El mapa de Windy no cargó (tiempo agotado). Abra la consola del navegador (F12 → pestaña "Console") para ver el error exacto, y revise en api.windy.com que la clave tenga autorizado el dominio correcto.</p>';
+  }, 8000);
+
+  try {
+    window.windyInit(opciones, (windyAPI) => {
+      if (resuelto) return;
+      resuelto = true;
+      clearTimeout(avisoTimeout);
+      alListo(windyAPI);
+    });
+  } catch (err) {
+    resuelto = true;
+    clearTimeout(avisoTimeout);
+    console.error("Error al iniciar el mapa de Windy:", err);
+    contenedor.innerHTML = `<p class="text-sm text-red-600 p-3">Error al iniciar el mapa de Windy: ${escapeHTML(err?.message || String(err))}</p>`;
+  }
+}
+
 /* ---------------- Mapa de pronóstico (Fluviometría) — Windy --------------- */
 // Reemplaza al viejo <iframe> de Windy: mismo motivo que el mapa de
 // estaciones (ver más abajo) — un iframe de otro dominio no se puede tocar
@@ -1113,7 +1146,7 @@ function inicializarMapaPronosticoFluvioSiHaceFalta() {
     return;
   }
 
-  window.windyInit({ key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "satellite" }, (windyAPI) => {
+  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "satellite" }, (windyAPI) => {
     mapaPronosticoFluvio = windyAPI.map;
     setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
   });
@@ -1162,7 +1195,7 @@ function inicializarMapaPluvioSiHaceFalta() {
     return;
   }
 
-  window.windyInit({ key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
+  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
     mapaPluvio = windyAPI.map;
     capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
     renderMarcadoresPluvio();
