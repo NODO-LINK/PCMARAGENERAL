@@ -40,7 +40,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
-<!-- Mapas de Windy.com (estaciones de Pluviometría + pronóstico de
+<!-- Mapa de Windy.com (pronóstico de Fluviometría; el mapa de estaciones de Pluviometría usa este mismo Leaflet 1.4.0 pero sin Windy) — antes: (
      Fluviometría): la librería de Windy NECESITA Leaflet ya cargado antes
      (lanza "L is not defined" si falta) y además exige una versión EXACTA:
      "Windy API error: Wrong version of Leaflet library. Version 1.4.x is
@@ -273,11 +273,11 @@
 
         <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
-            <h3 class="font-semibold text-slate-700">Mapa de estaciones — lluvia (Windy)</h3>
+            <h3 class="font-semibold text-slate-700">Mapa de estaciones</h3>
             <button type="button" id="btn-marcar-estacion-mapa" class="role-admin-only hidden px-3 py-1.5 text-xs rounded-md bg-navy-700 text-white hover:bg-navy-800">📍 Marcar estación</button>
           </div>
           <p class="text-xs text-slate-500 mb-3">Toque una estación para ver sus datos. <span class="role-admin-only hidden">Arrastre un punto para reubicarlo.</span></p>
-          <div id="mapa-pluvio" class="mapa-windy rounded-md border border-slate-200" style="height: 300px;"></div>
+          <div id="mapa-pluvio" class="rounded-md border border-slate-200" style="height: 300px;"></div>
         </div>
 
         <div class="flex items-center gap-2">

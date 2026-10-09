@@ -1198,53 +1198,39 @@ export function mostrarMapaPronosticoFluvio() {
 let modoUbicarEstacionArmado = false;
 let marcadorTemporalNuevaEstacion = null;
 
-// A diferencia del viejo widget <iframe> de "Pronóstico del tiempo" (que era
-// de otro dominio y por eso no se le podía tocar nada desde afuera, ni
-// ocultar su barra de línea de tiempo), este mapa usa la API "Map Forecast"
-// de Windy.com: nos entrega un mapa Leaflet REAL, del mismo origen de la
-// página, sobre el que sí podemos dibujar nuestros propios marcadores de
-// estaciones y ocultarle partes de su interfaz por CSS (ver css/styles.css,
-// selector .mapa-windy). Requiere una WINDY_API_KEY configurada en
-// js/config.js (gratuita, ver comentario ahí); sin ella el mapa no carga.
+// Mapa Leaflet normal (OpenStreetMap) para las estaciones: no usa Windy.
+// Windy solo se usa en el mapa de pronóstico de Fluviometría — su librería
+// no está pensada para varios mapas en la misma página, así que se decidió
+// dejarla en un solo lugar.
 function inicializarMapaPluvioSiHaceFalta() {
   const contenedor = document.getElementById("mapa-pluvio");
-  if (!contenedor || mapaPluvio) return;
+  if (!contenedor || mapaPluvio || !window.L) return;
 
-  if (!WINDY_API_KEY) {
-    contenedor.innerHTML =
-      '<p class="text-sm text-red-600 p-3">Falta configurar la clave de la API de Windy (WINDY_API_KEY en js/config.js) para mostrar este mapa. Ver instrucciones en ese archivo.</p>';
-    return;
-  }
-  if (!window.windyInit) {
-    // libBoot.js (script de Windy) puede no haber cargado todavía; se
-    // reintenta solo cada 500ms hasta que esté listo.
-    setTimeout(inicializarMapaPluvioSiHaceFalta, 500);
-    return;
-  }
+  mapaPluvio = window.L.map(contenedor).setView([10.064, -72.568], 8);
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(mapaPluvio);
+  capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
+  renderMarcadoresPluvio();
+  setTimeout(() => mapaPluvio?.invalidateSize(), 150);
 
-  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
-    mapaPluvio = windyAPI.map;
-    capaMarcadoresPluvio = window.L.layerGroup().addTo(mapaPluvio);
-    renderMarcadoresPluvio();
-    setTimeout(() => mapaPluvio?.invalidateSize(), 150);
-
-    // Clic en el mapa: solo hace algo si el modo "ubicar estación nueva"
-    // está armado (botón "📍 Marcar..."); un clic normal para ver/arrastrar
-    // un marcador existente no dispara esto.
-    mapaPluvio.on("click", (evento) => {
-      if (!modoUbicarEstacionArmado) return;
-      modoUbicarEstacionArmado = false;
-      const { lat, lng } = evento.latlng;
-      if (marcadorTemporalNuevaEstacion) mapaPluvio.removeLayer(marcadorTemporalNuevaEstacion);
-      marcadorTemporalNuevaEstacion = window.L.marker([lat, lng], { opacity: 0.75 }).addTo(mapaPluvio).bindPopup("Ubicación de la nueva estación — complete el nombre abajo.").openPopup();
-      const form = document.getElementById("form-nueva-estacion-pluvio");
-      if (form) {
-        form.elements["lat"].value = lat.toFixed(6);
-        form.elements["lon"].value = lng.toFixed(6);
-        form.elements["nombre"]?.focus();
-      }
-      toast('Ubicación marcada. Escriba el nombre y presione "Agregar estación".', "success");
-    });
+  // Clic en el mapa: solo hace algo si el modo "ubicar estación nueva" está
+  // armado (botón "📍 Marcar..."); un clic normal para ver/arrastrar un
+  // marcador existente no dispara esto.
+  mapaPluvio.on("click", (evento) => {
+    if (!modoUbicarEstacionArmado) return;
+    modoUbicarEstacionArmado = false;
+    const { lat, lng } = evento.latlng;
+    if (marcadorTemporalNuevaEstacion) mapaPluvio.removeLayer(marcadorTemporalNuevaEstacion);
+    marcadorTemporalNuevaEstacion = window.L.marker([lat, lng], { opacity: 0.75 }).addTo(mapaPluvio).bindPopup("Ubicación de la nueva estación — complete el nombre abajo.").openPopup();
+    const form = document.getElementById("form-nueva-estacion-pluvio");
+    if (form) {
+      form.elements["lat"].value = lat.toFixed(6);
+      form.elements["lon"].value = lng.toFixed(6);
+      form.elements["nombre"]?.focus();
+    }
+    toast('Ubicación marcada. Escriba el nombre y presione "Agregar estación".', "success");
   });
 }
 
