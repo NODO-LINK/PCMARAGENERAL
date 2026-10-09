@@ -1151,7 +1151,11 @@ function renderMarcadoresPluvio() {
       `<strong>${escapeHTML(e.nombre)}</strong><br/>` +
         `Lluvia de hoy: ${stats.lluviaHoy} mm/m²<br/>` +
         `Lluvia del mes: ${stats.lluviaMes} mm/m²<br/>` +
-        `Última lectura: ${stats.ultima ? escapeHTML(formatDate(stats.ultima.fecha)) : "Sin lecturas"}` +
+        `Última lectura: ${
+          stats.ultima
+            ? `${stats.ultima.lluvia} mm/m² (${escapeHTML(formatDate(stats.ultima.fecha))})`
+            : "Sin lecturas"
+        }` +
         (admin ? '<br/><span style="color:#64748b;font-size:11px;">Arrastre el punto para reubicar.</span>' : "")
     );
     marcador.on("click", () => {
@@ -1159,6 +1163,7 @@ function renderMarcadoresPluvio() {
       renderEstacionSelector();
       renderPluviometriaDashboard();
       construirHistorialPluvio();
+      marcador.openPopup();
     });
     if (admin) {
       marcador.on("dragend", async () => {
