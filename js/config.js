@@ -108,7 +108,7 @@ export const DEFAULT_RIO_NOMBRE = "Río Limón";
 // afuera). Es gratuita para uso no comercial: se obtiene creando una cuenta
 // en https://api.windy.com → sección "API keys" → generar una clave de tipo
 // "Map Forecast API" → pegarla aquí. Sin esta clave, ese mapa no carga.
-export const WINDY_API_KEY = "";
+export const WINDY_API_KEY = "wzuVbMacnel0H6legMe7UmmY5C6tK8bz";
 
 // Tipos de combustible fijos para el módulo de Despacho de Combustible.
 export const TIPOS_COMBUSTIBLE = ["Gasolina", "Diesel"];
