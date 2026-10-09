@@ -148,6 +148,28 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isHidroOperador() && resource.data.createdBy == request.auth.uid);
     }
 
+    /* --------------- Hidrometeorología: catálogo de ríos ---------------- */
+    // Fluviometría: cada río (Limón, Guasare, ...) con sus propios umbrales
+    // de alerta. Solo el administrador los crea/edita; cualquiera con
+    // acceso a Hidrometeorología (incluido el rol Hidro) puede leerlos
+    // para poblar el selector de río.
+    match /rios/{docId} {
+      allow read: if isAdmin() || isOperador() || isHidroOperador();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* ----------- Hidrometeorología: Pluviometría (independiente) -------- */
+    match /estacionesPluviometricas/{docId} {
+      allow read: if isAdmin() || isOperador() || isHidroOperador();
+      allow create, update, delete: if isAdmin();
+    }
+    match /pluviometriaLecturas/{docId} {
+      allow read: if isAdmin() || isOperador() || isHidroOperador();
+      allow create: if (isAdmin() || isOperador() || isHidroOperador()) && isOwnCreation();
+      allow update: if false;
+      allow delete: if isAdmin() || (isHidroOperador() && resource.data.createdBy == request.auth.uid);
+    }
+
     /* ------------------------- Catálogos maestros ------------------------ */
     match /instituciones/{docId} {
       allow read: if canReadOperational();

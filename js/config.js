@@ -26,10 +26,11 @@ export const firebaseConfig = {
 export const ROLES = {
   ADMIN: "admin",
   OPERADOR: "operador",
-  // Rol restringido: solo puede leer/escribir en Hidrometeorología (Río
-  // Limón). Pensado para dar acceso a un trabajador externo a ese único
-  // departamento sin exponerle el resto de los módulos — la restricción se
-  // aplica también en firestore.rules, no solo en la interfaz.
+  // Rol restringido: solo puede leer/escribir en Hidrometeorología
+  // (Fluviometría — todos los ríos — y Pluviometría). Pensado para dar
+  // acceso a un trabajador externo a ese único departamento sin exponerle
+  // el resto de los módulos — la restricción se aplica también en
+  // firestore.rules, no solo en la interfaz.
   HIDRO: "hidro",
 };
 
@@ -43,7 +44,17 @@ export const COLLECTIONS = {
   GUARDIAS: "guardias",
   INSTITUCIONES: "instituciones",
   DESPACHOS_COMBUSTIBLE: "despachosCombustible",
+  // Hidrometeorología / Fluviometría: lecturas de nivel por río (el campo
+  // rioId distingue a cuál pertenece cada una). Se mantiene este nombre de
+  // colección por compatibilidad con los registros ya cargados antes de
+  // que existiera más de un río — ver DEFAULT_RIO_ID más abajo.
   HIDRO_LECTURAS: "hidroLecturas",
+  RIOS: "rios",
+  // Hidrometeorología / Pluviometría: estaciones de lluvia INDEPENDIENTES
+  // de los ríos (no comparten datos con Fluviometría, aunque vivan en el
+  // mismo módulo de la interfaz).
+  ESTACIONES_PLUVIOMETRICAS: "estacionesPluviometricas",
+  PLUVIOMETRIA_LECTURAS: "pluviometriaLecturas",
   CONFIG: "config",
   EDUCACION: "educacion",
   INSPECCIONES: "gestionRiesgoInspeccion",
@@ -70,17 +81,24 @@ export const CATEGORIAS_INSTITUCIONES = [
   "Otros",
 ];
 
-// Umbrales por defecto del nivel del Río Limón. La escala institucional se
-// mide en msnm (metros sobre el nivel del mar), de 0 a 9, y admite
-// decimales: pueden ser sobrescritos por el documento config/hidrometeorologia
-// en Firestore desde la interfaz de administración. El nivel se carga
-// manualmente desde el propio módulo.
+// Umbrales por defecto para un río NUEVO (0 a 9, admite decimales). Cada
+// río guarda sus propios umbrales de advertencia/alerta en su documento de
+// rios/{id} (pueden ser distintos entre ríos); esto es solo el valor
+// inicial que se precarga al crear uno.
 export const UMBRALES_HIDRO_DEFAULT = {
   advertencia: 4,
   alerta: 7,
 };
 export const NIVEL_HIDRO_MIN = 0;
 export const NIVEL_HIDRO_MAX = 9;
+
+// Id FIJO (no autogenerado) del río "Río Limón" en la colección `rios`: se
+// sembró con este id a propósito para que las lecturas ya cargadas ANTES
+// de que existiera más de un río (que no tienen campo `rioId`) se puedan
+// seguir tratando como suyas sin tener que migrar cada documento viejo uno
+// por uno — ver `rioIdDeLectura()` en hidrometeorologia.js.
+export const DEFAULT_RIO_ID = "limon";
+export const DEFAULT_RIO_NOMBRE = "Río Limón";
 
 // Tipos de combustible fijos para el módulo de Despacho de Combustible.
 export const TIPOS_COMBUSTIBLE = ["Gasolina", "Diesel"];

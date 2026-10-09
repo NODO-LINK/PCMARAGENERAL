@@ -435,10 +435,17 @@
   }
   var MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   function picosPorMesHidro() {
+    // hidroLecturas ahora puede tener lecturas de varios ríos
+    // (Fluviometría); el monitor solo muestra Río Limón (rioId "limon",
+    // o sin rioId: lecturas viejas de antes de que existiera más de un
+    // río), para no mezclar los niveles de ríos distintos en una misma
+    // línea. Si se quiere agregar otro río a la TV, hace falta otra
+    // tarjeta/gráfica aparte, no sumarlo a esta.
     var porMes = {};
     var claves = [];
     for (var i = 0; i < state.hidro.length; i++) {
       var r = state.hidro[i];
+      if (r.rioId && r.rioId !== "limon") continue;
       var d = toDate(r.fecha);
       var nivel = Number(r.nivel);
       if (!d || isNaN(nivel)) continue;

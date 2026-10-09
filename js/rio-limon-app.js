@@ -67,16 +67,16 @@ function wireLogout() {
 // El historial arranca colapsado para no ocupar media pantalla en un
 // celular; el botón lo despliega/oculta sin recargar nada (el componente
 // ya está renderizado por debajo, solo se le cambia la visibilidad).
-function wireHistorialToggle() {
-  const btn = document.getElementById("btn-toggle-historial-hidro");
-  const panel = document.getElementById("historial-hidro");
-  const chevron = document.getElementById("historial-hidro-chevron");
+function wireHistorialToggle(btnId, panelId, chevronId, etiqueta) {
+  const btn = document.getElementById(btnId);
+  const panel = document.getElementById(panelId);
+  const chevron = document.getElementById(chevronId);
   if (!btn || !panel) return;
   btn.addEventListener("click", () => {
     const vaAMostrarse = panel.classList.contains("hidden");
     panel.classList.toggle("hidden", !vaAMostrarse);
     if (chevron) chevron.textContent = vaAMostrarse ? "▾" : "▸";
-    btn.querySelector("span").textContent = vaAMostrarse ? "Ocultar historial de lecturas" : "Ver historial de lecturas";
+    btn.querySelector("span").textContent = vaAMostrarse ? `Ocultar ${etiqueta}` : `Ver ${etiqueta}`;
   });
 }
 
@@ -86,7 +86,8 @@ function boot() {
   renderIcons();
   wireLoginForm();
   wireLogout();
-  wireHistorialToggle();
+  wireHistorialToggle("btn-toggle-historial-hidro", "historial-hidro", "historial-hidro-chevron", "historial de lecturas");
+  wireHistorialToggle("btn-toggle-historial-pluvio", "historial-pluvio", "historial-pluvio-chevron", "historial de lluvia");
 
   onAuthReady(({ user, profile }) => {
     const loginScreen = document.getElementById("login-screen");
