@@ -359,17 +359,25 @@ details[open] > summary .chevron {
   }
 }
 
-/* Mapa de estaciones de Pluviometría (API de Windy, ver js/hidrometeorologia.js):
-   oculta la barra de línea de tiempo/reproducción del pronóstico que Windy
-   agrega por defecto debajo del mapa — el pedido fue ver solo el tiempo
-   actual, sin controles para "adelantar" el pronóstico ni botón de play.
-   Los selectores son los que usa Windy en su propio sitio; si alguno no
-   aplica en una actualización futura de su librería, simplemente no hace
-   nada (no rompe el resto del mapa). */
-#mapa-pluvio #bottom,
-#mapa-pluvio #plugin-plugins,
-#mapa-pluvio [id*="timeline" i],
-#mapa-pluvio [class*="timeline" i],
-#mapa-pluvio [class*="time-slider" i] {
+/* Mapas de Windy.com reales (API "Map Forecast", NO el iframe viejo — ver
+   js/hidrometeorologia.js): ocultan la barra de línea de tiempo/reproducción
+   del pronóstico que Windy agrega por defecto, para ver solo el tiempo
+   actual sin controles para "adelantar" el pronóstico ni botón de play.
+   .mapa-windy se aplica tanto al mapa de estaciones (Pluviometría) como al
+   de pronóstico (Fluviometría). Los selectores son los que usa Windy en su
+   propio sitio; al ser esto un mapa del MISMO origen (ya no un iframe de
+   otro dominio) el CSS sí puede alcanzarlo. Si algún selector no aplica en
+   una actualización futura de su librería, simplemente no hace nada (no
+   rompe el resto del mapa). */
+.mapa-windy #bottom,
+.mapa-windy #plugin-plugins,
+.mapa-windy #timeline,
+.mapa-windy #playpause,
+.mapa-windy [id*="timeline" i],
+.mapa-windy [class*="timeline" i],
+.mapa-windy [class*="time-slider" i],
+.mapa-windy [id*="playpause" i],
+.mapa-windy [class*="playpause" i],
+.mapa-windy [class*="media-slider" i] {
   display: none !important;
 }

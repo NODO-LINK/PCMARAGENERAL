@@ -445,20 +445,8 @@
 
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
             <h3 class="font-semibold text-slate-700 mb-3">Pronóstico del tiempo — Viento y Lluvia (Zulia)</h3>
-            <div class="relative">
-              <iframe
-                title="Mapa de pronóstico de viento y lluvia (Windy.com)"
-                width="100%"
-                height="450"
-                src="https://embed.windy.com/embed2.html?lat=10.064&lon=-72.568&width=650&height=450&zoom=8&level=surface&overlay=satellite&product=ecmwf&menu=&message=false&marker=false&calendar=false&pressure=&type=map&location=coordinates&detail=false&metricWind=default&metricTemp=default&radarRange=-1"
-                frameborder="0"
-                class="rounded-md border border-slate-200 relative z-0"
-                loading="lazy"
-              ></iframe>
-              <!-- Bloquea el logo/enlace de Windy.com en la esquina para que un toque accidental no abra windy.com -->
-              <div class="absolute bottom-0 left-0 w-32 h-8 z-10" title="Windy.com" onclick="event.preventDefault(); event.stopPropagation();"></div>
-            </div>
-            <p class="text-xs text-slate-400 mt-2">Mapa de Windy.com — capa <strong>Satélite</strong> (imagen real de nubes, no animada/pronosticada, se actualiza cada 15-30 min aprox.). Las capas de Viento/Lluvia del menú (ícono ☰) SÍ son animadas porque muestran un modelo de pronóstico, no una cámara en vivo — Windy no ofrece viento/lluvia "en vivo" gratis, solo pronosticado.</p>
+            <div id="mapa-pronostico-fluvio" class="mapa-windy rounded-md border border-slate-200" style="height: 450px;"></div>
+            <p class="text-xs text-slate-400 mt-2">Mapa de Windy.com — capa <strong>Satélite</strong> (imagen real de nubes, no animada/pronosticada, se actualiza cada 15-30 min aprox.).</p>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -568,7 +556,7 @@
               <button type="button" id="btn-marcar-estacion-mapa" class="role-admin-only hidden px-3 py-1.5 text-xs rounded-md bg-navy-700 text-white hover:bg-navy-800">📍 Marcar nueva estación en el mapa</button>
             </div>
             <p class="text-xs text-slate-500 mb-3">Capa de lluvia de Windy.com de fondo, con las estaciones propias encima. Toque una estación para ver sus datos (también la selecciona abajo). <span class="role-admin-only hidden">Arrastre un punto para reubicarlo, o use el botón de arriba para ubicar una estación nueva tocando el mapa en vez de escribir las coordenadas.</span></p>
-            <div id="mapa-pluvio" class="rounded-md border border-slate-200" style="height: 350px;"></div>
+            <div id="mapa-pluvio" class="mapa-windy rounded-md border border-slate-200" style="height: 350px;"></div>
           </div>
 
           <div class="flex items-center gap-2">

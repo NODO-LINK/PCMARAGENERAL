@@ -1090,6 +1090,44 @@ function renderChartPluvio() {
   });
 }
 
+/* ---------------- Mapa de pronóstico (Fluviometría) — Windy --------------- */
+// Reemplaza al viejo <iframe> de Windy: mismo motivo que el mapa de
+// estaciones (ver más abajo) — un iframe de otro dominio no se puede tocar
+// desde esta página, así que no había forma real de ocultarle su barra de
+// línea de tiempo/reproducción. Este panel de Fluviometría está visible
+// desde que carga la página (no hay que esperar a un clic de pestaña), así
+// que se inicializa directo.
+let mapaPronosticoFluvio = null;
+
+function inicializarMapaPronosticoFluvioSiHaceFalta() {
+  const contenedor = document.getElementById("mapa-pronostico-fluvio");
+  if (!contenedor || mapaPronosticoFluvio) return;
+
+  if (!WINDY_API_KEY) {
+    contenedor.innerHTML =
+      '<p class="text-sm text-red-600 p-3">Falta configurar la clave de la API de Windy (WINDY_API_KEY en js/config.js) para mostrar este mapa. Ver instrucciones en ese archivo.</p>';
+    return;
+  }
+  if (!window.windyInit) {
+    setTimeout(inicializarMapaPronosticoFluvioSiHaceFalta, 500);
+    return;
+  }
+
+  window.windyInit({ key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "satellite" }, (windyAPI) => {
+    mapaPronosticoFluvio = windyAPI.map;
+    setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
+  });
+}
+
+// Usado por rio-limon.html, donde este mapa vive dentro de una sección
+// plegable que arranca oculta (a diferencia de index.html, donde la
+// subpestaña Fluviometría ya está visible al entrar a Hidrometeorología) —
+// se llama recién cuando el usuario despliega esa sección.
+export function mostrarMapaPronosticoFluvio() {
+  inicializarMapaPronosticoFluvioSiHaceFalta();
+  mapaPronosticoFluvio?.invalidateSize();
+}
+
 /* --------------------------- Mapa de estaciones -------------------------- */
 // Se inicializa recién la primera vez que se entra a la pestaña Pluviometría
 // (no al cargar la página): Leaflet calcula mal el tamaño de un mapa que
@@ -1100,15 +1138,14 @@ function renderChartPluvio() {
 let modoUbicarEstacionArmado = false;
 let marcadorTemporalNuevaEstacion = null;
 
-let windyMapaIntentado = false;
-
-// A diferencia del widget <iframe> de "Pronóstico del tiempo" (que es de
-// otro dominio y no se puede tocar desde afuera), este mapa usa la API
-// "Map Forecast" de Windy.com: nos entrega un mapa Leaflet REAL sobre el
-// que sí podemos dibujar nuestros propios marcadores de estaciones, con la
-// capa de lluvia de Windy puesta debajo — así se ven ambas cosas juntas.
-// Requiere una WINDY_API_KEY configurada en js/config.js (gratuita, ver
-// comentario ahí); sin ella el mapa no puede cargar.
+// A diferencia del viejo widget <iframe> de "Pronóstico del tiempo" (que era
+// de otro dominio y por eso no se le podía tocar nada desde afuera, ni
+// ocultar su barra de línea de tiempo), este mapa usa la API "Map Forecast"
+// de Windy.com: nos entrega un mapa Leaflet REAL, del mismo origen de la
+// página, sobre el que sí podemos dibujar nuestros propios marcadores de
+// estaciones y ocultarle partes de su interfaz por CSS (ver css/styles.css,
+// selector .mapa-windy). Requiere una WINDY_API_KEY configurada en
+// js/config.js (gratuita, ver comentario ahí); sin ella el mapa no carga.
 function inicializarMapaPluvioSiHaceFalta() {
   const contenedor = document.getElementById("mapa-pluvio");
   if (!contenedor || mapaPluvio) return;
@@ -1120,13 +1157,8 @@ function inicializarMapaPluvioSiHaceFalta() {
   }
   if (!window.windyInit) {
     // libBoot.js (script de Windy) puede no haber cargado todavía; se
-    // reintenta la próxima vez que se entre a la pestaña Pluviometría.
-    if (!windyMapaIntentado) {
-      windyMapaIntentado = true;
-      setTimeout(() => {
-        windyMapaIntentado = false;
-      }, 3000);
-    }
+    // reintenta solo cada 500ms hasta que esté listo.
+    setTimeout(inicializarMapaPluvioSiHaceFalta, 500);
     return;
   }
 
@@ -1316,6 +1348,13 @@ function setupSubtabsHidro() {
 export function refreshHidrometeorologia() {
   renderDashboard();
   refrescarFechaPorDefecto();
+  // El mapa de pronóstico vive en la subpestaña Fluviometría, que es la que
+  // se ve por defecto — pero la SECCIÓN "Hidrometeorología" completa está
+  // oculta (display:none) hasta que el usuario entra por el menú, y un mapa
+  // de Windy/Leaflet calcula mal su tamaño si se crea mientras está oculto.
+  // Por eso se inicializa aquí (cuando la sección ya se mostró) y no antes.
+  inicializarMapaPronosticoFluvioSiHaceFalta();
+  mapaPronosticoFluvio?.invalidateSize();
 }
 
 export async function initHidrometeorologia() {

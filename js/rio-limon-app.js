@@ -18,7 +18,7 @@
  * -----------------------------------------------------------------------
  */
 import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage } from "./auth.js";
-import { initHidrometeorologia } from "./hidrometeorologia.js";
+import { initHidrometeorologia, mostrarMapaPronosticoFluvio } from "./hidrometeorologia.js";
 import { renderIcons } from "./icons.js";
 
 function renderUserBadge() {
@@ -67,7 +67,7 @@ function wireLogout() {
 // Secciones colapsadas por defecto para no ocupar media pantalla en un
 // celular (historial, pronóstico del tiempo); el botón las despliega/oculta
 // sin recargar nada, solo cambia la visibilidad de lo que ya está debajo.
-function wireColapsable(btnId, panelId, chevronId, etiqueta) {
+function wireColapsable(btnId, panelId, chevronId, etiqueta, onMostrar) {
   const btn = document.getElementById(btnId);
   const panel = document.getElementById(panelId);
   const chevron = document.getElementById(chevronId);
@@ -77,6 +77,7 @@ function wireColapsable(btnId, panelId, chevronId, etiqueta) {
     panel.classList.toggle("hidden", !vaAMostrarse);
     if (chevron) chevron.textContent = vaAMostrarse ? "▾" : "▸";
     btn.querySelector("span").textContent = vaAMostrarse ? `Ocultar ${etiqueta}` : `Ver ${etiqueta}`;
+    if (vaAMostrarse) onMostrar?.();
   });
 }
 
@@ -88,7 +89,7 @@ function boot() {
   wireLogout();
   wireColapsable("btn-toggle-historial-hidro", "historial-hidro", "historial-hidro-chevron", "historial de lecturas");
   wireColapsable("btn-toggle-historial-pluvio", "historial-pluvio", "historial-pluvio-chevron", "historial de lluvia");
-  wireColapsable("btn-toggle-pronostico", "panel-pronostico", "pronostico-chevron", "pronóstico del tiempo");
+  wireColapsable("btn-toggle-pronostico", "panel-pronostico", "pronostico-chevron", "pronóstico del tiempo", mostrarMapaPronosticoFluvio);
 
   onAuthReady(({ user, profile }) => {
     const loginScreen = document.getElementById("login-screen");
