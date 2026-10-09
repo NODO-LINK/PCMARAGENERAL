@@ -26,6 +26,11 @@ export const firebaseConfig = {
 export const ROLES = {
   ADMIN: "admin",
   OPERADOR: "operador",
+  // Rol restringido: solo puede leer/escribir en Hidrometeorología (Río
+  // Limón). Pensado para dar acceso a un trabajador externo a ese único
+  // departamento sin exponerle el resto de los módulos — la restricción se
+  // aplica también en firestore.rules, no solo en la interfaz.
+  HIDRO: "hidro",
 };
 
 // Nombres de colecciones de Firestore (única fuente de verdad para evitar

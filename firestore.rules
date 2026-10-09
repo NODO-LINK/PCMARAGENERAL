@@ -12,10 +12,15 @@ rules_version = '2';
  *     ni eliminar registros históricos ya guardados.
  *   - ADMINISTRADOR: control total (crear, leer, editar, eliminar) sobre
  *     todos los registros y catálogos del sistema.
+ *   - HIDRO: rol restringido para personal externo al que solo se le
+ *     entrega el módulo de Hidrometeorología (Río Limón, página aparte
+ *     rio-limon.html). NO puede leer ni escribir ningún otro módulo — la
+ *     restricción está aplicada aquí, no solo ocultando botones en la UI,
+ *     para que sea real aunque inicie sesión con la app completa.
  *   - Los catálogos maestros (instituciones, categorías de insumos,
  *     insumos) solo pueden ser creados/editados/eliminados por el
- *     administrador; cualquier usuario autenticado puede leerlos para
- *     poblar los <select> de los formularios operativos.
+ *     administrador; cualquier Operador/Administrador puede leerlos para
+ *     poblar los <select> de los formularios operativos (el rol Hidro no).
  *   - Toda creación debe declarar `createdBy` igual al uid autenticado,
  *     reforzando la trazabilidad obligatoria de la aplicación.
  * -----------------------------------------------------------------------
@@ -40,20 +45,31 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.rol == 'admin' && userDoc().data.activo != false;
     }
 
+    function isOperador() {
+      return isSignedIn() && userDoc().data.rol == 'operador' && userDoc().data.activo != false;
+    }
+
+    // Rol restringido solo a Hidrometeorología (ver nota arriba).
+    function isHidroOperador() {
+      return isSignedIn() && userDoc().data.rol == 'hidro' && userDoc().data.activo != false;
+    }
+
     function isOwnCreation() {
       return request.resource.data.createdBy == request.auth.uid;
     }
 
     // Reglas comunes a todos los módulos operativos de tipo
     // "formulario + historial" (Pacientes, Traslados, Fallecidos,
-    // Guardias, Combustible, Educación): cualquier usuario autenticado y
-    // activo puede leer y crear declarando su propia autoría; solo el
-    // administrador puede editar o eliminar.
+    // Guardias, Combustible, Educación): Operador y Administrador pueden
+    // leer y crear declarando su propia autoría; solo el administrador
+    // puede editar o eliminar. El rol Hidro queda deliberadamente FUERA de
+    // esta función (no es isKnownUser()/isSignedIn() genérico) para que no
+    // tenga acceso a ningún módulo fuera de Hidrometeorología.
     function canReadOperational() {
-      return isSignedIn();
+      return isAdmin() || isOperador();
     }
     function canCreateOperational() {
-      return isKnownUser() && isOwnCreation();
+      return (isAdmin() || isOperador()) && isOwnCreation();
     }
     function canWriteOperational() {
       return isAdmin();
@@ -118,8 +134,9 @@ service cloud.firestore {
       allow delete: if canWriteOperational();
     }
     match /hidroLecturas/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isKnownUser() && isOwnCreation();
+      // Único módulo accesible también para el rol Hidro.
+      allow read: if isAdmin() || isOperador() || isHidroOperador();
+      allow create: if (isAdmin() || isOperador() || isHidroOperador()) && isOwnCreation();
       // Serie instrumental: no se edita una vez guardada (no se ofrece
       // edición individual desde la UI). El administrador sí puede
       // eliminar registros — necesario para corregir importaciones
@@ -130,32 +147,32 @@ service cloud.firestore {
 
     /* ------------------------- Catálogos maestros ------------------------ */
     match /instituciones/{docId} {
-      allow read: if isSignedIn();
+      allow read: if canReadOperational();
       allow create, update, delete: if isAdmin();
     }
     match /categoriasInsumos/{docId} {
-      allow read: if isSignedIn();
+      allow read: if canReadOperational();
       allow create, update, delete: if isAdmin();
     }
     match /insumos/{docId} {
-      allow read: if isSignedIn();
+      allow read: if canReadOperational();
       allow create, update, delete: if isAdmin();
     }
 
     /* --------------------- Inventario: existencias ------------------------ */
     // Las existencias por almacén se actualizan mediante transacciones al
-    // registrar entradas/transferencias; cualquier usuario activo puede
+    // registrar entradas/transferencias; Operador o Administrador pueden
     // generar esos movimientos, pero solo el administrador puede alterar
     // manualmente el nivel mínimo crítico o eliminar el documento.
     match /insumoStock/{docId} {
-      allow read: if isSignedIn();
-      allow create, update: if isKnownUser();
+      allow read: if canReadOperational();
+      allow create, update: if isAdmin() || isOperador();
       allow delete: if isAdmin();
     }
 
     match /entradasInventario/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isKnownUser() && isOwnCreation();
+      allow read: if canReadOperational();
+      allow create: if canCreateOperational();
       // Editar o eliminar (con reversión/reajuste de insumoStock) es solo
       // para el administrador; el operador únicamente crea y consulta.
       allow update: if isAdmin();
@@ -163,22 +180,24 @@ service cloud.firestore {
     }
 
     match /transferenciasInventario/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isKnownUser() && isOwnCreation();
+      allow read: if canReadOperational();
+      allow create: if canCreateOperational();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /debitosInventario/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isKnownUser() && isOwnCreation();
+      allow read: if canReadOperational();
+      allow create: if canCreateOperational();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     /* ------------------------------ Config -------------------------------- */
     match /config/{docId} {
-      allow read: if isSignedIn();
+      // El rol Hidro solo necesita leer los umbrales de alerta de su propio
+      // módulo (config/hidrometeorologia), nada más de esta colección.
+      allow read: if canReadOperational() || (isHidroOperador() && docId == 'hidrometeorologia');
       allow write: if isAdmin();
     }
   }

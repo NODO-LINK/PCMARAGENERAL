@@ -12,6 +12,7 @@ import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile } from
 import { initRouter, registerView, navigateTo } from "./router.js";
 import { toast } from "./ui.js";
 import { renderIcons } from "./icons.js";
+import { ROLES } from "./config.js";
 
 import { initCatalogos } from "./catalogos.js";
 import { initDashboard, refreshDashboard } from "./dashboard.js";
@@ -149,6 +150,14 @@ function boot() {
     const loginScreen = document.getElementById("login-screen");
     const appShell = document.getElementById("app-shell");
     if (user && profile) {
+      // El rol Hidro no tiene nada que hacer en esta app completa (las
+      // reglas de seguridad le bloquean leer casi todos los módulos, lo
+      // que llenaría la pantalla de errores de permisos); se le redirige a
+      // su página dedicada, que es la que de verdad puede usar.
+      if (profile.rol === ROLES.HIDRO) {
+        window.location.replace("./rio-limon.html");
+        return;
+      }
       loginScreen.classList.add("hidden");
       appShell.classList.remove("hidden");
       renderUserBadge();
