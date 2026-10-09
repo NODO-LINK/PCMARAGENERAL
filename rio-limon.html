@@ -40,9 +40,13 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
-<!-- Mapa de estaciones de Pluviometría: API de mapas de Windy.com (incluye su
-     propio Leaflet interno, por eso ya no se carga leaflet.js por separado;
-     requiere WINDY_API_KEY en js/config.js — ver comentario ahí). -->
+<!-- Mapas de Windy.com (estaciones de Pluviometría + pronóstico de
+     Fluviometría): la librería de Windy NECESITA Leaflet ya cargado antes
+     (no trae uno propio pese a lo que se pensó al principio — lanza
+     "L is not defined" si falta), por eso leaflet.js va primero. Requiere
+     WINDY_API_KEY en js/config.js — ver comentario ahí. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://api.windy.com/assets/map-forecast/libBoot.js"></script>
 <link rel="stylesheet" href="./css/styles.css" />
 </head>
