@@ -42,11 +42,14 @@
 
 <!-- Mapas de Windy.com (estaciones de Pluviometría + pronóstico de
      Fluviometría): la librería de Windy NECESITA Leaflet ya cargado antes
-     (no trae uno propio pese a lo que se pensó al principio — lanza
-     "L is not defined" si falta), por eso leaflet.js va primero. Requiere
-     WINDY_API_KEY en js/config.js — ver comentario ahí. -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+     (lanza "L is not defined" si falta) y además exige una versión EXACTA:
+     "Windy API error: Wrong version of Leaflet library. Version 1.4.x is
+     required" si se usa cualquier otra (se probó con 1.9.4 y falló). Por
+     eso aquí se usa 1.4.0 en vez de la versión más nueva que usa el resto
+     de la app para otras cosas. Requiere WINDY_API_KEY en js/config.js —
+     ver comentario ahí. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.4.0/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.4.0/dist/leaflet.js"></script>
 <script src="https://api.windy.com/assets/map-forecast/libBoot.js"></script>
 <link rel="stylesheet" href="./css/styles.css" />
 </head>
