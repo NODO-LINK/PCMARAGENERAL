@@ -138,11 +138,14 @@ service cloud.firestore {
       allow read: if isAdmin() || isOperador() || isHidroOperador();
       allow create: if (isAdmin() || isOperador() || isHidroOperador()) && isOwnCreation();
       // Serie instrumental: no se edita una vez guardada (no se ofrece
-      // edición individual desde la UI). El administrador sí puede
-      // eliminar registros — necesario para corregir importaciones
-      // masivas erróneas (ej. "vaciar historial" antes de reimportar).
+      // edición individual desde la UI). Eliminar sí está permitido: el
+      // administrador puede borrar cualquier lectura (ej. para corregir
+      // importaciones masivas erróneas, "vaciar historial" antes de
+      // reimportar); el rol Hidro solo puede borrar las lecturas que ÉL
+      // MISMO cargó (se corrige sus propios errores de carga, sin poder
+      // tocar lo que otro haya registrado).
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isHidroOperador() && resource.data.createdBy == request.auth.uid);
     }
 
     /* ------------------------- Catálogos maestros ------------------------ */

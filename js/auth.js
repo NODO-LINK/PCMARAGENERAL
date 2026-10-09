@@ -52,6 +52,9 @@ export function isAdmin() {
 export function isOperador() {
   return currentProfile?.rol === ROLES.OPERADOR;
 }
+export function isHidro() {
+  return currentProfile?.rol === ROLES.HIDRO;
+}
 export function getResponsableLabel() {
   return currentProfile?.nombre || currentUser?.email || "Usuario";
 }

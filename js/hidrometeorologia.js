@@ -14,11 +14,11 @@
  *    por el Responsable y el Director.
  * -----------------------------------------------------------------------
  */
-import { db, doc, getDoc, setDoc, serverTimestamp, collection, getDocs, writeBatch } from "./firebase.js";
+import { db, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, getDocs, writeBatch } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
-import { subscribeCollection, createRecord, deleteRecord } from "./data.js";
+import { subscribeCollection, createRecord } from "./data.js";
 import { createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, toast, confirmDialog } from "./ui.js";
-import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
+import { isAdmin, isHidro, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
 
 let lecturas = [];
@@ -244,8 +244,13 @@ export async function initHidrometeorologia() {
     firmas: ["Responsable", "Director"],
     // Las lecturas hidrometeorológicas no se EDITAN una vez guardadas (no
     // se ofrece onEdit, para preservar la integridad de la serie
-    // histórica) pero sí se pueden ELIMINAR si se cargaron por error —
-    // solo el administrador, igual que "Vaciar historial completo".
+    // histórica) pero sí se pueden ELIMINAR si se cargaron por error.
+    // Regla distinta al resto de la app (donde eliminar es SIEMPRE
+    // exclusivo del administrador, por eso NO se usa deleteRecord() de
+    // data.js aquí): el rol Hidro también puede borrar, pero solo sus
+    // PROPIOS registros — igual que ya exige firestore.rules del lado del
+    // servidor (resource.data.createdBy == request.auth.uid).
+    canDelete: (row) => isAdmin() || (isHidro() && row.createdBy === getCurrentUser()?.uid),
     onDelete: async (row) => {
       if (!row) return;
       const ok = await confirmDialog({
@@ -254,11 +259,11 @@ export async function initHidrometeorologia() {
       });
       if (!ok) return;
       try {
-        await deleteRecord(COLLECTIONS.HIDRO_LECTURAS, row.id);
+        await deleteDoc(doc(db, COLLECTIONS.HIDRO_LECTURAS, row.id));
         toast("Lectura eliminada.", "success");
       } catch (err) {
         console.error("Error eliminando lectura de Hidrometeorología:", err);
-        toast("No se pudo eliminar la lectura.", "error");
+        toast("No se pudo eliminar la lectura. Verifique sus permisos.", "error");
       }
     },
   });

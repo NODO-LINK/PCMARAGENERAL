@@ -117,13 +117,14 @@ export function formatDate(value, withTime = false) {
  * @param {Function} opts.getRows - () => array de datos actuales (ya cargados en memoria).
  * @param {string} opts.dateField - nombre del campo fecha usado para filtrar.
  * @param {Function} opts.isAdmin - () => boolean.
- * @param {Function} [opts.onEdit] - (row) => void.
+ * @param {Function} [opts.onEdit] - (row) => void. Siempre requiere isAdmin().
  * @param {Function} [opts.onDelete] - (row) => void.
+ * @param {Function} [opts.canDelete] - (row) => boolean. Controla, POR FILA, si se muestra "Eliminar" — útil para permitir borrar solo registros propios a un rol no-admin. Si se omite, se usa isAdmin() para todas las filas (comportamiento de antes).
  * @param {string} [opts.exportFileName] - nombre base para exportaciones.
  * @param {[string,string]} [opts.firmas] - etiquetas de las dos firmas del pie de impresión.
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, exportFileName, firmas, totals, firmaEspacio } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -258,7 +259,7 @@ export function createHistorial(opts) {
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
           ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
-          ${admin && onDelete ? `<button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>` : ""}
+          ${onDelete && (canDelete ? canDelete(row) : admin) ? `<button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>` : ""}
         </td>
       </tr>`
       )
@@ -318,18 +319,20 @@ export function createHistorial(opts) {
         btn.onclick = () => printRegistro(rows.find((r) => r.id === btn.dataset.id));
       });
 
-    if (admin) {
-      el(`#${uid}-body`)
-        .querySelectorAll('[data-act="edit"]')
-        .forEach((btn) => {
-          btn.onclick = () => onEdit && onEdit(rows.find((r) => r.id === btn.dataset.id));
-        });
-      el(`#${uid}-body`)
-        .querySelectorAll('[data-act="del"]')
-        .forEach((btn) => {
-          btn.onclick = () => onDelete && onDelete(rows.find((r) => r.id === btn.dataset.id));
-        });
-    }
+    // El cableado no necesita repetir las condiciones de arriba: los
+    // botones "Editar"/"Eliminar" solo existen en el DOM cuando ya se
+    // decidió mostrarlos, así que querySelectorAll simplemente no
+    // encuentra nada si no corresponden a esta fila/usuario.
+    el(`#${uid}-body`)
+      .querySelectorAll('[data-act="edit"]')
+      .forEach((btn) => {
+        btn.onclick = () => onEdit && onEdit(rows.find((r) => r.id === btn.dataset.id));
+      });
+    el(`#${uid}-body`)
+      .querySelectorAll('[data-act="del"]')
+      .forEach((btn) => {
+        btn.onclick = () => onDelete && onDelete(rows.find((r) => r.id === btn.dataset.id));
+      });
   }
 
   el(`#${uid}-desde`).addEventListener("change", render);
