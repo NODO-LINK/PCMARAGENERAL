@@ -358,3 +358,18 @@ details[open] > summary .chevron {
     break-after: avoid;
   }
 }
+
+/* Mapa de estaciones de Pluviometría (API de Windy, ver js/hidrometeorologia.js):
+   oculta la barra de línea de tiempo/reproducción del pronóstico que Windy
+   agrega por defecto debajo del mapa — el pedido fue ver solo el tiempo
+   actual, sin controles para "adelantar" el pronóstico ni botón de play.
+   Los selectores son los que usa Windy en su propio sitio; si alguno no
+   aplica en una actualización futura de su librería, simplemente no hace
+   nada (no rompe el resto del mapa). */
+#mapa-pluvio #bottom,
+#mapa-pluvio #plugin-plugins,
+#mapa-pluvio [id*="timeline" i],
+#mapa-pluvio [class*="timeline" i],
+#mapa-pluvio [class*="time-slider" i] {
+  display: none !important;
+}
