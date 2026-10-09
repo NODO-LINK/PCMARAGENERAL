@@ -4,8 +4,8 @@
  * Módulo de Hidrometeorología — Monitoreo del Río Limón.
  *
  * El nivel se mide en msnm (metros sobre el nivel del mar), admite
- * decimales (ej. 2.5), y se carga manualmente desde este módulo (Fecha +
- * Nivel, sin hora). El módulo ofrece:
+ * decimales (ej. 2.5), y se carga manualmente desde este módulo (Fecha y
+ * hora + Nivel). El módulo ofrece:
  *  - Un dashboard en tiempo real (numérico + gráfico) con estados de
  *    alerta visual (Normal / Advertencia / Alerta Roja) según umbrales
  *    configurables por el administrador.
@@ -56,11 +56,11 @@ function picosPorMes(lecturasTodas) {
   return [...porMes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => v);
 }
 
-// Formato "YYYY-MM-DD" en hora LOCAL, tal como lo espera un input date
-// (evita el corrimiento de zona horaria de toISOString()).
+// Formato "YYYY-MM-DDTHH:MM" en hora LOCAL, tal como lo espera un input
+// datetime-local (evita el corrimiento de zona horaria de toISOString()).
 function fechaLocalInput(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 async function registrarLectura(nivel, fecha) {
@@ -82,7 +82,7 @@ function renderDashboard() {
   const badgeEl = document.getElementById("hidro-estado-badge");
   const fechaEl = document.getElementById("hidro-fecha-lectura");
   if (nivelEl) nivelEl.textContent = nivel !== null ? `${nivel} msnm` : "—";
-  if (fechaEl) fechaEl.textContent = ultima ? `Última lectura: ${formatDate(ultima.fecha)}` : "Sin lecturas registradas";
+  if (fechaEl) fechaEl.textContent = ultima ? `Última lectura: ${formatDate(ultima.fecha, true)}` : "Sin lecturas registradas";
 
   const colorClasses = {
     emerald: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -110,7 +110,7 @@ function renderChart() {
     coloresPuntos = picos.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
   } else {
     const ultimos = [...lecturas].slice(0, 20).reverse();
-    labels = ultimos.map((l) => formatDate(l.fecha));
+    labels = ultimos.map((l) => formatDate(l.fecha, true));
     data = ultimos.map((l) => Number(l.nivel));
     coloresPuntos = ultimos.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
   }
@@ -193,7 +193,7 @@ export async function initHidrometeorologia() {
     root: document.getElementById("historial-hidro"),
     title: "Historial de Lecturas — Río Limón",
     columns: [
-      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
+      { key: "fecha", label: "Fecha y hora", format: (r) => formatDate(r.fecha, true) },
       { key: "nivel", label: "Nivel (msnm)" },
       { key: "estado", label: "Estado" },
       { key: "responsable", label: "Responsable" },
