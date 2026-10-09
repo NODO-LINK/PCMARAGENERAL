@@ -179,7 +179,13 @@ function renderChart() {
   if (selectorEl) selectorEl.classList.toggle("hidden", chartModo !== "especifico");
   if (resumenEl) resumenEl.classList.toggle("hidden", chartModo !== "especifico");
 
-  let labels, data, coloresPuntos, datasetLabel;
+  // Para "Diario" y "Un mes" (lectura por lectura, pueden ser muchas): el
+  // eje muestra un simple número de orden (1, 2, 3...) en vez de la fecha
+  // completa, para que no se amontonen en diagonal y no quede espacio para
+  // ver la gráfica. La fecha/hora real de cada punto no se pierde: queda
+  // en `fechasCompletas` y se muestra al tocar/pasar el mouse por el punto
+  // (tooltip).
+  let labels, data, coloresPuntos, datasetLabel, fechasCompletas;
   if (chartModo === "especifico") {
     const claves = clavesMesesDisponibles(lecturas);
     if (selectorEl) poblarSelectorMeses(selectorEl, claves);
@@ -188,7 +194,8 @@ function renderChart() {
     const [anio, mes] = claveSeleccionada ? claveSeleccionada.split("-") : [];
     const nombreMes = claveSeleccionada ? new Date(Number(anio), Number(mes) - 1, 1).toLocaleString("es-VE", { month: "long", year: "numeric" }) : "";
 
-    labels = delMes.map((l) => formatDate(l.fecha, true));
+    labels = delMes.map((_, i) => String(i + 1));
+    fechasCompletas = delMes.map((l) => formatDate(l.fecha, true));
     data = delMes.map((l) => Number(l.nivel));
     coloresPuntos = delMes.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
     datasetLabel = nombreMes ? `Nivel en ${nombreMes} (msnm)` : "Nivel del Río Limón (msnm)";
@@ -220,7 +227,8 @@ function renderChart() {
     datasetLabel = "Nivel promedio mensual (msnm)";
   } else {
     const deHoy = lecturasDeHoy(lecturas);
-    labels = deHoy.map((l) => formatDate(l.fecha, true));
+    labels = deHoy.map((_, i) => String(i + 1));
+    fechasCompletas = deHoy.map((l) => formatDate(l.fecha, true));
     data = deHoy.map((l) => Number(l.nivel));
     coloresPuntos = deHoy.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
     datasetLabel = "Nivel del Río Limón — Hoy (msnm)";
@@ -251,8 +259,20 @@ function renderChart() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: fechasCompletas
+          ? {
+              callbacks: {
+                // Muestra la fecha/hora real del punto (no el numerito del
+                // eje, que es solo para ahorrar espacio).
+                title: (items) => fechasCompletas[items[0]?.dataIndex] || "",
+              },
+            }
+          : undefined,
+      },
       scales: {
+        x: fechasCompletas ? { title: { display: true, text: "N.º de lectura (toque un punto para ver la fecha)" } } : {},
         y: {
           beginAtZero: true,
           min: NIVEL_HIDRO_MIN,
