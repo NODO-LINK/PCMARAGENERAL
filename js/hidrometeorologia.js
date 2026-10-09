@@ -1173,7 +1173,7 @@ function inicializarMapaPronosticoFluvioSiHaceFalta() {
     return;
   }
 
-  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "satellite" }, (windyAPI) => {
+  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
     mapaPronosticoFluvio = windyAPI.map;
     setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
   });
