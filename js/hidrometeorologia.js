@@ -81,6 +81,19 @@ function claveMes(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Para la vista "Diario": lecturas de HOY, en orden cronológico. Si no se
+// cargó ninguna hoy, devuelve un arreglo vacío (el gráfico queda en blanco
+// a propósito, no muestra lecturas de días anteriores).
+function lecturasDeHoy(lecturasTodas) {
+  const hoy = new Date();
+  return lecturasTodas
+    .filter((l) => {
+      const d = toDate(l.fecha);
+      return d && !isNaN(d.getTime()) && d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+    })
+    .sort((a, b) => toDate(a.fecha).getTime() - toDate(b.fecha).getTime());
+}
+
 // Para la vista "Un mes": lista de meses ("YYYY-MM") que tienen al menos una
 // lectura, del más reciente al más antiguo (para el selector).
 function clavesMesesDisponibles(lecturasTodas) {
@@ -206,11 +219,11 @@ function renderChart() {
     coloresPuntos = promedios.map((p) => COLOR_HEX_ESTADO[calcularEstado(p.nivel).color]);
     datasetLabel = "Nivel promedio mensual (msnm)";
   } else {
-    const ultimos = [...lecturas].slice(0, 20).reverse();
-    labels = ultimos.map((l) => formatDate(l.fecha, true));
-    data = ultimos.map((l) => Number(l.nivel));
-    coloresPuntos = ultimos.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
-    datasetLabel = "Nivel del Río Limón (msnm)";
+    const deHoy = lecturasDeHoy(lecturas);
+    labels = deHoy.map((l) => formatDate(l.fecha, true));
+    data = deHoy.map((l) => Number(l.nivel));
+    coloresPuntos = deHoy.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
+    datasetLabel = "Nivel del Río Limón — Hoy (msnm)";
   }
 
   if (chart) chart.destroy();
