@@ -401,20 +401,26 @@ export async function initHidrometeorologia() {
 }
 
 function setupModoChart() {
-  const btnDiario = document.getElementById("hidro-chart-modo-diario");
-  const btnEspecifico = document.getElementById("hidro-chart-modo-especifico");
-  const btnMes = document.getElementById("hidro-chart-modo-mes");
-  const btnPicos = document.getElementById("hidro-chart-modo-picos");
+  // Mapa modo -> botón, en vez de variables sueltas: así, si el HTML en
+  // caché del navegador todavía no tiene alguno de los botones (quedó
+  // viejo mientras el JS ya se actualizó, o viceversa), los demás botones
+  // igual quedan funcionando en vez de que uno solo faltante cancele todo
+  // el cableado (eso fue justo lo que pasó con "Un mes" la primera vez).
+  const botones = {
+    diario: document.getElementById("hidro-chart-modo-diario"),
+    especifico: document.getElementById("hidro-chart-modo-especifico"),
+    mes: document.getElementById("hidro-chart-modo-mes"),
+    picos: document.getElementById("hidro-chart-modo-picos"),
+  };
   const selectorMes = document.getElementById("hidro-chart-mes-selector");
-  if (!btnDiario || !btnEspecifico || !btnMes || !btnPicos) return;
+  if (!Object.values(botones).some(Boolean)) return;
 
   const ACTIVO = "px-3 py-1.5 bg-navy-700 text-white";
   const INACTIVO = "px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50";
   function actualizarBotones() {
-    btnDiario.className = chartModo === "diario" ? ACTIVO : INACTIVO;
-    btnEspecifico.className = chartModo === "especifico" ? ACTIVO : INACTIVO;
-    btnMes.className = chartModo === "mes" ? ACTIVO : INACTIVO;
-    btnPicos.className = chartModo === "picos" ? ACTIVO : INACTIVO;
+    Object.entries(botones).forEach(([modo, btn]) => {
+      if (btn) btn.className = chartModo === modo ? ACTIVO : INACTIVO;
+    });
   }
 
   function elegirModo(modo) {
@@ -423,10 +429,9 @@ function setupModoChart() {
     renderChart();
   }
 
-  btnDiario.addEventListener("click", () => elegirModo("diario"));
-  btnEspecifico.addEventListener("click", () => elegirModo("especifico"));
-  btnMes.addEventListener("click", () => elegirModo("mes"));
-  btnPicos.addEventListener("click", () => elegirModo("picos"));
+  Object.entries(botones).forEach(([modo, btn]) => {
+    btn?.addEventListener("click", () => elegirModo(modo));
+  });
   selectorMes?.addEventListener("change", () => renderChart());
   actualizarBotones();
 }
