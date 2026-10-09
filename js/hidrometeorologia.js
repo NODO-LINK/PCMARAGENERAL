@@ -1098,40 +1098,56 @@ function renderChartPluvio() {
 // propio usuario vea el motivo exacto. Esto deja un aviso en el recuadro
 // del mapa (y en la consola del navegador, F12) si Windy no responde a
 // tiempo o lanza un error, en vez de quedar en blanco sin pista alguna.
-function windyInitConDiagnostico(contenedor, opciones, alListo) {
-  let resuelto = false;
-  const avisoTimeout = setTimeout(() => {
-    if (resuelto) return;
-    resuelto = true;
-    console.error("Windy no respondió a tiempo con estas opciones (revise la clave y su restricción de dominio en api.windy.com):", opciones);
-    contenedor.innerHTML =
-      '<p class="text-sm text-red-600 p-3">El mapa de Windy no cargó (tiempo agotado). Abra la consola del navegador (F12 → pestaña "Console") para ver el error exacto, y revise en api.windy.com que la clave tenga autorizado el dominio correcto.</p>';
-  }, 8000);
+//
+// Windy busca su contenedor por un id FIJO ("windy"), no por el que
+// nosotros le pongamos: sin él falla con 'Missing <div id="windy"> in the
+// BODY of the page'. Esa búsqueda ocurre DESPUÉS de validar la clave (un
+// paso asíncrono), así que el id se le presta al contenedor hasta que Windy
+// responde (o se agota el tiempo), no solo durante la llamada. Como no puede
+// haber dos elementos con ese id a la vez, los arranques se encolan: el
+// siguiente mapa espera a que el anterior termine de arrancar.
+let windyColaInit = Promise.resolve();
 
-  // Windy busca el contenedor por un id FIJO ("windy"), no por el que
-  // nosotros le pongamos — sin él falla con "Missing <div id='windy'> in
-  // the BODY of the page". Como hay dos mapas de Windy en la misma página
-  // (estaciones y pronóstico) no puede haber dos elementos con ese id a la
-  // vez, así que se lo prestamos solo durante el arranque (windyInit lee el
-  // elemento de una vez, al principio, antes de hacer nada asíncrono) y se
-  // lo devolvemos a su id real apenas termina la llamada.
-  const idOriginal = contenedor.id;
-  contenedor.id = "windy";
-  try {
-    window.windyInit(opciones, (windyAPI) => {
-      if (resuelto) return;
-      resuelto = true;
-      clearTimeout(avisoTimeout);
-      alListo(windyAPI);
-    });
-  } catch (err) {
-    resuelto = true;
-    clearTimeout(avisoTimeout);
-    console.error("Error al iniciar el mapa de Windy:", err);
-    contenedor.innerHTML = `<p class="text-sm text-red-600 p-3">Error al iniciar el mapa de Windy: ${escapeHTML(err?.message || String(err))}</p>`;
-  } finally {
-    contenedor.id = idOriginal;
-  }
+function windyInitConDiagnostico(contenedor, opciones, alListo) {
+  windyColaInit = windyColaInit.then(
+    () =>
+      new Promise((terminar) => {
+        const idOriginal = contenedor.id;
+        let resuelto = false;
+        const liberar = () => {
+          contenedor.id = idOriginal;
+          terminar();
+        };
+        const avisoTimeout = setTimeout(() => {
+          if (resuelto) return;
+          resuelto = true;
+          console.error("[mapa-windy v70] Windy no respondió a tiempo con estas opciones (revise la clave y su restricción de dominio en api.windy.com):", opciones);
+          contenedor.innerHTML =
+            '<p class="text-sm text-red-600 p-3">El mapa de Windy no cargó (tiempo agotado). Abra la consola del navegador (F12 → pestaña "Console") para ver el error exacto, y revise en api.windy.com que la clave tenga autorizado el dominio correcto.</p>';
+          liberar();
+        }, 8000);
+
+        contenedor.id = "windy";
+        try {
+          window.windyInit(opciones, (windyAPI) => {
+            if (resuelto) return;
+            resuelto = true;
+            clearTimeout(avisoTimeout);
+            try {
+              alListo(windyAPI);
+            } finally {
+              liberar();
+            }
+          });
+        } catch (err) {
+          resuelto = true;
+          clearTimeout(avisoTimeout);
+          console.error("[mapa-windy v70] Error al iniciar el mapa de Windy:", err);
+          contenedor.innerHTML = `<p class="text-sm text-red-600 p-3">Error al iniciar el mapa de Windy: ${escapeHTML(err?.message || String(err))}</p>`;
+          liberar();
+        }
+      })
+  );
 }
 
 /* ---------------- Mapa de pronóstico (Fluviometría) — Windy --------------- */
