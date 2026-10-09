@@ -61,6 +61,35 @@ export async function login(email, password) {
   return cred.user;
 }
 
+/**
+ * Traduce un código de error de Firebase Auth a un mensaje concreto en
+ * español, en vez de un genérico "credenciales inválidas" que mezcla
+ * causas muy distintas (contraseña incorrecta, usuario no existe, dominio
+ * no autorizado, cuenta deshabilitada, sin conexión...) y dificulta
+ * diagnosticar qué pasó realmente.
+ */
+export function loginErrorMessage(err) {
+  switch (err?.code) {
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Contraseña incorrecta. Verifique que no tenga espacios ni mayúsculas de más.";
+    case "auth/user-not-found":
+      return "No existe una cuenta con ese correo. Verifique que esté bien escrito.";
+    case "auth/invalid-email":
+      return "El correo ingresado no tiene un formato válido.";
+    case "auth/user-disabled":
+      return "Esta cuenta fue desactivada. Contacte al administrador.";
+    case "auth/too-many-requests":
+      return "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.";
+    case "auth/network-request-failed":
+      return "Sin conexión a internet. Verifique la red e intente de nuevo.";
+    case "auth/unauthorized-domain":
+      return "Este sitio (" + window.location.hostname + ") no está autorizado para iniciar sesión. Avise al administrador para que lo agregue en Firebase Console → Authentication → Settings → Authorized domains.";
+    default:
+      return "No se pudo iniciar sesión" + (err?.code ? " (" + err.code + ")" : "") + ". Intente de nuevo o avise al administrador.";
+  }
+}
+
 export async function logout() {
   await signOut(auth);
 }

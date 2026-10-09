@@ -8,7 +8,7 @@
  *  - El registro del Service Worker para capacidades PWA.
  * -----------------------------------------------------------------------
  */
-import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile } from "./auth.js";
+import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage } from "./auth.js";
 import { initRouter, registerView, navigateTo } from "./router.js";
 import { toast } from "./ui.js";
 import { renderIcons } from "./icons.js";
@@ -88,7 +88,7 @@ function wireLoginForm() {
       await login(email, password);
     } catch (err) {
       console.error(err);
-      errorEl.textContent = "Credenciales inválidas o usuario no registrado.";
+      errorEl.textContent = loginErrorMessage(err);
       errorEl.classList.remove("hidden");
     } finally {
       btn.disabled = false;

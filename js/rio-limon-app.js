@@ -17,7 +17,7 @@
  * redirige automáticamente a esta página — ver js/app.js).
  * -----------------------------------------------------------------------
  */
-import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile } from "./auth.js";
+import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage } from "./auth.js";
 import { initHidrometeorologia } from "./hidrometeorologia.js";
 import { renderIcons } from "./icons.js";
 
@@ -49,7 +49,7 @@ function wireLoginForm() {
       await login(email, password);
     } catch (err) {
       console.error(err);
-      errorEl.textContent = "Credenciales inválidas o usuario no registrado.";
+      errorEl.textContent = loginErrorMessage(err);
       errorEl.classList.remove("hidden");
     } finally {
       btn.disabled = false;
