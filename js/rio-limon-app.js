@@ -89,6 +89,17 @@ function boot() {
   });
 
   initAuth();
+
+  // Requisito técnico para que el navegador ofrezca "Agregar a pantalla de
+  // inicio" (instalación como app, con su propio ícono y sin barra de
+  // navegador) — reutiliza el mismo service worker que la app principal,
+  // que ya incluye esta página en su lista de archivos (ver APP_SHELL en
+  // service-worker.js).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch((err) => console.warn("Service worker no registrado:", err));
+    });
+  }
 }
 
 boot();

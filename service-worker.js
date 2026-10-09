@@ -12,13 +12,14 @@
 // Es lo que fuerza al navegador a descartar el caché viejo — si no se sube,
 // los usuarios pueden seguir viendo código desactualizado por días, incluso
 // después de recargar la página, hasta que limpien el caché a mano.
-const CACHE_NAME = "pc-gestion-shell-v39";
+const CACHE_NAME = "pc-gestion-shell-v40";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./rio-limon.html",
   "./js/rio-limon-app.js",
   "./manifest.json",
+  "./manifest-rio-limon.json",
   "./css/styles.css",
   "./js/app.js",
   "./js/config.js",
