@@ -270,6 +270,16 @@ function renderChart() {
               },
             }
           : undefined,
+        // Zoom SOLO dentro del gráfico (con dos dedos, o la rueda del mouse
+        // en computador): el resto de la página sigue sin poder pellizcarse
+        // (ver el viewport de rio-limon.html, user-scalable=no). "x" porque
+        // lo que suele apretarse son los puntos a lo ancho, no el nivel.
+        zoom: window.ChartZoom
+          ? {
+              zoom: { pinch: { enabled: true }, wheel: { enabled: true }, mode: "x" },
+              pan: { enabled: true, mode: "x" },
+            }
+          : undefined,
       },
       scales: {
         x: fechasCompletas ? { title: { display: true, text: "N.º de lectura (toque un punto para ver la fecha)" } } : {},
@@ -431,6 +441,10 @@ export async function initHidrometeorologia() {
   setupImportacionHidro();
   setupVaciarHidro();
   setupModoChart();
+
+  document.getElementById("btn-reset-zoom-hidro")?.addEventListener("click", () => {
+    chart?.resetZoom?.();
+  });
 }
 
 function setupModoChart() {

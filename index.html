@@ -34,6 +34,8 @@
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
@@ -428,6 +430,9 @@
             </div>
             <div id="hidro-chart-mes-resumen" class="hidden text-xs text-slate-500 mb-2"></div>
             <canvas id="chart-hidro" height="200"></canvas>
+            <div class="text-right mt-1">
+              <button type="button" id="btn-reset-zoom-hidro" class="text-xs text-slate-400 hover:text-slate-600 hover:underline">Pellizque o use la rueda del mouse para hacer zoom · Restablecer zoom</button>
+            </div>
           </div>
         </div>
 
