@@ -141,7 +141,7 @@ function renderDashboard() {
   const nivelEl = document.getElementById("hidro-nivel-actual");
   const badgeEl = document.getElementById("hidro-estado-badge");
   const fechaEl = document.getElementById("hidro-fecha-lectura");
-  if (nivelEl) nivelEl.textContent = nivel !== null ? `${nivel} msnm` : "—";
+  if (nivelEl) nivelEl.textContent = nivel !== null ? `${nivel}` : "—";
   if (fechaEl) fechaEl.textContent = ultima ? `Última lectura: ${formatDate(ultima.fecha, true)}` : "Sin lecturas registradas";
 
   const colorClasses = {
