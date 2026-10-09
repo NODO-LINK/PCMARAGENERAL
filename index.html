@@ -452,7 +452,10 @@
 
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
             <h3 class="font-semibold text-slate-700 mb-3">Pronóstico del tiempo — Viento y Lluvia (Zulia)</h3>
-            <div id="windy" class="mapa-windy rounded-md border border-slate-200" style="height: 450px;"></div>
+            <div class="mapa-windy rounded-md border border-slate-200" style="position: relative; height: 450px; overflow: hidden;">
+            <!-- Windy aplica sus propios estilos al elemento #windy (lo estira a pantalla completa); el recuadro de arriba tiene tamaño fijo y este se queda dentro de él -->
+            <div id="windy" style="position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important;"></div>
+          </div>
             <p class="text-xs text-slate-400 mt-2">Mapa de Windy.com — capa <strong>Lluvia</strong> (pronóstico del modelo meteorológico de Windy).</p>
           </div>
 

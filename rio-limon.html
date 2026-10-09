@@ -162,7 +162,10 @@
           <span id="pronostico-chevron" class="text-slate-400 transition-transform">▸</span>
         </button>
         <div id="panel-pronostico" class="hidden bg-white rounded-lg border border-slate-200 shadow-sm p-4">
-          <div id="windy" class="mapa-windy rounded-md border border-slate-200" style="height: 400px;"></div>
+          <div class="mapa-windy rounded-md border border-slate-200" style="position: relative; height: 400px; overflow: hidden;">
+            <!-- Windy aplica sus propios estilos al elemento #windy (lo estira a pantalla completa); el recuadro de arriba tiene tamaño fijo y este se queda dentro de él -->
+            <div id="windy" style="position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important;"></div>
+          </div>
           <p class="text-xs text-slate-400 mt-2">Mapa de Windy.com — capa <strong>Lluvia</strong> (pronóstico del modelo meteorológico de Windy).</p>
         </div>
 
