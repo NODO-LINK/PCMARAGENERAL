@@ -1103,7 +1103,7 @@ let marcadorTemporalNuevaEstacion = null;
 function inicializarMapaPluvioSiHaceFalta() {
   const contenedor = document.getElementById("mapa-pluvio");
   if (!contenedor || mapaPluvio || !window.L) return;
-  mapaPluvio = window.L.map(contenedor).setView([10.064, -72.568], 8);
+  mapaPluvio = window.L.map(contenedor, { gestureHandling: true }).setView([10.064, -72.568], 8);
   window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 18,
