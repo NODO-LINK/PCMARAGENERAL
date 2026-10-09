@@ -64,10 +64,10 @@ function wireLogout() {
   });
 }
 
-// El historial arranca colapsado para no ocupar media pantalla en un
-// celular; el botón lo despliega/oculta sin recargar nada (el componente
-// ya está renderizado por debajo, solo se le cambia la visibilidad).
-function wireHistorialToggle(btnId, panelId, chevronId, etiqueta) {
+// Secciones colapsadas por defecto para no ocupar media pantalla en un
+// celular (historial, pronóstico del tiempo); el botón las despliega/oculta
+// sin recargar nada, solo cambia la visibilidad de lo que ya está debajo.
+function wireColapsable(btnId, panelId, chevronId, etiqueta) {
   const btn = document.getElementById(btnId);
   const panel = document.getElementById(panelId);
   const chevron = document.getElementById(chevronId);
@@ -86,8 +86,9 @@ function boot() {
   renderIcons();
   wireLoginForm();
   wireLogout();
-  wireHistorialToggle("btn-toggle-historial-hidro", "historial-hidro", "historial-hidro-chevron", "historial de lecturas");
-  wireHistorialToggle("btn-toggle-historial-pluvio", "historial-pluvio", "historial-pluvio-chevron", "historial de lluvia");
+  wireColapsable("btn-toggle-historial-hidro", "historial-hidro", "historial-hidro-chevron", "historial de lecturas");
+  wireColapsable("btn-toggle-historial-pluvio", "historial-pluvio", "historial-pluvio-chevron", "historial de lluvia");
+  wireColapsable("btn-toggle-pronostico", "panel-pronostico", "pronostico-chevron", "pronóstico del tiempo");
 
   onAuthReady(({ user, profile }) => {
     const loginScreen = document.getElementById("login-screen");
