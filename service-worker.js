@@ -12,7 +12,7 @@
 // Es lo que fuerza al navegador a descartar el caché viejo — si no se sube,
 // los usuarios pueden seguir viendo código desactualizado por días, incluso
 // después de recargar la página, hasta que limpien el caché a mano.
-const CACHE_NAME = "pc-gestion-shell-v78";
+const CACHE_NAME = "pc-gestion-shell-v79";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -60,9 +60,16 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Estrategia: red primero para peticiones a Firebase/Firestore/Google APIs
-// (los datos deben ser siempre en tiempo real); "cache first" con
-// actualización en segundo plano para el resto del app shell estático.
+// Estrategia: las peticiones a Firebase/Google APIs/CDN/Windy no se
+// interceptan (los datos deben ser siempre en tiempo real). Para los
+// archivos de la propia app se usa "red primero": con conexión siempre se
+// descarga la versión más reciente (y se guarda copia); si no hay red, o el
+// servidor tarda más de 4 s, se sirve la copia guardada para que la app siga
+// abriendo sin internet. Antes era "caché primero", y por eso después de cada
+// actualización el navegador seguía mostrando código viejo hasta que el
+// usuario borraba los datos del sitio a mano.
+const TIEMPO_MAX_RED_MS = 4000;
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   const isRemoteApi = url.origin.includes("googleapis.com") || url.origin.includes("firebaseio.com") || url.origin.includes("gstatic.com") || url.origin.includes("cdn.") || url.origin.includes("windy.com");
@@ -70,21 +77,21 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || isRemoteApi) return; // dejar pasar sin interceptar
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      // "cache: no-store" evita que esta petición de fondo se resuelva con
-      // el caché HTTP del propio navegador (que podría estar tan viejo como
-      // el del Service Worker) — así la actualización en segundo plano
-      // siempre trae los bytes más recientes del servidor.
-      const fetchPromise = fetch(event.request, { cache: "no-store" })
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const desdeRed = fetch(event.request, { cache: "no-store" }).then((response) => {
+        if (response && response.status === 200) cache.put(event.request, response.clone());
+        return response;
+      });
+      desdeRed.catch(() => {}); // evita aviso de promesa sin atender si la red falla después del límite
+      try {
+        const limite = new Promise((_, rechazar) => setTimeout(() => rechazar(new Error("red lenta")), TIEMPO_MAX_RED_MS));
+        return await Promise.race([desdeRed, limite]);
+      } catch (err) {
+        const guardada = await cache.match(event.request);
+        if (guardada) return guardada;
+        return desdeRed; // sin copia guardada: esperar a la red lo que haga falta
+      }
+    })()
   );
 });
