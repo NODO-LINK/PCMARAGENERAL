@@ -257,12 +257,8 @@ export function createHistorial(opts) {
         ${columns.map((c) => `<td class="px-4 py-2 align-top">${escapeHTML(c.format ? c.format(row) : row[c.key] ?? "—")}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
-          ${
-            admin
-              ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>
-                 <button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>`
-              : ""
-          }
+          ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
+          ${admin && onDelete ? `<button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>` : ""}
         </td>
       </tr>`
       )

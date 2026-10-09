@@ -16,7 +16,7 @@
  */
 import { db, doc, getDoc, setDoc, serverTimestamp, collection, getDocs, writeBatch } from "./firebase.js";
 import { COLLECTIONS, UMBRALES_HIDRO_DEFAULT, NIVEL_HIDRO_MIN, NIVEL_HIDRO_MAX } from "./config.js";
-import { subscribeCollection, createRecord } from "./data.js";
+import { subscribeCollection, createRecord, deleteRecord } from "./data.js";
 import { createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, toast, confirmDialog } from "./ui.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
@@ -200,6 +200,16 @@ function renderUmbralesUI() {
 
 export function refreshHidrometeorologia() {
   renderDashboard();
+  refrescarFechaPorDefecto();
+}
+
+// Mantiene el campo "Fecha y hora" del formulario en el momento actual cada
+// vez que se entra/vuelve a esta vista (vía el router) o se regresa a la
+// pestaña — así el operador normalmente solo tiene que escribir el nivel,
+// sin corregir a mano una fecha que quedó vieja de una visita anterior.
+function refrescarFechaPorDefecto() {
+  const lecturaForm = document.getElementById("form-hidro-lectura");
+  if (lecturaForm) lecturaForm.elements["fecha"].value = fechaLocalInput();
 }
 
 export async function initHidrometeorologia() {
@@ -232,16 +242,38 @@ export async function initHidrometeorologia() {
     isAdmin,
     exportFileName: "Lecturas_Rio_Limon",
     firmas: ["Responsable", "Director"],
-    // Las lecturas hidrometeorológicas son de solo lectura una vez
-    // guardadas (registro instrumental); no se ofrece edición/eliminación
-    // para preservar la integridad de la serie histórica.
+    // Las lecturas hidrometeorológicas no se EDITAN una vez guardadas (no
+    // se ofrece onEdit, para preservar la integridad de la serie
+    // histórica) pero sí se pueden ELIMINAR si se cargaron por error —
+    // solo el administrador, igual que "Vaciar historial completo".
+    onDelete: async (row) => {
+      if (!row) return;
+      const ok = await confirmDialog({
+        title: "Eliminar lectura",
+        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (${row.nivel} msnm). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
+      });
+      if (!ok) return;
+      try {
+        await deleteRecord(COLLECTIONS.HIDRO_LECTURAS, row.id);
+        toast("Lectura eliminada.", "success");
+      } catch (err) {
+        console.error("Error eliminando lectura de Hidrometeorología:", err);
+        toast("No se pudo eliminar la lectura.", "error");
+      }
+    },
   });
 
   const lecturaForm = document.getElementById("form-hidro-lectura");
   if (lecturaForm) {
-    // Precarga la fecha de hoy para que el operador normalmente solo tenga
-    // que escribir el nivel.
+    // Precarga la fecha/hora de ahora para que el operador normalmente solo
+    // tenga que escribir el nivel. Se refresca también al volver a la
+    // pestaña (ej. rio-limon.html, que al no tener router no pasa por
+    // refreshHidrometeorologia()), para que no quede vieja si la página se
+    // dejó abierta un rato.
     lecturaForm.elements["fecha"].value = fechaLocalInput();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") refrescarFechaPorDefecto();
+    });
 
     lecturaForm.addEventListener("submit", async (e) => {
       e.preventDefault();
