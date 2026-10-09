@@ -1090,62 +1090,88 @@ function renderChartPluvio() {
   });
 }
 
-// Envoltorio con diagnóstico alrededor de window.windyInit: una clave
-// inválida o con el dominio no autorizado (ver api.windy.com → esa clave →
-// lápiz de editar → "restriction") puede dejar el mapa en blanco SIN
-// llamar de vuelta y sin lanzar ningún error visible — y como este entorno
-// no tiene acceso a windy.com para probarlo en vivo, hace falta que el
-// propio usuario vea el motivo exacto. Esto deja un aviso en el recuadro
-// del mapa (y en la consola del navegador, F12) si Windy no responde a
-// tiempo o lanza un error, en vez de quedar en blanco sin pista alguna.
+// Envoltorio alrededor de window.windyInit. Windy no siempre llama de
+// vuelta cuando algo falla: puede rechazar una promesa interna (con o sin
+// mensaje) y dejar el mapa en blanco. Como este entorno no tiene acceso a
+// windy.com para probarlo en vivo, esto prueba una lista de configuraciones
+// ("variantes") en orden — por ejemplo capas que la clave gratuita quizá no
+// trae — detectando el fallo por la promesa rechazada o por tiempo agotado, y
+// deja cada intento registrado en la consola (F12) para poder diagnosticar.
 //
-// Windy busca su contenedor por un id FIJO ("windy"), no por el que
-// nosotros le pongamos: sin él falla con 'Missing <div id="windy"> in the
-// BODY of the page'. Esa búsqueda ocurre DESPUÉS de validar la clave (un
-// paso asíncrono), así que el id se le presta al contenedor hasta que Windy
-// responde (o se agota el tiempo), no solo durante la llamada. Como no puede
-// haber dos elementos con ese id a la vez, los arranques se encolan: el
-// siguiente mapa espera a que el anterior termine de arrancar.
+// Windy busca su contenedor por un id FIJO ("windy"): sin él falla con
+// 'Missing <div id="windy"> in the BODY of the page'. Esa búsqueda ocurre
+// DESPUÉS de validar la clave (paso asíncrono), así que el id se le presta al
+// contenedor hasta que Windy responde (o se agotan los intentos). Los
+// arranques se encolan para que nunca haya dos elementos con ese id a la vez.
+// Entre intentos el contenedor se reemplaza por uno nuevo y vacío, porque
+// Leaflet no deja crear un segundo mapa sobre el mismo elemento.
 let windyColaInit = Promise.resolve();
 
-function windyInitConDiagnostico(contenedor, opciones, alListo) {
+function windyInitConDiagnostico(contenedorInicial, variantes, alListo) {
   windyColaInit = windyColaInit.then(
     () =>
       new Promise((terminar) => {
+        let contenedor = contenedorInicial;
         const idOriginal = contenedor.id;
-        let resuelto = false;
-        const liberar = () => {
+        const TIEMPO_POR_INTENTO = 6000;
+
+        const terminarConMensaje = (html) => {
+          contenedor.innerHTML = html;
           contenedor.id = idOriginal;
           terminar();
         };
-        const avisoTimeout = setTimeout(() => {
-          if (resuelto) return;
-          resuelto = true;
-          console.error("[mapa-windy v70] Windy no respondió a tiempo con estas opciones (revise la clave y su restricción de dominio en api.windy.com):", opciones);
-          contenedor.innerHTML =
-            '<p class="text-sm text-red-600 p-3">El mapa de Windy no cargó (tiempo agotado). Abra la consola del navegador (F12 → pestaña "Console") para ver el error exacto, y revise en api.windy.com que la clave tenga autorizado el dominio correcto.</p>';
-          liberar();
-        }, 8000);
 
-        contenedor.id = "windy";
-        try {
-          window.windyInit(opciones, (windyAPI) => {
+        const intentar = (i) => {
+          const opciones = variantes[i];
+          let resuelto = false;
+          let avisoTimeout;
+
+          const limpiar = () => {
+            clearTimeout(avisoTimeout);
+            window.removeEventListener("unhandledrejection", alRechazar);
+          };
+          const fallar = (motivo) => {
             if (resuelto) return;
             resuelto = true;
-            clearTimeout(avisoTimeout);
-            try {
-              alListo(windyAPI);
-            } finally {
-              liberar();
+            limpiar();
+            console.error(`[mapa-windy v74] Intento ${i + 1}/${variantes.length} falló (${motivo}) con:`, opciones);
+            if (i + 1 < variantes.length) {
+              const nuevo = contenedor.cloneNode(false);
+              nuevo.id = idOriginal;
+              contenedor.replaceWith(nuevo);
+              contenedor = nuevo;
+              intentar(i + 1);
+            } else {
+              terminarConMensaje(
+                '<p class="text-sm text-red-600 p-3">El mapa de Windy no pudo cargar con ninguna configuración. Abra la consola del navegador (F12 → pestaña "Console") y envíe una captura de los mensajes "[mapa-windy v74]".</p>'
+              );
             }
-          });
-        } catch (err) {
-          resuelto = true;
-          clearTimeout(avisoTimeout);
-          console.error("[mapa-windy v70] Error al iniciar el mapa de Windy:", err);
-          contenedor.innerHTML = `<p class="text-sm text-red-600 p-3">Error al iniciar el mapa de Windy: ${escapeHTML(err?.message || String(err))}</p>`;
-          liberar();
-        }
+          };
+          function alRechazar(ev) {
+            fallar(`promesa rechazada: ${ev.reason?.message || String(ev.reason)}`);
+          }
+
+          window.addEventListener("unhandledrejection", alRechazar);
+          avisoTimeout = setTimeout(() => fallar("sin respuesta a tiempo"), TIEMPO_POR_INTENTO);
+          contenedor.id = "windy";
+          try {
+            window.windyInit(opciones, (windyAPI) => {
+              if (resuelto) return;
+              resuelto = true;
+              limpiar();
+              try {
+                alListo(windyAPI);
+              } finally {
+                contenedor.id = idOriginal;
+                terminar();
+              }
+            });
+          } catch (err) {
+            fallar(`excepción: ${err?.message || String(err)}`);
+          }
+        };
+
+        intentar(0);
       })
   );
 }
@@ -1173,10 +1199,15 @@ function inicializarMapaPronosticoFluvioSiHaceFalta() {
     return;
   }
 
-  windyInitConDiagnostico(contenedor, { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
-    mapaPronosticoFluvio = windyAPI.map;
-    setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
-  });
+  const base = { key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8 };
+  windyInitConDiagnostico(
+    contenedor,
+    [{ ...base, overlay: "rain" }, { ...base, overlay: "rain", product: "gfs" }, { ...base, overlay: "wind" }, { ...base, overlay: "clouds" }, { ...base }],
+    (windyAPI) => {
+      mapaPronosticoFluvio = windyAPI.map;
+      setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
+    }
+  );
 }
 
 // Usado por rio-limon.html, donde este mapa vive dentro de una sección
