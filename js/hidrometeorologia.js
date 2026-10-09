@@ -1109,8 +1109,7 @@ let pronosticoIniciado = false;
 // Windy puede tardar en llamar de vuelta (o rechazar una promesa interna sin
 // consecuencias, "Uncaught (in promise) undefined") aunque el mapa ya se
 // esté mostrando, así que NO se da por fallido ni se borra nada solo porque
-// la llamada de vuelta tarde: el aviso de error solo sale si pasado un buen
-// rato no apareció ningún mapa en el recuadro.
+// la llamada de vuelta tarde. Nunca se escribe nada encima del mapa.
 function inicializarMapaPronosticoFluvioSiHaceFalta() {
   const contenedor = document.getElementById("windy");
   if (!contenedor || pronosticoIniciado) return;
@@ -1126,22 +1125,13 @@ function inicializarMapaPronosticoFluvioSiHaceFalta() {
   }
 
   pronosticoIniciado = true;
-  const avisoSinMapa = setTimeout(() => {
-    if (contenedor.classList.contains("leaflet-container")) return;
-    console.error("[mapa-windy v75] No apareció ningún mapa de Windy en 30 segundos. Revise la clave y su restricción de dominio en api.windy.com.");
-    contenedor.innerHTML =
-      '<p class="text-sm text-red-600 p-3">El mapa de Windy no cargó. Abra la consola del navegador (F12 → pestaña "Console") para ver el error exacto, y revise en api.windy.com que la clave tenga autorizado el dominio correcto.</p>';
-  }, 30000);
-
   try {
     window.windyInit({ key: WINDY_API_KEY, lat: 10.064, lon: -72.568, zoom: 8, overlay: "rain" }, (windyAPI) => {
-      clearTimeout(avisoSinMapa);
       mapaPronosticoFluvio = windyAPI.map;
       setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 150);
     });
   } catch (err) {
-    clearTimeout(avisoSinMapa);
-    console.error("[mapa-windy v75] Error al iniciar el mapa de Windy:", err);
+    console.error("[mapa-windy v77] Error al iniciar el mapa de Windy:", err);
     contenedor.innerHTML = `<p class="text-sm text-red-600 p-3">Error al iniciar el mapa de Windy: ${escapeHTML(err?.message || String(err))}</p>`;
   }
 }
@@ -1345,6 +1335,9 @@ function setupSubtabsHidro() {
       document.querySelectorAll("#view-hidro .subtab-panel").forEach((p) => p.classList.add("hidden"));
       document.getElementById(`panel-${btn.dataset.subtab}`)?.classList.remove("hidden");
       tabs.forEach((b) => b.classList.toggle("subtab-active", b === btn));
+      if (btn.dataset.subtab === "fluviometria") {
+        setTimeout(() => mapaPronosticoFluvio?.invalidateSize(), 100);
+      }
       if (btn.dataset.subtab === "pluviometria") {
         inicializarMapaPluvioSiHaceFalta();
         // El mapa ya puede existir de una visita anterior a esta pestaña,
