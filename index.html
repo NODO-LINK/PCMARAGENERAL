@@ -416,12 +416,17 @@
           <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-4 lg:col-span-2">
             <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h3 class="font-semibold text-slate-700">Tendencia de nivel</h3>
-              <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-xs font-semibold">
-                <button type="button" id="hidro-chart-modo-diario" class="px-3 py-1.5 bg-navy-700 text-white">Diario</button>
-                <button type="button" id="hidro-chart-modo-mes" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Mes (promedio)</button>
-                <button type="button" id="hidro-chart-modo-picos" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Picos del mes</button>
+              <div class="flex items-center flex-wrap gap-2">
+                <select id="hidro-chart-mes-selector" class="hidden text-xs font-semibold border border-slate-300 rounded-md px-2 py-1.5"></select>
+                <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-xs font-semibold">
+                  <button type="button" id="hidro-chart-modo-diario" class="px-3 py-1.5 bg-navy-700 text-white">Diario</button>
+                  <button type="button" id="hidro-chart-modo-especifico" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Un mes</button>
+                  <button type="button" id="hidro-chart-modo-mes" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Mes (promedio)</button>
+                  <button type="button" id="hidro-chart-modo-picos" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Picos del mes</button>
+                </div>
               </div>
             </div>
+            <div id="hidro-chart-mes-resumen" class="hidden text-xs text-slate-500 mb-2"></div>
             <canvas id="chart-hidro" height="200"></canvas>
           </div>
         </div>

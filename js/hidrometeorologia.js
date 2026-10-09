@@ -24,7 +24,7 @@ import { leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtil
 let lecturas = [];
 let umbrales = { ...UMBRALES_HIDRO_DEFAULT };
 let chart = null;
-let chartModo = "diario"; // "diario" | "mes" (promedio) | "picos" (máximo)
+let chartModo = "diario"; // "diario" | "especifico" (un mes puntual) | "mes" (promedio por mes) | "picos" (máximo por mes)
 
 function calcularEstado(nivel) {
   if (nivel === null || nivel === undefined || isNaN(nivel)) return { label: "Sin datos", color: "slate" };
@@ -77,6 +77,32 @@ function promediosPorMes(lecturasTodas) {
     .map(([, v]) => ({ fecha: v.fecha, nivel: Math.round((v.suma / v.cantidad) * 100) / 100 }));
 }
 
+function claveMes(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Para la vista "Un mes": lista de meses ("YYYY-MM") que tienen al menos una
+// lectura, del más reciente al más antiguo (para el selector).
+function clavesMesesDisponibles(lecturasTodas) {
+  const claves = new Set();
+  lecturasTodas.forEach((l) => {
+    const d = toDate(l.fecha);
+    if (d && !isNaN(d.getTime())) claves.add(claveMes(d));
+  });
+  return [...claves].sort().reverse();
+}
+
+// Para la vista "Un mes": todas las lecturas de un mes específico, en orden
+// cronológico (no solo las últimas 20, como en "Diario").
+function lecturasDeMes(lecturasTodas, clave) {
+  return lecturasTodas
+    .filter((l) => {
+      const d = toDate(l.fecha);
+      return d && !isNaN(d.getTime()) && claveMes(d) === clave;
+    })
+    .sort((a, b) => toDate(a.fecha).getTime() - toDate(b.fecha).getTime());
+}
+
 // Formato "YYYY-MM-DDTHH:MM" en hora LOCAL, tal como lo espera un input
 // datetime-local (evita el corrimiento de zona horaria de toISOString()).
 function fechaLocalInput(d = new Date()) {
@@ -119,12 +145,55 @@ function renderDashboard() {
   renderChart();
 }
 
+function poblarSelectorMeses(selectEl, claves) {
+  const valorPrevio = selectEl.value;
+  selectEl.innerHTML = claves
+    .map((clave) => {
+      const [anio, mes] = clave.split("-");
+      const etiqueta = new Date(Number(anio), Number(mes) - 1, 1).toLocaleString("es-VE", { month: "long", year: "numeric" });
+      return `<option value="${clave}">${etiqueta.charAt(0).toUpperCase()}${etiqueta.slice(1)}</option>`;
+    })
+    .join("");
+  selectEl.value = claves.includes(valorPrevio) ? valorPrevio : claves[0] || "";
+}
+
 function renderChart() {
   const canvas = document.getElementById("chart-hidro");
   if (!canvas || !window.Chart) return;
 
+  const selectorEl = document.getElementById("hidro-chart-mes-selector");
+  const resumenEl = document.getElementById("hidro-chart-mes-resumen");
+  if (selectorEl) selectorEl.classList.toggle("hidden", chartModo !== "especifico");
+  if (resumenEl) resumenEl.classList.toggle("hidden", chartModo !== "especifico");
+
   let labels, data, coloresPuntos, datasetLabel;
-  if (chartModo === "picos") {
+  if (chartModo === "especifico") {
+    const claves = clavesMesesDisponibles(lecturas);
+    if (selectorEl) poblarSelectorMeses(selectorEl, claves);
+    const claveSeleccionada = selectorEl?.value || "";
+    const delMes = claveSeleccionada ? lecturasDeMes(lecturas, claveSeleccionada) : [];
+    const [anio, mes] = claveSeleccionada ? claveSeleccionada.split("-") : [];
+    const nombreMes = claveSeleccionada ? new Date(Number(anio), Number(mes) - 1, 1).toLocaleString("es-VE", { month: "long", year: "numeric" }) : "";
+
+    labels = delMes.map((l) => formatDate(l.fecha, true));
+    data = delMes.map((l) => Number(l.nivel));
+    coloresPuntos = delMes.map((l) => COLOR_HEX_ESTADO[calcularEstado(Number(l.nivel)).color]);
+    datasetLabel = nombreMes ? `Nivel en ${nombreMes} (msnm)` : "Nivel del Río Limón (msnm)";
+
+    if (resumenEl) {
+      if (!claveSeleccionada) {
+        resumenEl.textContent = "Sin lecturas registradas todavía.";
+      } else if (!delMes.length) {
+        resumenEl.textContent = `Sin lecturas en ${nombreMes}.`;
+      } else {
+        const niveles = data;
+        const minimo = Math.min(...niveles);
+        const maximo = Math.max(...niveles);
+        const promedio = Math.round((niveles.reduce((a, b) => a + b, 0) / niveles.length) * 100) / 100;
+        resumenEl.textContent = `${delMes.length} lectura(s) en ${nombreMes} — Mínimo: ${minimo} msnm · Máximo: ${maximo} msnm · Promedio: ${promedio} msnm`;
+      }
+    }
+  } else if (chartModo === "picos") {
     const picos = picosPorMes(lecturas);
     labels = picos.map((p) => p.fecha.toLocaleString("es-VE", { month: "short", year: "numeric" }));
     data = picos.map((p) => p.nivel);
@@ -333,14 +402,17 @@ export async function initHidrometeorologia() {
 
 function setupModoChart() {
   const btnDiario = document.getElementById("hidro-chart-modo-diario");
+  const btnEspecifico = document.getElementById("hidro-chart-modo-especifico");
   const btnMes = document.getElementById("hidro-chart-modo-mes");
   const btnPicos = document.getElementById("hidro-chart-modo-picos");
-  if (!btnDiario || !btnMes || !btnPicos) return;
+  const selectorMes = document.getElementById("hidro-chart-mes-selector");
+  if (!btnDiario || !btnEspecifico || !btnMes || !btnPicos) return;
 
   const ACTIVO = "px-3 py-1.5 bg-navy-700 text-white";
   const INACTIVO = "px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50";
   function actualizarBotones() {
     btnDiario.className = chartModo === "diario" ? ACTIVO : INACTIVO;
+    btnEspecifico.className = chartModo === "especifico" ? ACTIVO : INACTIVO;
     btnMes.className = chartModo === "mes" ? ACTIVO : INACTIVO;
     btnPicos.className = chartModo === "picos" ? ACTIVO : INACTIVO;
   }
@@ -352,8 +424,10 @@ function setupModoChart() {
   }
 
   btnDiario.addEventListener("click", () => elegirModo("diario"));
+  btnEspecifico.addEventListener("click", () => elegirModo("especifico"));
   btnMes.addEventListener("click", () => elegirModo("mes"));
   btnPicos.addEventListener("click", () => elegirModo("picos"));
+  selectorMes?.addEventListener("change", () => renderChart());
   actualizarBotones();
 }
 
