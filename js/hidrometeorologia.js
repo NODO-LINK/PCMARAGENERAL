@@ -530,7 +530,7 @@ function imprimirMesFluviometria() {
       </table>
     </div>`;
 
-  printAdHoc(`${rioActual()?.nombre || "Río"} — ${nombreMes}`, bodyHTML, ["Responsable", "Director"]);
+  printAdHoc(`${rioActual()?.nombre || "Río"} — ${nombreMes}`, bodyHTML, ["Jefe de Departamento", "Director"]);
 }
 
 /* -------------------------------- Historial ------------------------------ */
@@ -552,7 +552,7 @@ function construirHistorialFluvio() {
     getRows: () => lecturasDelRioConVariacion(),
     isAdmin,
     exportFileName: `Lecturas_${nombreRio.replace(/\s+/g, "_")}`,
-    firmas: ["Responsable", "Director"],
+    firmas: ["Jefe de Departamento", "Director"],
     // Las lecturas no se EDITAN una vez guardadas (preserva la serie
     // histórica), pero SÍ se pueden eliminar: el administrador borra
     // cualquiera; el rol Hidro solo las que él mismo cargó (coincide con
@@ -1267,7 +1267,7 @@ function construirHistorialPluvio() {
     getRows: () => lluviasDeEstacion(),
     isAdmin,
     exportFileName: `Lluvia_${nombreEstacion.replace(/\s+/g, "_")}`,
-    firmas: ["Responsable", "Director"],
+    firmas: ["Jefe de Departamento", "Director"],
     canDelete: (row) => isAdmin() || (isHidro() && row.createdBy === getCurrentUser()?.uid),
     onDelete: async (row) => {
       if (!row) return;

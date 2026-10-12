@@ -390,7 +390,7 @@ export function printHeaderHTML(subtitle) {
  *   pensado para que reportes largos no empujen la firma a otra hoja).
  */
 export function printFooterHTML(firmas, espacioRem) {
-  const labels = firmas && firmas.length === 2 ? firmas : ["Responsable", "Departamento"];
+  const labels = firmas && firmas.length === 2 ? firmas : ["Jefe de Departamento", "Director"];
   const estiloExtra = espacioRem ? ` style="margin-top:${espacioRem}rem"` : "";
   return `
     <div class="print-signatures"${estiloExtra}>

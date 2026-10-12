@@ -17,7 +17,7 @@ export function initCombustible() {
     historialRoot: document.getElementById("historial-combustible"),
     dateField: "fecha",
     historialTitle: "Historial de Despachos de Combustible",
-    firmas: ["Despachador", "Director"],
+    firmas: ["Jefe de Departamento", "Director"],
     columns: [
       { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
       { key: "institucionNombre", label: "Institución" },

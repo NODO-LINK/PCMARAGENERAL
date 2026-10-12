@@ -101,7 +101,7 @@ export function initEmergencias() {
     historialRoot: document.getElementById("historial-traslados"),
     dateField: "fecha",
     historialTitle: "Historial de Traslados",
-    firmas: ["Médico", "Jefe de Departamento"],
+    firmas: ["Jefe de Departamento", "Director"],
     columns: [
       { key: "fecha", label: "Fecha/Hora", format: (r) => formatDate(r.fecha, true) },
       { key: "tipo", label: "Tipo" },
