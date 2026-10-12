@@ -8,11 +8,10 @@
  *  - El registro del Service Worker para capacidades PWA.
  * -----------------------------------------------------------------------
  */
-import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage, getDepartamento, vistaInicial } from "./auth.js";
+import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage, getDepartamento, esSoloHidro, vistaInicial } from "./auth.js";
 import { initRouter, registerView, navigateTo } from "./router.js";
 import { toast } from "./ui.js";
 import { renderIcons } from "./icons.js";
-import { ROLES } from "./config.js";
 
 import { initCatalogos } from "./catalogos.js";
 import { initDashboard, refreshDashboard } from "./dashboard.js";
@@ -163,7 +162,7 @@ function boot() {
       // reglas de seguridad le bloquean leer casi todos los módulos, lo
       // que llenaría la pantalla de errores de permisos); se le redirige a
       // su página dedicada, que es la que de verdad puede usar.
-      if (profile.rol === ROLES.HIDRO) {
+      if (esSoloHidro()) {
         window.location.replace("./rio-limon.html");
         return;
       }

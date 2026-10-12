@@ -41,7 +41,14 @@ export const ROLES = {
   DEP_EDUCACION: "dep_educacion",
   DEP_INSPECCION: "dep_inspeccion",
   DEP_INVENTARIO: "dep_inventario",
+  // Rol "genérico" de departamentos: el perfil trae además `departamentos`,
+  // una lista de 1 a MAX_DEPARTAMENTOS roles de departamento (los de arriba
+  // y HIDRO). Es lo que crea el panel de Usuarios; los roles de un solo
+  // departamento (dep_*, hidro) siguen funcionando igual que antes.
+  DEPARTAMENTOS: "departamentos",
 };
+
+export const MAX_DEPARTAMENTOS = 3;
 
 // Nombres de colecciones de Firestore (única fuente de verdad para evitar
 // errores de tipeo en el resto de los módulos).
@@ -149,6 +156,32 @@ export const DEPARTAMENTOS = {
     leer: [COLLECTIONS.HIDRO_LECTURAS, COLLECTIONS.RIOS, COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, COLLECTIONS.PLUVIOMETRIA_LECTURAS],
   },
 };
+
+/**
+ * Roles de departamento que tiene un perfil: [rol] si es de un solo
+ * departamento (dep_*, hidro), o la lista `departamentos` si es del rol
+ * genérico. Ignora valores desconocidos y limita a MAX_DEPARTAMENTOS.
+ */
+export function departamentosDePerfil(perfil) {
+  if (!perfil) return [];
+  if (DEPARTAMENTOS[perfil.rol]) return [perfil.rol];
+  if (perfil.rol === ROLES.DEPARTAMENTOS && Array.isArray(perfil.departamentos)) {
+    return [...new Set(perfil.departamentos)].filter((r) => DEPARTAMENTOS[r]).slice(0, MAX_DEPARTAMENTOS);
+  }
+  return [];
+}
+
+/** Une la configuración de varios departamentos (vistas, módulos y lecturas). */
+export function configDepartamentos(roles) {
+  if (!roles.length) return null;
+  const union = (campo) => [...new Set(roles.flatMap((r) => DEPARTAMENTOS[r][campo]))];
+  return {
+    nombre: roles.map((r) => DEPARTAMENTOS[r].nombre).join(" · "),
+    vistas: union("vistas"),
+    modulos: union("modulos"),
+    leer: union("leer"),
+  };
+}
 
 // Almacenes / ubicaciones de inventario independientes entre sí.
 export const ALMACENES = ["Depósito", "Módulo", "Oficina", "Ambulancia"];

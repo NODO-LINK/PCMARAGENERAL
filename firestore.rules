@@ -18,9 +18,10 @@ rules_version = '2';
  *     restricción está aplicada aquí, no solo ocultando botones en la UI,
  *     para que sea real aunque inicie sesión con la app completa.
  *   - DEPARTAMENTO (dep_emergencias, dep_guardias, dep_combustible,
- *     dep_educacion, dep_inspeccion, dep_inventario): un trabajador por
- *     departamento que SOLO puede leer y crear en las colecciones de su
- *     departamento (más el catálogo/inventario que ese módulo necesita);
+ *     dep_educacion, dep_inspeccion, dep_inventario, hidro): un trabajador
+ *     con acceso a uno o varios departamentos (rol 'departamentos' + lista
+ *     `departamentos` en su perfil) que SOLO puede leer y crear en las
+ *     colecciones de sus departamentos (más el catálogo/inventario que ese módulo necesita);
  *     igual que el Operador, no edita ni elimina registros guardados. Debe
  *     coincidir con DEPARTAMENTOS en js/config.js.
  *   - Los catálogos maestros (instituciones, categorías de insumos,
@@ -55,15 +56,22 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.rol == 'operador' && userDoc().data.activo != false;
     }
 
-    // Rol restringido solo a Hidrometeorología (ver nota arriba).
+    // Acceso a Hidrometeorología: rol 'hidro' (un solo departamento) o el rol
+    // genérico 'departamentos' que incluya 'hidro' en su lista.
     function isHidroOperador() {
-      return isSignedIn() && userDoc().data.rol == 'hidro' && userDoc().data.activo != false;
+      return hasAnyRole(['hidro']);
     }
 
     // Rol de departamento: true si el usuario activo tiene alguno de los
     // roles de la lista (ej. ['dep_emergencias', 'dep_inventario']).
+    //  - Rol de un solo departamento: su valor está en la lista (rol 'dep_guardias').
+    //  - Rol genérico 'departamentos': el perfil trae `departamentos`, una lista
+    //    (de 1 a 3 en la interfaz) y basta con que alguno esté en `roles`.
     function hasAnyRole(roles) {
-      return isSignedIn() && userDoc().data.rol in roles && userDoc().data.activo != false;
+      return isSignedIn() && userDoc().data.activo != false && (
+        userDoc().data.rol in roles ||
+        (userDoc().data.rol == 'departamentos' && userDoc().data.departamentos.hasAny(roles))
+      );
     }
 
     // Leer / crear en un módulo: Administrador, Operador o alguno de los

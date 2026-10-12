@@ -23,7 +23,7 @@ import {
   createUserWithEmailAndPassword,
   getSecondaryAuth,
 } from "./firebase.js";
-import { COLLECTIONS, ROLES, DEPARTAMENTOS } from "./config.js";
+import { COLLECTIONS, ROLES, departamentosDePerfil, configDepartamentos } from "./config.js";
 import { signOut as fbSignOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import { toast } from "./ui.js";
 
@@ -56,9 +56,20 @@ export function isHidro() {
   return currentProfile?.rol === ROLES.HIDRO;
 }
 
-/** Configuración del departamento del usuario actual, o null si es Admin/Operador. */
+/** Configuración combinada de los departamentos del usuario actual, o null si es Admin/Operador. */
 export function getDepartamento() {
-  return DEPARTAMENTOS[currentProfile?.rol] || null;
+  return configDepartamentos(departamentosDePerfil(currentProfile));
+}
+
+/** ¿El perfil tiene algún acceso válido? (Admin, Operador o al menos un departamento reconocido) */
+export function tieneAcceso() {
+  return isAdmin() || isOperador() || departamentosDePerfil(currentProfile).length > 0;
+}
+
+/** ¿Su único departamento es Hidrometeorología? (entonces usa la página rio-limon.html) */
+export function esSoloHidro() {
+  const deps = departamentosDePerfil(currentProfile);
+  return deps.length === 1 && deps[0] === ROLES.HIDRO;
 }
 
 /** ¿Puede la interfaz abrir esta colección? (las reglas de Firestore son la barrera real). */
@@ -122,7 +133,7 @@ export async function logout() {
 }
 
 /** Crea un nuevo usuario (solo administradores) sin cerrar la sesión actual. */
-export async function adminCreateUser({ email, password, nombre, rol }) {
+export async function adminCreateUser({ email, password, nombre, rol, departamentos }) {
   if (!isAdmin()) throw new Error("Solo un administrador puede crear usuarios.");
   const secondaryAuth = getSecondaryAuth();
   let uid;
@@ -152,6 +163,7 @@ export async function adminCreateUser({ email, password, nombre, rol }) {
     email,
     nombre,
     rol,
+    ...(rol === ROLES.DEPARTAMENTOS ? { departamentos } : {}),
     activo: true,
     createdAt: serverTimestamp(),
     createdBy: currentUser?.uid || null,
@@ -176,6 +188,16 @@ export function initAuth() {
         currentProfile = snap.data();
         if (currentProfile.activo === false) {
           toast("Su cuenta se encuentra desactivada. Contacte al administrador.", "error");
+          await signOut(auth);
+          return;
+        }
+        // Un rol desconocido, o "departamentos" sin ningún departamento válido,
+        // no debe dejar entrar (la interfaz lo trataría como si no tuviera
+        // restricciones y solo las reglas del servidor lo frenarían).
+        if (!tieneAcceso()) {
+          toast("Su cuenta no tiene departamentos asignados. Contacte al administrador.", "error");
+          currentUser = null;
+          currentProfile = null;
           await signOut(auth);
           return;
         }
