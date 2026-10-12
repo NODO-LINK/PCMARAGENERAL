@@ -238,7 +238,7 @@ function renderResumenGeneral() {
           ${filas.map((f) => `<tr class="border-t border-slate-100"><td class="px-4 py-2">${f.label}</td><td class="px-4 py-2 font-semibold">${f.unidad}</td></tr>`).join("")}
         </tbody>
       </table>
-      <div class="print-footer hidden">${printFooterHTML()}</div>
+      <div class="print-footer hidden">${printFooterHTML(["Departamento de Sistema", "Director"])}</div>
     </div>`;
 
   const exportBtn = document.getElementById("btn-resumen-print");
