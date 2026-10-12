@@ -32,6 +32,15 @@ export const ROLES = {
   // el resto de los módulos — la restricción se aplica también en
   // firestore.rules, no solo en la interfaz.
   HIDRO: "hidro",
+  // Un rol por departamento: cada trabajador solo ve y usa el suyo (ver
+  // DEPARTAMENTOS más abajo). Igual que HIDRO, la restricción se aplica
+  // también en firestore.rules, no solo en la interfaz.
+  DEP_EMERGENCIAS: "dep_emergencias",
+  DEP_GUARDIAS: "dep_guardias",
+  DEP_COMBUSTIBLE: "dep_combustible",
+  DEP_EDUCACION: "dep_educacion",
+  DEP_INSPECCION: "dep_inspeccion",
+  DEP_INVENTARIO: "dep_inventario",
 };
 
 // Nombres de colecciones de Firestore (única fuente de verdad para evitar
@@ -65,6 +74,80 @@ export const COLLECTIONS = {
   TRANSFERENCIAS_INVENTARIO: "transferenciasInventario",
   DEBITOS_INVENTARIO: "debitosInventario",
   CIERRES_DIARIOS: "cierresDiarios",
+};
+
+// Departamentos con acceso restringido. Para cada rol de departamento:
+//  - vistas:  pantallas (data-view del menú) que puede abrir; la primera es
+//             la que se muestra al entrar.
+//  - modulos: módulos de js/app.js que se inicializan para ese usuario.
+//  - leer:    colecciones que la interfaz le deja suscribirse. DEBE coincidir
+//             con lo que firestore.rules le permite leer (las reglas son la
+//             barrera real; esto evita pedir datos que el servidor rechazaría
+//             y llenar la pantalla de errores de permisos).
+// Emergencias necesita además el inventario (insumos usados en la lista
+// diaria descuentan existencias), y Emergencias/Combustible leen el catálogo
+// de instituciones para sus listas desplegables.
+export const DEPARTAMENTOS = {
+  [ROLES.DEP_EMERGENCIAS]: {
+    nombre: "Emergencias",
+    vistas: ["emergencias"],
+    modulos: ["catalogos", "inventario", "emergencias"],
+    leer: [
+      COLLECTIONS.PACIENTES,
+      COLLECTIONS.TRASLADOS,
+      COLLECTIONS.FALLECIDOS,
+      COLLECTIONS.INSTITUCIONES,
+      COLLECTIONS.CATEGORIAS_INSUMOS,
+      COLLECTIONS.INSUMOS,
+      COLLECTIONS.INSUMO_STOCK,
+      COLLECTIONS.DEBITOS_INVENTARIO,
+    ],
+  },
+  [ROLES.DEP_GUARDIAS]: {
+    nombre: "Guardias de Prevención",
+    vistas: ["guardias"],
+    modulos: ["guardias"],
+    leer: [COLLECTIONS.GUARDIAS],
+  },
+  [ROLES.DEP_COMBUSTIBLE]: {
+    nombre: "Combustible",
+    vistas: ["combustible"],
+    modulos: ["catalogos", "combustible"],
+    leer: [COLLECTIONS.DESPACHOS_COMBUSTIBLE, COLLECTIONS.INSTITUCIONES],
+  },
+  [ROLES.DEP_EDUCACION]: {
+    nombre: "Educación",
+    vistas: ["educacion"],
+    modulos: ["educacion"],
+    leer: [COLLECTIONS.EDUCACION],
+  },
+  [ROLES.DEP_INSPECCION]: {
+    nombre: "Gestión de Riesgo",
+    vistas: ["inspeccion"],
+    modulos: ["inspeccion"],
+    leer: [COLLECTIONS.INSPECCIONES],
+  },
+  [ROLES.DEP_INVENTARIO]: {
+    nombre: "Inventario",
+    vistas: ["inventario"],
+    modulos: ["catalogos", "inventario"],
+    leer: [
+      COLLECTIONS.CATEGORIAS_INSUMOS,
+      COLLECTIONS.INSUMOS,
+      COLLECTIONS.INSUMO_STOCK,
+      COLLECTIONS.ENTRADAS_INVENTARIO,
+      COLLECTIONS.TRANSFERENCIAS_INVENTARIO,
+      COLLECTIONS.DEBITOS_INVENTARIO,
+    ],
+  },
+  // Hidrometeorología tiene su propia página (rio-limon.html); se lista aquí
+  // para que el control de lectura por colección sea uniforme.
+  [ROLES.HIDRO]: {
+    nombre: "Hidrometeorología",
+    vistas: ["hidro"],
+    modulos: ["hidro"],
+    leer: [COLLECTIONS.HIDRO_LECTURAS, COLLECTIONS.RIOS, COLLECTIONS.ESTACIONES_PLUVIOMETRICAS, COLLECTIONS.PLUVIOMETRIA_LECTURAS],
+  },
 };
 
 // Almacenes / ubicaciones de inventario independientes entre sí.

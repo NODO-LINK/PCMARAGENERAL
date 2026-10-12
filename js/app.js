@@ -8,7 +8,7 @@
  *  - El registro del Service Worker para capacidades PWA.
  * -----------------------------------------------------------------------
  */
-import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage } from "./auth.js";
+import { initAuth, onAuthReady, login, logout, isAdmin, getCurrentProfile, loginErrorMessage, getDepartamento, vistaInicial } from "./auth.js";
 import { initRouter, registerView, navigateTo } from "./router.js";
 import { toast } from "./ui.js";
 import { renderIcons } from "./icons.js";
@@ -31,19 +31,27 @@ let modulesStarted = false;
 function startModules() {
   if (modulesStarted) return;
   modulesStarted = true;
+  // Un usuario de departamento solo arranca los módulos que necesita (ver
+  // DEPARTAMENTOS en config.js); Admin y Operador arrancan todos.
+  const dep = getDepartamento();
+  const arrancar = (nombre, init) => {
+    if (!dep || dep.modulos.includes(nombre)) init();
+  };
   // El orden importa: catálogos e inventario deben inicializarse antes que
   // los módulos que dependen de sus <select> (combustible → instituciones).
-  initCatalogos();
-  initInventario();
-  initEmergencias();
-  initGuardias();
-  initCombustible();
-  initHidrometeorologia();
-  initEducacion();
-  initInspeccion();
-  initDashboard();
-  initReportes();
-  initUsuarios();
+  arrancar("catalogos", initCatalogos);
+  arrancar("inventario", initInventario);
+  arrancar("emergencias", initEmergencias);
+  arrancar("guardias", initGuardias);
+  arrancar("combustible", initCombustible);
+  arrancar("hidro", initHidrometeorologia);
+  arrancar("educacion", initEducacion);
+  arrancar("inspeccion", initInspeccion);
+  if (!dep) {
+    initDashboard();
+    initReportes();
+    initUsuarios();
+  }
 }
 
 function registerRoutes() {
@@ -67,8 +75,9 @@ function renderUserBadge() {
   if (nameEl) nameEl.textContent = profile?.nombre || profile?.email || "";
   if (roleEl) {
     const admin = isAdmin();
-    roleEl.textContent = admin ? "Administrador" : "Operador";
-    roleEl.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${admin ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`;
+    const dep = getDepartamento();
+    roleEl.textContent = dep ? dep.nombre : admin ? "Administrador" : "Operador";
+    roleEl.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${admin ? "bg-red-100 text-red-700" : dep ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-700"}`;
   }
   document.querySelectorAll(".role-admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin()));
 }
@@ -163,7 +172,7 @@ function boot() {
       renderUserBadge();
       startModules();
       initRouter();
-      if (!window.location.hash) navigateTo("dashboard");
+      if (!window.location.hash) navigateTo(vistaInicial());
     } else {
       appShell.classList.add("hidden");
       loginScreen.classList.remove("hidden");

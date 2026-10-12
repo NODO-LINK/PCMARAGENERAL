@@ -25,7 +25,7 @@ import {
   orderBy,
   serverTimestamp,
 } from "./firebase.js";
-import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
+import { isAdmin, getCurrentUser, getResponsableLabel, puedeLeerColeccion } from "./auth.js";
 import { toast } from "./ui.js";
 
 /**
@@ -34,6 +34,13 @@ import { toast } from "./ui.js";
  * @returns {Function} función para cancelar la suscripción.
  */
 export function subscribeCollection(collectionName, orderField, cb) {
+  // Un usuario de departamento solo lee sus propias colecciones (ver
+  // DEPARTAMENTOS en config.js): para el resto no se pide nada al servidor
+  // (que lo rechazaría) y el módulo recibe simplemente una lista vacía.
+  if (!puedeLeerColeccion(collectionName)) {
+    setTimeout(() => cb([]), 0);
+    return () => {};
+  }
   const q = query(collection(db, collectionName), orderBy(orderField, "desc"));
   return onSnapshot(
     q,

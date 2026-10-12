@@ -6,7 +6,7 @@
  * visibilidad de los enlaces de navegación restringidos a administrador.
  * -----------------------------------------------------------------------
  */
-import { isAdmin } from "./auth.js";
+import { isAdmin, puedeVerVista, vistaInicial } from "./auth.js";
 
 const registry = new Map(); // viewName -> { onEnter }
 
@@ -15,23 +15,18 @@ export function registerView(name, { onEnter } = {}) {
 }
 
 export function navigateTo(name) {
-  if (!registry.has(name)) name = "dashboard";
+  if (!registry.has(name)) name = vistaInicial();
   window.location.hash = `#${name}`;
 }
 
-// Una vista es "solo administrador" si su botón de navegación está marcado
-// así (o dentro de un bloque marcado así). Ocultar el botón no basta: sin
-// esta comprobación un operador podría abrir la pantalla escribiendo
-// #usuarios en la dirección.
-function esVistaSoloAdmin(name) {
-  const btn = document.querySelector(`.nav-link[data-view="${name}"]`);
-  return !!btn && (btn.classList.contains("nav-admin-only") || !!btn.closest(".nav-admin-only"));
-}
-
 function applyView(name) {
-  if (esVistaSoloAdmin(name) && !isAdmin()) {
-    name = "dashboard";
-    if (window.location.hash !== "#dashboard") window.location.hash = "#dashboard";
+  // Ocultar el botón del menú no basta: sin esta comprobación se podría abrir
+  // la pantalla escribiendo #usuarios (o la de otro departamento) en la
+  // dirección. Lo que no le corresponde al usuario lo manda a su pantalla
+  // inicial.
+  if (!puedeVerVista(name)) {
+    name = vistaInicial();
+    if (window.location.hash !== `#${name}`) window.location.hash = `#${name}`;
   }
   document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
   document.querySelectorAll(".nav-link").forEach((btn) => {
@@ -43,6 +38,11 @@ function applyView(name) {
   document.querySelectorAll(".nav-admin-only").forEach((el) => {
     el.classList.toggle("hidden", !isAdmin());
   });
+  // Cada botón del menú solo se muestra si el usuario puede abrir esa vista.
+  document.querySelectorAll(".nav-link[data-view]").forEach((btn) => {
+    if (!puedeVerVista(btn.dataset.view)) btn.classList.add("hidden");
+    else if (!btn.classList.contains("nav-admin-only")) btn.classList.remove("hidden");
+  });
 
   const entry = registry.get(name);
   if (entry?.onEnter) entry.onEnter();
@@ -50,7 +50,7 @@ function applyView(name) {
 
 export function initRouter() {
   window.addEventListener("hashchange", () => {
-    const name = (window.location.hash || "#dashboard").replace("#", "");
+    const name = (window.location.hash || `#${vistaInicial()}`).replace("#", "");
     applyView(name);
   });
 
@@ -58,7 +58,7 @@ export function initRouter() {
     btn.addEventListener("click", () => navigateTo(btn.dataset.view));
   });
 
-  const initial = (window.location.hash || "#dashboard").replace("#", "");
-  applyView(registry.has(initial) ? initial : "dashboard");
-  if (!window.location.hash) window.location.hash = "#dashboard";
+  const initial = (window.location.hash || `#${vistaInicial()}`).replace("#", "");
+  applyView(registry.has(initial) ? initial : vistaInicial());
+  if (!window.location.hash) window.location.hash = `#${vistaInicial()}`;
 }

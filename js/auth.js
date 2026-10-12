@@ -23,7 +23,7 @@ import {
   createUserWithEmailAndPassword,
   getSecondaryAuth,
 } from "./firebase.js";
-import { COLLECTIONS, ROLES } from "./config.js";
+import { COLLECTIONS, ROLES, DEPARTAMENTOS } from "./config.js";
 import { signOut as fbSignOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import { toast } from "./ui.js";
 
@@ -54,6 +54,30 @@ export function isOperador() {
 }
 export function isHidro() {
   return currentProfile?.rol === ROLES.HIDRO;
+}
+
+/** Configuración del departamento del usuario actual, o null si es Admin/Operador. */
+export function getDepartamento() {
+  return DEPARTAMENTOS[currentProfile?.rol] || null;
+}
+
+/** ¿Puede la interfaz abrir esta colección? (las reglas de Firestore son la barrera real). */
+export function puedeLeerColeccion(nombre) {
+  const dep = getDepartamento();
+  return !dep || dep.leer.includes(nombre);
+}
+
+/** ¿Puede abrir esta pantalla del menú? Admin ve todo; Operador todo menos las de administración. */
+export function puedeVerVista(vista) {
+  const dep = getDepartamento();
+  if (dep) return dep.vistas.includes(vista);
+  if (isAdmin()) return true;
+  return vista !== "usuarios" && vista !== "catalogos";
+}
+
+/** Pantalla a mostrar al entrar (o si intenta abrir una que no le corresponde). */
+export function vistaInicial() {
+  return getDepartamento()?.vistas[0] || "dashboard";
 }
 export function getResponsableLabel() {
   return currentProfile?.nombre || currentUser?.email || "Usuario";
@@ -135,16 +159,15 @@ export function initAuth() {
           return;
         }
       } else {
-        // Primer inicio de sesión sin perfil: se crea como Operador por
-        // defecto. El administrador puede luego elevar su rol.
-        currentProfile = {
-          email: user.email,
-          nombre: user.email,
-          rol: ROLES.OPERADOR,
-          activo: true,
-          createdAt: serverTimestamp(),
-        };
-        await setDoc(doc(db, COLLECTIONS.USUARIOS, user.uid), currentProfile);
+        // Sin perfil no hay acceso: antes se creaba solo como Operador, lo
+        // que le daba acceso a todo a cualquiera que lograra crear una
+        // cuenta en Firebase Auth (la clave pública de la app lo permite).
+        // Los perfiles los crea únicamente el administrador desde "Usuarios".
+        toast("Su cuenta no tiene un perfil asignado. Contacte al administrador.", "error");
+        currentUser = null;
+        currentProfile = null;
+        await signOut(auth);
+        return;
       }
     } catch (err) {
       console.error("Error cargando perfil de usuario:", err);

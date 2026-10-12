@@ -17,6 +17,12 @@ rules_version = '2';
  *     rio-limon.html). NO puede leer ni escribir ningún otro módulo — la
  *     restricción está aplicada aquí, no solo ocultando botones en la UI,
  *     para que sea real aunque inicie sesión con la app completa.
+ *   - DEPARTAMENTO (dep_emergencias, dep_guardias, dep_combustible,
+ *     dep_educacion, dep_inspeccion, dep_inventario): un trabajador por
+ *     departamento que SOLO puede leer y crear en las colecciones de su
+ *     departamento (más el catálogo/inventario que ese módulo necesita);
+ *     igual que el Operador, no edita ni elimina registros guardados. Debe
+ *     coincidir con DEPARTAMENTOS en js/config.js.
  *   - Los catálogos maestros (instituciones, categorías de insumos,
  *     insumos) solo pueden ser creados/editados/eliminados por el
  *     administrador; cualquier Operador/Administrador puede leerlos para
@@ -54,6 +60,21 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.rol == 'hidro' && userDoc().data.activo != false;
     }
 
+    // Rol de departamento: true si el usuario activo tiene alguno de los
+    // roles de la lista (ej. ['dep_emergencias', 'dep_inventario']).
+    function hasAnyRole(roles) {
+      return isSignedIn() && userDoc().data.rol in roles && userDoc().data.activo != false;
+    }
+
+    // Leer / crear en un módulo: Administrador, Operador o alguno de los
+    // roles de departamento que le corresponden a ese módulo.
+    function canReadFor(roles) {
+      return isAdmin() || isOperador() || hasAnyRole(roles);
+    }
+    function canCreateFor(roles) {
+      return canReadFor(roles) && isOwnCreation();
+    }
+
     function isOwnCreation() {
       return request.resource.data.createdBy == request.auth.uid;
     }
@@ -78,10 +99,11 @@ service cloud.firestore {
     /* ------------------------------ usuarios ---------------------------- */
     match /usuarios/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      // Auto-aprovisionamiento en el primer inicio de sesión (crea su
-      // propio documento) o creación por parte de un administrador desde
-      // el panel de Usuarios.
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Solo un administrador crea perfiles (panel de Usuarios). Antes un
+      // usuario sin perfil podía crear el suyo con el rol que quisiera —
+      // incluido admin — lo que dejaba entrar a cualquiera que lograra
+      // crear una cuenta de Firebase Auth.
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -89,38 +111,38 @@ service cloud.firestore {
     /* --------------- Registros operativos (crear/leer todos, ------------ */
     /* --------------- editar/eliminar solo administrador) ---------------- */
     match /pacientes/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_emergencias']);
+      allow create: if canCreateFor(['dep_emergencias']);
       allow update, delete: if canWriteOperational();
     }
     match /traslados/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_emergencias']);
+      allow create: if canCreateFor(['dep_emergencias']);
       allow update, delete: if canWriteOperational();
     }
     match /fallecidos/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_emergencias']);
+      allow create: if canCreateFor(['dep_emergencias']);
       allow update, delete: if canWriteOperational();
     }
     match /guardias/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_guardias']);
+      allow create: if canCreateFor(['dep_guardias']);
       allow update, delete: if canWriteOperational();
     }
     match /despachosCombustible/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_combustible']);
+      allow create: if canCreateFor(['dep_combustible']);
       allow update, delete: if canWriteOperational();
     }
     match /educacion/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_educacion']);
+      allow create: if canCreateFor(['dep_educacion']);
       allow update, delete: if canWriteOperational();
     }
     match /gestionRiesgoInspeccion/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_inspeccion']);
+      allow create: if canCreateFor(['dep_inspeccion']);
       allow update, delete: if canWriteOperational();
     }
     match /cierresDiarios/{docId} {
@@ -172,15 +194,15 @@ service cloud.firestore {
 
     /* ------------------------- Catálogos maestros ------------------------ */
     match /instituciones/{docId} {
-      allow read: if canReadOperational();
+      allow read: if canReadFor(['dep_emergencias', 'dep_combustible']);
       allow create, update, delete: if isAdmin();
     }
     match /categoriasInsumos/{docId} {
-      allow read: if canReadOperational();
+      allow read: if canReadFor(['dep_emergencias', 'dep_inventario']);
       allow create, update, delete: if isAdmin();
     }
     match /insumos/{docId} {
-      allow read: if canReadOperational();
+      allow read: if canReadFor(['dep_emergencias', 'dep_inventario']);
       allow create, update, delete: if isAdmin();
     }
 
@@ -190,14 +212,16 @@ service cloud.firestore {
     // generar esos movimientos, pero solo el administrador puede alterar
     // manualmente el nivel mínimo crítico o eliminar el documento.
     match /insumoStock/{docId} {
-      allow read: if canReadOperational();
-      allow create, update: if isAdmin() || isOperador();
+      allow read: if canReadFor(['dep_emergencias', 'dep_inventario']);
+      // Emergencias también descuenta existencias (insumos usados en la
+      // lista diaria de pacientes), por eso puede crear/actualizar aquí.
+      allow create, update: if canReadFor(['dep_emergencias', 'dep_inventario']);
       allow delete: if isAdmin();
     }
 
     match /entradasInventario/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_inventario']);
+      allow create: if canCreateFor(['dep_inventario']);
       // Editar o eliminar (con reversión/reajuste de insumoStock) es solo
       // para el administrador; el operador únicamente crea y consulta.
       allow update: if isAdmin();
@@ -205,15 +229,15 @@ service cloud.firestore {
     }
 
     match /transferenciasInventario/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_inventario']);
+      allow create: if canCreateFor(['dep_inventario']);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /debitosInventario/{docId} {
-      allow read: if canReadOperational();
-      allow create: if canCreateOperational();
+      allow read: if canReadFor(['dep_emergencias', 'dep_inventario']);
+      allow create: if canCreateFor(['dep_emergencias', 'dep_inventario']);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
