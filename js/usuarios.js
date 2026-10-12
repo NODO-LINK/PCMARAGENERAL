@@ -10,8 +10,8 @@
  * -----------------------------------------------------------------------
  */
 import { COLLECTIONS, ROLES, DEPARTAMENTOS } from "./config.js";
-import { subscribeCollection, updateRecord } from "./data.js";
-import { toast } from "./ui.js";
+import { subscribeCollection, updateRecord, deleteRecord } from "./data.js";
+import { toast, confirmDialog } from "./ui.js";
 import { adminCreateUser, isAdmin, getCurrentUser } from "./auth.js";
 
 let usuarios = [];
@@ -61,7 +61,9 @@ export function initUsuarios() {
         form.reset();
       } catch (err) {
         console.error(err);
-        toast(err.message?.includes("email-already") ? "Ese correo ya está registrado." : "No se pudo crear el usuario.", "error");
+        // Los errores de correo repetido traen su explicación después de "email-already-in-use:".
+        const detalle = err.message?.startsWith("email-already-in-use:") ? err.message.slice("email-already-in-use:".length).trim() : null;
+        toast(detalle || (err.code === "auth/email-already-in-use" ? "Ese correo ya está registrado." : "No se pudo crear el usuario."), "error");
       }
     });
   }
@@ -91,7 +93,7 @@ function renderTabla() {
         <td class="px-4 py-2">
           ${
             admin && u.id !== myUid
-              ? `<button data-id="${u.id}" data-act="estado" class="text-red-700 hover:underline">${u.activo === false ? "Activar" : "Desactivar"}</button>`
+              ? `<button data-id="${u.id}" data-act="estado" class="text-slate-700 hover:underline mr-3">${u.activo === false ? "Activar" : "Desactivar"}</button><button data-id="${u.id}" data-act="eliminar" class="text-red-700 hover:underline">Eliminar</button>`
               : `<span class="text-slate-300">—</span>`
           }
         </td>
@@ -104,6 +106,25 @@ function renderTabla() {
       select.onchange = () => {
         const u = usuarios.find((x) => x.id === select.dataset.id);
         updateRecord(COLLECTIONS.USUARIOS, u.id, { rol: select.value });
+      };
+    });
+    tbody.querySelectorAll('[data-act="eliminar"]').forEach((btn) => {
+      btn.onclick = async () => {
+        const u = usuarios.find((x) => x.id === btn.dataset.id);
+        if (!u || u.id === myUid) return;
+        const ok = await confirmDialog({
+          title: "Eliminar usuario",
+          message: `¿Eliminar a "${u.nombre || u.email}"? Pierde el acceso al sistema de inmediato. Sus registros ya guardados se conservan. Si solo quiere suspenderlo temporalmente, use "Desactivar".`,
+          confirmText: "Eliminar",
+        });
+        if (!ok) return;
+        try {
+          await deleteRecord(COLLECTIONS.USUARIOS, u.id);
+          toast(`Usuario "${u.nombre || u.email}" eliminado.`, "success");
+        } catch (err) {
+          console.error(err);
+          toast("No se pudo eliminar el usuario.", "error");
+        }
       };
     });
     tbody.querySelectorAll('[data-act="estado"]').forEach((btn) => {

@@ -125,8 +125,29 @@ export async function logout() {
 export async function adminCreateUser({ email, password, nombre, rol }) {
   if (!isAdmin()) throw new Error("Solo un administrador puede crear usuarios.");
   const secondaryAuth = getSecondaryAuth();
-  const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-  const uid = cred.user.uid;
+  let uid;
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    uid = cred.user.uid;
+  } catch (err) {
+    if (err?.code !== "auth/email-already-in-use") throw err;
+    // El correo ya existe en el sistema de acceso (por ejemplo de un usuario
+    // eliminado: borrar el perfil le quita el acceso, pero la cuenta de
+    // Firebase Auth no se puede borrar desde el navegador). Si la contraseña
+    // indicada es la de esa cuenta se reutiliza y solo se vuelve a crear el
+    // perfil; si no, hay que usar otro correo o borrarla en Firebase Console.
+    try {
+      const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      uid = cred.user.uid;
+    } catch {
+      throw new Error("email-already-in-use: ese correo ya existe en el sistema de acceso con otra contraseña. Use otro correo, o escriba la contraseña que tenía.");
+    }
+    const existente = await getDoc(doc(db, COLLECTIONS.USUARIOS, uid));
+    if (existente.exists()) {
+      await fbSignOut(secondaryAuth);
+      throw new Error("email-already-in-use: ese usuario ya está registrado.");
+    }
+  }
   await setDoc(doc(db, COLLECTIONS.USUARIOS, uid), {
     email,
     nombre,

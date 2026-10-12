@@ -133,6 +133,14 @@ export function createHistorial(opts) {
         <h4 class="font-semibold text-slate-700">${title}</h4>
         <div class="flex flex-wrap items-end gap-2">
           <div>
+            <label class="block text-xs text-slate-500">Mes</label>
+            <div class="flex items-center gap-1">
+              <button type="button" id="${uid}-mes-prev" title="Mes anterior" class="px-2 py-1 text-sm border border-slate-300 rounded-md hover:bg-slate-50">‹</button>
+              <input type="month" id="${uid}-mes" class="border border-slate-300 rounded-md px-2 py-1 text-sm" />
+              <button type="button" id="${uid}-mes-next" title="Mes siguiente" class="px-2 py-1 text-sm border border-slate-300 rounded-md hover:bg-slate-50">›</button>
+            </div>
+          </div>
+          <div>
             <label class="block text-xs text-slate-500">Desde</label>
             <input type="date" id="${uid}-desde" class="border border-slate-300 rounded-md px-2 py-1 text-sm" />
           </div>
@@ -239,9 +247,29 @@ export function createHistorial(opts) {
     printAdHoc(`${title} — ${rows.length} Registro(s) Seleccionado(s)`, bodyHTML, firmas, firmaEspacio);
   }
 
+  // Texto del periodo filtrado ("octubre de 2026" o "del 01/10/2026 al ..."),
+  // que se agrega al título de la hoja impresa para que se sepa de qué mes es.
+  function periodoTexto() {
+    const mes = el(`#${uid}-mes`).value;
+    if (mes) {
+      const [a, m] = mes.split("-").map(Number);
+      return new Date(a, m - 1, 1).toLocaleDateString("es-VE", { month: "long", year: "numeric" });
+    }
+    const d = el(`#${uid}-desde`).value;
+    const h = el(`#${uid}-hasta`).value;
+    const fmt = (v) => v.split("-").reverse().join("/");
+    if (d && h) return `del ${fmt(d)} al ${fmt(h)}`;
+    if (d) return `desde ${fmt(d)}`;
+    if (h) return `hasta ${fmt(h)}`;
+    return "";
+  }
+
   function render() {
     const rows = filteredRows();
     const admin = isAdmin();
+
+    const periodo = periodoTexto();
+    el(".print-header").innerHTML = printHeaderHTML(periodo ? `${title} — ${periodo}` : title);
 
     // Depura la selección: descarta ids de registros que ya no existen
     // (p. ej. porque un administrador los eliminó).
@@ -335,8 +363,41 @@ export function createHistorial(opts) {
       });
   }
 
-  el(`#${uid}-desde`).addEventListener("change", render);
-  el(`#${uid}-hasta`).addEventListener("change", render);
+  // "Mes" y "Desde/Hasta" son dos formas de elegir el mismo filtro: al
+  // elegir un mes se rellenan Desde/Hasta con su primer y último día, y al
+  // tocar Desde/Hasta a mano se limpia el mes.
+  function ponerMes(valor) {
+    el(`#${uid}-mes`).value = valor;
+    if (!valor) {
+      el(`#${uid}-desde`).value = "";
+      el(`#${uid}-hasta`).value = "";
+    } else {
+      const [a, m] = valor.split("-").map(Number);
+      const pad = (n) => String(n).padStart(2, "0");
+      el(`#${uid}-desde`).value = `${a}-${pad(m)}-01`;
+      el(`#${uid}-hasta`).value = `${a}-${pad(m)}-${pad(new Date(a, m, 0).getDate())}`;
+    }
+    render();
+  }
+  function moverMes(delta) {
+    let base = el(`#${uid}-mes`).value;
+    if (!base) {
+      const hoy = new Date();
+      base = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    }
+    const [a, m] = base.split("-").map(Number);
+    const f = new Date(a, m - 1 + delta, 1);
+    ponerMes(`${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}`);
+  }
+  el(`#${uid}-mes`).addEventListener("change", (e) => ponerMes(e.target.value));
+  el(`#${uid}-mes-prev`).addEventListener("click", () => moverMes(-1));
+  el(`#${uid}-mes-next`).addEventListener("click", () => moverMes(1));
+  const alCambiarRango = () => {
+    el(`#${uid}-mes`).value = "";
+    render();
+  };
+  el(`#${uid}-desde`).addEventListener("change", alCambiarRango);
+  el(`#${uid}-hasta`).addEventListener("change", alCambiarRango);
   el(`#${uid}-q`).addEventListener("input", render);
   el(`#${uid}-check-all`).addEventListener("change", (e) => {
     const checked = e.target.checked;
