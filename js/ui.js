@@ -10,6 +10,7 @@
  *  - Impresión de una vista específica con cintillo institucional.
  * -----------------------------------------------------------------------
  */
+import { coincideBusqueda, resaltarBusqueda, terminosDeBusqueda } from "./busqueda.js";
 import { INSTITUCION } from "./config.js";
 import { getIcon } from "./icons.js";
 
@@ -150,7 +151,10 @@ export function createHistorial(opts) {
           </div>
           <div>
             <label class="block text-xs text-slate-500">Buscar</label>
-            <input type="text" id="${uid}-q" placeholder="Texto..." class="border border-slate-300 rounded-md px-2 py-1 text-sm" />
+            <div class="relative">
+              <input type="search" id="${uid}-q" placeholder="Varias palabras..." title="Busca en todos los campos, sin importar tildes ni mayúsculas; varias palabras en cualquier orden" autocomplete="off" class="border border-slate-300 rounded-md pl-2 pr-6 py-1 text-sm w-44" />
+              <button type="button" id="${uid}-q-clear" title="Limpiar búsqueda" class="hidden absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base leading-none px-1">×</button>
+            </div>
           </div>
           <button id="${uid}-print" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900">${getIcon("impresora")}Imprimir</button>
           <button id="${uid}-print-sel" disabled class="px-3 py-1.5 text-xs rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">${getIcon("impresora")}Imprimir selección</button>
@@ -181,7 +185,7 @@ export function createHistorial(opts) {
   function filteredRows() {
     const desde = el(`#${uid}-desde`).value ? new Date(el(`#${uid}-desde`).value + "T00:00:00") : null;
     const hasta = el(`#${uid}-hasta`).value ? new Date(el(`#${uid}-hasta`).value + "T23:59:59") : null;
-    const q = el(`#${uid}-q`).value.trim().toLowerCase();
+    const q = el(`#${uid}-q`).value;
     return getRows().filter((row) => {
       if (dateField && (desde || hasta)) {
         const d = toDate(row[dateField]);
@@ -189,12 +193,21 @@ export function createHistorial(opts) {
         if (desde && d < desde) return false;
         if (hasta && d > hasta) return false;
       }
-      if (q) {
-        const haystack = columns.map((c) => (c.format ? c.format(row) : row[c.key])).join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
+      if (q && !coincideBusqueda(textoBuscable(row), q)) return false;
       return true;
     });
+  }
+
+  // Todo el texto en el que se busca un registro: lo que muestran las
+  // columnas (ya formateado: fechas dd/mm/aaaa, etc.) más los demás campos
+  // de texto y números del registro (responsable, observaciones...), menos
+  // los internos (ids y datos de auditoría).
+  function textoBuscable(row) {
+    const visibles = columns.map((c) => (c.format ? c.format(row) : row[c.key]));
+    const ocultos = Object.entries(row)
+      .filter(([k, v]) => (typeof v === "string" || typeof v === "number") && !/^(id|createdBy|createdByEmail|updatedBy)$|Id$/.test(k))
+      .map(([, v]) => v);
+    return [...visibles, ...ocultos].join(" ");
   }
 
   // Conjunto de ids marcados con el checkbox de cada fila, para "Imprimir
@@ -267,6 +280,12 @@ export function createHistorial(opts) {
   function render() {
     const rows = filteredRows();
     const admin = isAdmin();
+    const consulta = el(`#${uid}-q`).value;
+    el(`#${uid}-q-clear`).classList.toggle("hidden", !consulta);
+    const celdaHTML = (valor, q) => {
+      const texto = valor === null || valor === undefined ? "—" : String(valor);
+      return terminosDeBusqueda(q).length ? resaltarBusqueda(texto, q) : escapeHTML(texto);
+    };
 
     const periodo = periodoTexto();
     el(".print-header").innerHTML = printHeaderHTML(periodo ? `${title} — ${periodo}` : title);
@@ -283,7 +302,7 @@ export function createHistorial(opts) {
         (row) => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
         <td class="px-4 py-2 no-print"><input type="checkbox" class="row-check" data-id="${row.id}" ${selectedIds.has(row.id) ? "checked" : ""} /></td>
-        ${columns.map((c) => `<td class="px-4 py-2 align-top">${escapeHTML(c.format ? c.format(row) : row[c.key] ?? "—")}</td>`).join("")}
+        ${columns.map((c) => `<td class="px-4 py-2 align-top">${celdaHTML(c.format ? c.format(row) : row[c.key], consulta)}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
           ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
@@ -399,6 +418,11 @@ export function createHistorial(opts) {
   el(`#${uid}-desde`).addEventListener("change", alCambiarRango);
   el(`#${uid}-hasta`).addEventListener("change", alCambiarRango);
   el(`#${uid}-q`).addEventListener("input", render);
+  el(`#${uid}-q-clear`).addEventListener("click", () => {
+    el(`#${uid}-q`).value = "";
+    el(`#${uid}-q`).focus();
+    render();
+  });
   el(`#${uid}-check-all`).addEventListener("change", (e) => {
     const checked = e.target.checked;
     filteredRows().forEach((r) => (checked ? selectedIds.add(r.id) : selectedIds.delete(r.id)));

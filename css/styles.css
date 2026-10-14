@@ -381,3 +381,17 @@ details[open] > summary .chevron {
 .mapa-windy [class*="media-slider" i] {
   display: none !important;
 }
+
+/* Resaltado de lo encontrado por el buscador (js/busqueda.js): visible en
+   pantalla, pero no se imprime. */
+mark {
+  background: #fde68a;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+@media print {
+  mark {
+    background: none;
+  }
+}

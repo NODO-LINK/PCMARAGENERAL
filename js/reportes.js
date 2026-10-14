@@ -130,44 +130,6 @@ const REPORTS = {
       { key: "responsable", label: "Responsable" },
     ],
   },
-  entradasInventario: {
-    label: "Inventario — Entradas",
-    collection: COLLECTIONS.ENTRADAS_INVENTARIO,
-    dateField: "fecha",
-    columns: [
-      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
-      { key: "insumoNombre", label: "Insumo" },
-      { key: "cantidad", label: "Cantidad" },
-      { key: "almacenDestino", label: "Destino" },
-      { key: "responsable", label: "Responsable" },
-    ],
-  },
-  transferenciasInventario: {
-    label: "Inventario — Transferencias",
-    collection: COLLECTIONS.TRANSFERENCIAS_INVENTARIO,
-    dateField: "fecha",
-    columns: [
-      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
-      { key: "insumoNombre", label: "Insumo" },
-      { key: "stockOrigen", label: "Origen" },
-      { key: "stockDestino", label: "Destino" },
-      { key: "cantidad", label: "Cantidad" },
-      { key: "responsable", label: "Responsable" },
-    ],
-  },
-  debitosInventario: {
-    label: "Inventario — Débitos",
-    collection: COLLECTIONS.DEBITOS_INVENTARIO,
-    dateField: "fecha",
-    columns: [
-      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
-      { key: "insumoNombre", label: "Insumo" },
-      { key: "almacenOrigen", label: "Almacén" },
-      { key: "cantidad", label: "Cantidad" },
-      { key: "motivo", label: "Motivo" },
-      { key: "responsable", label: "Responsable" },
-    ],
-  },
 };
 
 const dataCache = {}; // collectionName -> rows[]
@@ -279,9 +241,6 @@ function computeCierreCounts(dateStr) {
   const combustible = (dataCache[COLLECTIONS.DESPACHOS_COMBUSTIBLE] || []).filter((r) => sameDate(r, "fecha", dateStr));
   const educacion = (dataCache[COLLECTIONS.EDUCACION] || []).filter((r) => sameDate(r, "fecha", dateStr));
   const inspeccion = (dataCache[COLLECTIONS.INSPECCIONES] || []).filter((r) => sameDate(r, "fecha", dateStr));
-  const entradas = (dataCache[COLLECTIONS.ENTRADAS_INVENTARIO] || []).filter((r) => sameDate(r, "fecha", dateStr));
-  const transferencias = (dataCache[COLLECTIONS.TRANSFERENCIAS_INVENTARIO] || []).filter((r) => sameDate(r, "fecha", dateStr));
-  const debitos = (dataCache[COLLECTIONS.DEBITOS_INVENTARIO] || []).filter((r) => sameDate(r, "fecha", dateStr));
 
   // La Lista Diaria de Pacientes es una planilla por día (no un registro
   // por paciente): las cantidades ya vienen guardadas como campos
@@ -304,9 +263,6 @@ function computeCierreCounts(dateStr) {
     combustibleLitros: combustible.reduce((s, r) => s + (Number(r.litros) || 0), 0),
     educacion: educacion.length,
     inspeccion: inspeccion.length,
-    entradasInventario: entradas.length,
-    transferenciasInventario: transferencias.length,
-    debitosInventario: debitos.length,
   };
 }
 
@@ -331,9 +287,6 @@ function buildCierreBodyHTML(fechaFmt, c) {
           ${row("Litros de combustible despachados", c.combustibleLitros)}
           ${row("Educación (actividades)", c.educacion)}
           ${row("Gestión de Riesgo (inspecciones)", c.inspeccion)}
-          ${row("Inventario — entradas", c.entradasInventario)}
-          ${row("Inventario — transferencias", c.transferenciasInventario)}
-          ${row("Inventario — débitos", c.debitosInventario)}
         </tbody>
       </table>
     </div>`;

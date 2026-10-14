@@ -50,6 +50,7 @@ import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, toDa
 import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
+import { coincideBusqueda } from "./busqueda.js";
 
 let insumos = [];
 let stock = []; // filas de insumoStock
@@ -234,7 +235,7 @@ function populateCategoriaInsumoSelect() {
  * almacén de donde se está sacando).
  */
 function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
-  const term = filterText.trim().toLowerCase();
+  const term = filterText.trim();
   let activos = insumos.filter((i) => i.activo !== false);
   // Cuando se filtra por almacén (Débito, Insumos utilizados), se guarda
   // también la existencia de cada insumo en ese almacén para mostrarla
@@ -247,7 +248,7 @@ function buildInsumoOptionsHTML(filterText = "", almacenFiltro = "") {
     );
     activos = activos.filter((i) => (existenciaPorInsumo.get(i.id) || 0) > 0);
   }
-  const coincide = (i) => i.nombre.toLowerCase().includes(term) || (i.categoriaNombre || "").toLowerCase().includes(term);
+  const coincide = (i) => coincideBusqueda(`${i.nombre} ${i.categoriaNombre || ""}`, term);
   const visibles = term ? activos.filter(coincide) : activos;
 
   const porCategoria = {};
@@ -531,10 +532,8 @@ function renderInsumosTable() {
   const tbody = document.getElementById("tabla-insumos-body");
   if (!tbody) return;
   const admin = isAdmin();
-  const buscar = (document.getElementById("insumos-catalogo-buscar")?.value || "").trim().toLowerCase();
-  const filtrados = buscar
-    ? insumos.filter((i) => i.nombre.toLowerCase().includes(buscar) || (i.categoriaNombre || "").toLowerCase().includes(buscar))
-    : insumos;
+  const buscar = (document.getElementById("insumos-catalogo-buscar")?.value || "").trim();
+  const filtrados = buscar ? insumos.filter((i) => coincideBusqueda(`${i.nombre} ${i.categoriaNombre || ""}`, buscar)) : insumos;
 
   const countEl = document.getElementById("insumos-catalogo-count");
   if (countEl) countEl.textContent = buscar ? `${filtrados.length} de ${insumos.length}` : `${insumos.length} insumo(s)`;
@@ -750,7 +749,7 @@ function renderStockTable() {
   if (!tbody) return;
   renderAvisoExistenciasHuerfanas();
   const filtro = document.getElementById("stock-filtro-almacen")?.value || "";
-  const buscar = (document.getElementById("stock-buscar")?.value || "").trim().toLowerCase();
+  const buscar = (document.getElementById("stock-buscar")?.value || "").trim();
   const soloCriticos = document.getElementById("stock-solo-criticos")?.checked || false;
   const soloDeficit = document.getElementById("stock-solo-deficit")?.checked || false;
   const umbralDeficit = Number(document.getElementById("stock-deficit-umbral")?.value) || 0;
@@ -758,9 +757,7 @@ function renderStockTable() {
 
   let rows = stock.filter((s) => !filtro || s.almacen === filtro);
   if (buscar) {
-    rows = rows.filter(
-      (s) => (s.insumoNombre || "").toLowerCase().includes(buscar) || (s.categoriaNombre || "").toLowerCase().includes(buscar)
-    );
+    rows = rows.filter((s) => coincideBusqueda(`${s.insumoNombre || ""} ${s.categoriaNombre || ""} ${s.almacen || ""}`, buscar));
   }
   if (soloCriticos) {
     rows = rows.filter((s) => Number(s.existencia) <= Number(s.minimo ?? 0));
