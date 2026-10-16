@@ -12,7 +12,7 @@
 // Es lo que fuerza al navegador a descartar el caché viejo — si no se sube,
 // los usuarios pueden seguir viendo código desactualizado por días, incluso
 // después de recargar la página, hasta que limpien el caché a mano.
-const CACHE_NAME = "pc-gestion-shell-v86";
+const CACHE_NAME = "pc-gestion-shell-v87";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -32,6 +32,7 @@ const APP_SHELL = [
   "./js/moduleFactory.js",
   "./js/importUtils.js",
   "./js/busqueda.js",
+  "./js/buscadorGlobal.js",
   "./js/dashboard.js",
   "./js/emergencias.js",
   "./js/guardias.js",

@@ -24,6 +24,7 @@ import { initInspeccion } from "./inspeccion.js";
 import { initInventario } from "./inventario.js";
 import { initReportes } from "./reportes.js";
 import { initUsuarios } from "./usuarios.js";
+import { initBuscadorGlobal } from "./buscadorGlobal.js";
 
 let modulesStarted = false;
 
@@ -46,6 +47,7 @@ function startModules() {
   arrancar("hidro", initHidrometeorologia);
   arrancar("educacion", initEducacion);
   arrancar("inspeccion", initInspeccion);
+  initBuscadorGlobal();
   if (!dep) {
     initDashboard();
     initReportes();

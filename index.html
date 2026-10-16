@@ -92,13 +92,18 @@
 
   <!-- Topbar / cintillo institucional -->
   <header class="bg-navy-800 text-white no-print">
-    <div class="flex items-center justify-between px-4 md:px-6 py-3">
+    <div class="flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 shrink-0"><img src="./icons/icon-192.png" alt="Escudo de Protección Civil" class="w-full h-full" /></div>
         <div>
           <div class="font-bold leading-tight tracking-wide text-sm md:text-base">PROTECCIÓN CIVIL</div>
           <div class="text-navy-200 text-[11px] md:text-xs leading-tight">Sistema Integral de Gestión Operativa</div>
         </div>
+      </div>
+      <!-- Buscador global: busca en todos los módulos a los que el usuario tiene acceso (js/buscadorGlobal.js) -->
+      <div id="busqueda-global" class="relative order-3 w-full md:order-none md:w-auto md:flex-1 md:max-w-xl md:mx-6">
+        <input id="busqueda-global-input" type="search" autocomplete="off" placeholder="Buscar en todo el sistema...  ( / )" aria-label="Buscar en todo el sistema" class="w-full rounded-md bg-white/10 border border-white/25 placeholder-navy-200 text-white text-sm px-3 py-1.5 focus:bg-white focus:text-slate-800 focus:placeholder-slate-400 focus:outline-none" />
+        <div id="busqueda-global-panel" class="hidden absolute left-0 right-0 top-full mt-1 z-50 max-h-[70vh] overflow-y-auto rounded-md bg-white text-slate-800 shadow-xl border border-slate-200"></div>
       </div>
       <div class="flex items-center gap-3">
         <span id="conn-status" class="hidden items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"></span>
