@@ -183,8 +183,6 @@ function setupListaDiaria(pacientes) {
       toast("No hay una lista diaria guardada para esa fecha. Agréguela primero en el formulario de arriba.", "error");
       return;
     }
-    const insumosDia = insumosUsados.filter((r) => r.motivo === MOTIVO_USO_DIARIO && sameDay(r));
-
     const fechaFmt = new Date(dateStr + "T00:00:00").toLocaleDateString("es-VE", {
       day: "2-digit",
       month: "2-digit",
@@ -193,7 +191,7 @@ function setupListaDiaria(pacientes) {
 
     printAdHoc(
       `Lista Diaria de Pacientes — ${fechaFmt}`,
-      buildListaDiariaBodyHTML(fechaFmt, registro, insumosDia),
+      buildListaDiariaBodyHTML(fechaFmt, registro),
       ["Jefe de Departamento", "Director"]
     );
   });
@@ -202,22 +200,7 @@ function setupListaDiaria(pacientes) {
 const cellStyle = "border:1px solid #cbd5e1;padding:5px 7px;";
 const headStyle = `${cellStyle}background:#f1f5f9;font-weight:bold;`;
 
-function buildListaDiariaBodyHTML(fechaFmt, registro, insumosDia = []) {
-  const insumosRows =
-    insumosDia
-      .map(
-        (r, i) => `
-      <tr>
-        <td style="${cellStyle}">${i + 1}</td>
-        <td style="${cellStyle}">${escapeHTML(r.insumoNombre)}</td>
-        <td style="${cellStyle}">${escapeHTML(r.almacenOrigen)}</td>
-        <td style="${cellStyle}">${r.cantidad}</td>
-        <td style="${cellStyle}">${escapeHTML(r.responsable)}</td>
-      </tr>`
-      )
-      .join("") ||
-    `<tr><td colspan="5" style="${cellStyle}text-align:center;color:#94a3b8;">Sin insumos utilizados registrados en esta fecha.</td></tr>`;
-
+function buildListaDiariaBodyHTML(fechaFmt, registro) {
   return `
     <div style="padding:12px 20px 4px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
       <h2 style="text-align:center;font-size:15px;margin:6px 0 4px;">LISTA DIARIA DE PACIENTES ATENDIDOS</h2>
@@ -243,20 +226,6 @@ function buildListaDiariaBodyHTML(fechaFmt, registro, insumosDia = []) {
             <td style="${cellStyle}">${registro.cantidadFallecidos ?? 0}</td>
           </tr>
         </tbody>
-      </table>
-
-      <h3 style="font-size:12px;margin:18px 0 6px;">Insumos utilizados</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:10px;">
-        <thead>
-          <tr>
-            <th style="${headStyle}">#</th>
-            <th style="${headStyle}">Insumo</th>
-            <th style="${headStyle}">Almacén</th>
-            <th style="${headStyle}">Cantidad</th>
-            <th style="${headStyle}">Responsable</th>
-          </tr>
-        </thead>
-        <tbody>${insumosRows}</tbody>
       </table>
     </div>`;
 }
