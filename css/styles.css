@@ -206,6 +206,7 @@ details[open] > summary .chevron {
 /* IMPRESIÓN INSTITUCIONAL                                                 */
 /* ---------------------------------------------------------------------- */
 .print-header,
+.print-summary,
 .print-footer {
   display: none;
 }
@@ -311,6 +312,7 @@ details[open] > summary .chevron {
     display: none !important;
   }
   body.printing-single .print-target .print-header,
+  body.printing-single .print-target .print-summary,
   body.printing-single .print-target .print-footer {
     display: block !important;
   }
@@ -347,6 +349,7 @@ details[open] > summary .chevron {
      ni se separa de la última fila de la tabla (totales incluidos) con un
      salto de página justo antes. */
   tfoot,
+  .print-summary,
   .print-footer,
   .print-signatures {
     page-break-inside: avoid;

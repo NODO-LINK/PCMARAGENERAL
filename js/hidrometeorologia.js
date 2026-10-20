@@ -546,6 +546,90 @@ function imprimirMesFluviometria() {
   printAdHoc(`${rioActual()?.nombre || "Río"} — ${nombreMes}`, bodyHTML, ["Jefe de Departamento", "Director"]);
 }
 
+/* ---------------- Estadística que se imprime con el historial ---------------- */
+
+const diaClave = (fecha) => toDate(fecha)?.toLocaleDateString("en-CA") || "";
+const fmtNum = (n) => String(Math.round(n * 100) / 100);
+
+// Tabla compacta de pares "concepto — valor" en dos columnas, para la hoja
+// impresa (estilos en línea: la hoja se arma fuera de la pantalla normal).
+function tablaEstadistica(titulo, pares) {
+  const celda = "border:1px solid #cbd5e1;padding:4px 8px;";
+  const filas = [];
+  for (let i = 0; i < pares.length; i += 2) {
+    const a = pares[i];
+    const b = pares[i + 1];
+    filas.push(`<tr>
+      <td style="${celda}background:#f8fafc;font-weight:bold;">${escapeHTML(a[0])}</td><td style="${celda}">${escapeHTML(a[1])}</td>
+      ${b ? `<td style="${celda}background:#f8fafc;font-weight:bold;">${escapeHTML(b[0])}</td><td style="${celda}">${escapeHTML(b[1])}</td>` : `<td style="${celda}"></td><td style="${celda}"></td>`}
+    </tr>`);
+  }
+  return `<div style="margin:16px 0 6px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+    <div style="font-weight:bold;font-size:12px;margin-bottom:4px;">${escapeHTML(titulo)}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;"><tbody>${filas.join("")}</tbody></table>
+  </div>`;
+}
+
+// Lluvia agrupada por día (varias lecturas el mismo día se suman).
+function lluviaPorDia(rows) {
+  const porDia = new Map();
+  rows.forEach((r) => {
+    const v = r.lluvia === null || r.lluvia === undefined || r.lluvia === "" ? null : Number(r.lluvia);
+    if (v === null || isNaN(v)) return;
+    const k = diaClave(r.fecha);
+    porDia.set(k, (porDia.get(k) || 0) + v);
+  });
+  return porDia;
+}
+const fechaCorta = (clave) => (clave ? clave.split("-").reverse().join("/") : "—");
+
+function estadisticaFluvio(rows) {
+  const conNivel = rows.filter(tieneNivel);
+  const pares = [["Lecturas registradas", String(rows.length)]];
+  if (conNivel.length) {
+    const niveles = conNivel.map(nivelDe);
+    const max = conNivel.reduce((m, r) => (nivelDe(r) > nivelDe(m) ? r : m));
+    const min = conNivel.reduce((m, r) => (nivelDe(r) < nivelDe(m) ? r : m));
+    pares.push(["Lecturas de nivel", String(conNivel.length)]);
+    pares.push(["Nivel máximo", `${fmtNum(nivelDe(max))} (${fechaCorta(diaClave(max.fecha))})`]);
+    pares.push(["Nivel mínimo", `${fmtNum(nivelDe(min))} (${fechaCorta(diaClave(min.fecha))})`]);
+    pares.push(["Nivel promedio", fmtNum(niveles.reduce((s, n) => s + n, 0) / niveles.length)]);
+    const variaciones = conNivel.map((r) => r.variacion).filter((v) => v !== null && v !== undefined);
+    if (variaciones.length) {
+      pares.push(["Mayor subida", `+${fmtNum(Math.max(0, ...variaciones))}`]);
+      pares.push(["Mayor bajada", fmtNum(Math.min(0, ...variaciones))]);
+    }
+    const porEstado = {};
+    conNivel.forEach((r) => {
+      const e = calcularEstado(nivelDe(r)).label;
+      porEstado[e] = (porEstado[e] || 0) + 1;
+    });
+    pares.push(["Lecturas por estado", Object.entries(porEstado).map(([e, n]) => `${e}: ${n}`).join(" · ")]);
+  }
+  const porDia = lluviaPorDia(rows);
+  if (porDia.size) {
+    const total = [...porDia.values()].reduce((s, v) => s + v, 0);
+    const [diaMax, valMax] = [...porDia.entries()].reduce((m, e) => (e[1] > m[1] ? e : m));
+    pares.push(["Lluvia total (mm/m²)", fmtNum(total)]);
+    pares.push(["Días con lluvia", String([...porDia.values()].filter((v) => v > 0).length)]);
+    pares.push(["Mayor lluvia en un día", `${fmtNum(valMax)} (${fechaCorta(diaMax)})`]);
+  }
+  return tablaEstadistica("Estadística del período", pares);
+}
+
+function estadisticaPluvio(rows) {
+  const porDia = lluviaPorDia(rows);
+  const conLluvia = [...porDia.entries()].filter(([, v]) => v > 0);
+  const total = [...porDia.values()].reduce((s, v) => s + v, 0);
+  const pares = [["Registros", String(rows.length)], ["Lluvia total (mm/m²)", fmtNum(total)], ["Días con lluvia", String(conLluvia.length)], ["Días sin lluvia", String(porDia.size - conLluvia.length)]];
+  if (conLluvia.length) {
+    const [diaMax, valMax] = conLluvia.reduce((m, e) => (e[1] > m[1] ? e : m));
+    pares.push(["Mayor lluvia en un día", `${fmtNum(valMax)} (${fechaCorta(diaMax)})`]);
+    pares.push(["Promedio por día con lluvia", fmtNum(total / conLluvia.length)]);
+  }
+  return tablaEstadistica("Estadística del período", pares);
+}
+
 /* -------------------------------- Historial ------------------------------ */
 
 function construirHistorialFluvio() {
@@ -559,8 +643,9 @@ function construirHistorialFluvio() {
       { key: "variacion", label: "Variación", format: (r) => (r.variacion === null || r.variacion === undefined ? "—" : r.variacion > 0 ? `+${r.variacion}` : `${r.variacion}`) },
       { key: "lluvia", label: "Lluvia (mm/m²)", format: (r) => (r.lluvia === null || r.lluvia === undefined || r.lluvia === "" ? "—" : r.lluvia) },
       { key: "estado", label: "Estado", format: (r) => r.estado || "—" },
-      { key: "responsable", label: "Responsable" },
+      { key: "responsable", label: "Responsable", noPrint: true },
     ],
+    resumenImpresion: estadisticaFluvio,
     dateField: "fecha",
     getRows: () => lecturasDelRioConVariacion(),
     isAdmin,
@@ -1288,8 +1373,9 @@ function construirHistorialPluvio() {
     columns: [
       { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
       { key: "lluvia", label: "Lluvia (mm/m²)" },
-      { key: "responsable", label: "Responsable" },
+      { key: "responsable", label: "Responsable", noPrint: true },
     ],
+    resumenImpresion: estadisticaPluvio,
     dateField: "fecha",
     getRows: () => lluviasDeEstacion(),
     isAdmin,

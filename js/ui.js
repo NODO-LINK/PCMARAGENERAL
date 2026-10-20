@@ -160,9 +160,11 @@ export function formatDate(value, withTime = false) {
  * @param {Function} [opts.canDelete] - (row) => boolean. Controla, POR FILA, si se muestra "Eliminar" — útil para permitir borrar solo registros propios a un rol no-admin. Si se omite, se usa isAdmin() para todas las filas (comportamiento de antes).
  * @param {string} [opts.exportFileName] - nombre base para exportaciones.
  * @param {[string,string]} [opts.firmas] - etiquetas de las dos firmas del pie de impresión.
+ * @param {Function} [opts.resumenImpresion] - (filas filtradas) => HTML con una estadística que se imprime al final, antes de las firmas.
+ * Cada columna puede traer `noPrint: true` para que no salga en la hoja impresa (sí en pantalla y en Excel/PDF).
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio, resumenImpresion } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -205,7 +207,7 @@ export function createHistorial(opts) {
           <thead class="bg-slate-50 text-slate-600">
             <tr>
               <th class="px-4 py-2 no-print"><input type="checkbox" id="${uid}-check-all" title="Seleccionar todos los visibles" /></th>
-              ${columns.map((c) => `<th class="text-left font-medium px-4 py-2 whitespace-nowrap">${c.label}</th>`).join("")}
+              ${columns.map((c) => `<th class="text-left font-medium px-4 py-2 whitespace-nowrap${c.noPrint ? " no-print" : ""}">${c.label}</th>`).join("")}
               <th class="text-left font-medium px-4 py-2 no-print">Acciones</th>
             </tr>
           </thead>
@@ -214,6 +216,7 @@ export function createHistorial(opts) {
         </table>
       </div>
       <div class="p-3 text-xs text-slate-400 border-t border-slate-100 no-print" id="${uid}-count"></div>
+      <div class="print-summary hidden"></div>
       <div class="print-footer hidden">${printFooterHTML(firmas, firmaEspacio)}</div>
     </div>`;
 
@@ -324,6 +327,8 @@ export function createHistorial(opts) {
       return terminosDeBusqueda(q).length ? resaltarBusqueda(texto, q) : escapeHTML(texto);
     };
 
+    if (resumenImpresion) el(".print-summary").innerHTML = rows.length ? resumenImpresion(rows) : "";
+
     const periodo = periodoTexto();
     el(".print-header").innerHTML = printHeaderHTML(periodo ? `${title} — ${periodo}` : title);
 
@@ -339,7 +344,7 @@ export function createHistorial(opts) {
         (row) => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
         <td class="px-4 py-2 no-print"><input type="checkbox" class="row-check" data-id="${row.id}" ${selectedIds.has(row.id) ? "checked" : ""} /></td>
-        ${columns.map((c) => `<td class="px-4 py-2 align-top">${celdaHTML(c.format ? c.format(row) : row[c.key], consulta)}</td>`).join("")}
+        ${columns.map((c) => `<td class="px-4 py-2 align-top${c.noPrint ? " no-print" : ""}">${celdaHTML(c.format ? c.format(row) : row[c.key], consulta)}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
           ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
@@ -365,14 +370,15 @@ export function createHistorial(opts) {
         });
         let etiquetaPuesta = false;
         const celdas = columns.map((c) => {
+          const np = c.noPrint ? " no-print" : "";
           if (totals.includes(c.key)) {
-            return `<td class="px-4 py-2">${sumas[c.key]}</td>`;
+            return `<td class="px-4 py-2${np}">${sumas[c.key]}</td>`;
           }
           if (!etiquetaPuesta) {
             etiquetaPuesta = true;
-            return `<td class="px-4 py-2 text-right">Total:</td>`;
+            return `<td class="px-4 py-2 text-right${np}">Total:</td>`;
           }
-          return `<td class="px-4 py-2"></td>`;
+          return `<td class="px-4 py-2${np}"></td>`;
         });
         totalsEl.innerHTML = `<td class="px-4 py-2 no-print"></td>${celdas.join("")}<td class="px-4 py-2 no-print"></td>`;
       }
@@ -535,7 +541,7 @@ export function printElement(root, title) {
   // imprimir para que sea hijo directo de <body>. Así, la regla de
   // impresión solo necesita ocultar el resto de los hijos directos de
   // <body>, sin importar en qué vista/pestaña estaba anidado el nodo.
-  root.querySelectorAll(".print-header, .print-footer").forEach((n) => n.classList.remove("hidden"));
+  root.querySelectorAll(".print-header, .print-summary, .print-footer").forEach((n) => n.classList.remove("hidden"));
   root.classList.add("print-target");
 
   const placeholder = document.createComment("print-placeholder");
@@ -555,7 +561,7 @@ export function printElement(root, title) {
     }
     document.body.classList.remove("printing-single");
     root.classList.remove("print-target");
-    root.querySelectorAll(".print-header, .print-footer").forEach((n) => n.classList.add("hidden"));
+    root.querySelectorAll(".print-header, .print-summary, .print-footer").forEach((n) => n.classList.add("hidden"));
     document.title = previousTitle;
   };
   // afterprint cubre el cierre del diálogo en la mayoría de navegadores;
