@@ -963,6 +963,7 @@
         <div class="flex gap-2 no-print">
           <button class="subtab-btn subtab-active" data-subtab="instituciones">Instituciones</button>
           <button class="subtab-btn" data-subtab="categorias-insumos">Categorías de Insumos</button>
+          <button class="subtab-btn" data-subtab="correcciones">Corregir nombres</button>
         </div>
 
         <div id="panel-instituciones" class="subtab-panel space-y-4">
@@ -1012,6 +1013,23 @@
               <tbody id="tabla-categorias-insumos-body"></tbody>
             </table>
           </div>
+        </div>
+
+        <div id="panel-correcciones" class="subtab-panel hidden space-y-4">
+          <div class="form-card">
+            <h3 class="font-semibold text-slate-700 mb-1">Corregir un nombre en todos los registros</h3>
+            <p class="text-xs text-slate-500 mb-3 max-w-2xl">
+              Busca un texto en los registros ya guardados (combustible, traslados, educación, etc.; no importan tildes ni mayúsculas) y lo cambia por el correcto.
+              Si la institución correcta ya está en el catálogo, los registros se pasan a ella; si no, se renombra la del catálogo. Primero se muestra una
+              vista previa: no se cambia nada hasta que usted confirme.
+            </p>
+            <div class="form-grid !grid-cols-3">
+              <div><label class="form-label">Texto actual (equivocado)</label><input id="corr-viejo" type="text" class="form-input" autocomplete="off" /></div>
+              <div><label class="form-label">Debe decir</label><input id="corr-nuevo" type="text" class="form-input" autocomplete="off" /></div>
+              <div class="flex items-end"><button type="button" id="btn-corr-buscar" class="btn-primary w-full">Buscar coincidencias</button></div>
+            </div>
+          </div>
+          <div id="corr-resultado"></div>
         </div>
       </section>
 

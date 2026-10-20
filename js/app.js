@@ -25,6 +25,7 @@ import { initInventario } from "./inventario.js";
 import { initReportes } from "./reportes.js";
 import { initUsuarios } from "./usuarios.js";
 import { initBuscadorGlobal } from "./buscadorGlobal.js";
+import { initCorrecciones } from "./correcciones.js";
 
 let modulesStarted = false;
 
@@ -52,6 +53,7 @@ function startModules() {
     initDashboard();
     initReportes();
     initUsuarios();
+    initCorrecciones();
   }
 }
 

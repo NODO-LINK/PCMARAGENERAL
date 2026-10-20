@@ -71,3 +71,39 @@ export function resaltarBusqueda(texto, consulta) {
   if (abierto) html += "</mark>";
   return html;
 }
+
+/**
+ * Reemplaza `viejo` por `nuevo` en `texto` sin importar tildes ni mayúsculas
+ * (lo demás del texto queda intacto). Devuelve { texto, cambios }.
+ */
+export function reemplazarBusqueda(texto, viejo, nuevo) {
+  const original = String(texto ?? "");
+  const buscado = normalizarBusqueda(viejo).trim();
+  if (!buscado || !original) return { texto: original, cambios: 0 };
+
+  let normalizado = "";
+  const posicion = [];
+  const caracteres = [...original];
+  caracteres.forEach((ch, i) => {
+    const n = normalizarBusqueda(ch);
+    for (let k = 0; k < n.length; k++) posicion.push(i);
+    normalizado += n;
+  });
+
+  let salida = "";
+  let cambios = 0;
+  let desdeOriginal = 0;
+  let desdeNormalizado = 0;
+  for (;;) {
+    const idx = normalizado.indexOf(buscado, desdeNormalizado);
+    if (idx === -1) break;
+    const iniOriginal = posicion[idx];
+    const finOriginal = posicion[idx + buscado.length - 1] + 1;
+    salida += caracteres.slice(desdeOriginal, iniOriginal).join("") + nuevo;
+    desdeOriginal = finOriginal;
+    desdeNormalizado = idx + buscado.length;
+    cambios++;
+  }
+  salida += caracteres.slice(desdeOriginal).join("");
+  return { texto: salida, cambios };
+}
