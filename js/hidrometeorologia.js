@@ -571,7 +571,7 @@ function imprimirMesFluviometria() {
       </table>
     </div>`;
 
-  printAdHoc(`${rioActual()?.nombre || "Río"} — ${nombreMes}`, bodyHTML, ["Jefe de Departamento", "Director"]);
+  printAdHoc(`${rioActual()?.nombre || "Río"} — ${nombreMes}`, bodyHTML, ["Jefe de Departamento", "Director"], 4);
 }
 
 /* ---------------- Estadística que se imprime con el historial ---------------- */
@@ -802,6 +802,8 @@ function construirHistorialFluvio() {
     isAdmin,
     exportFileName: `Lecturas_${nombreRio.replace(/\s+/g, "_")}`,
     firmas: ["Jefe de Departamento", "Director"],
+    // Espacio extra sobre las líneas para que se pueda firmar a mano (el margen por defecto es de 1.5rem).
+    firmaEspacio: 4,
     // Las lecturas no se EDITAN una vez guardadas (preserva la serie
     // histórica), pero SÍ se pueden eliminar: el administrador borra
     // cualquiera; el rol Hidro solo las que él mismo cargó (coincide con
@@ -1538,6 +1540,8 @@ function construirHistorialPluvio() {
     isAdmin,
     exportFileName: `Lluvia_${nombreEstacion.replace(/\s+/g, "_")}`,
     firmas: ["Jefe de Departamento", "Director"],
+    // Espacio extra sobre las líneas para que se pueda firmar a mano (el margen por defecto es de 1.5rem).
+    firmaEspacio: 4,
     canDelete: (row) => isAdmin() || (isHidro() && row.createdBy === getCurrentUser()?.uid),
     onDelete: async (row) => {
       if (!row) return;
