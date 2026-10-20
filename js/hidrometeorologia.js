@@ -651,10 +651,30 @@ const ticksEnteros = (max) => {
   return v;
 };
 
-/** Línea del nivel en el tiempo, con las líneas de advertencia/alerta y los puntos coloreados por estado. */
+// Una lectura por día para la línea: la de las 7:00 a. m. (la oficial: la
+// rutina es de 7 a. m. a 7 a. m.). Si ese día no hay ninguna entre las 6:00 y
+// las 8:59, se usa la primera del día, para que ningún día quede sin punto.
+// Las demás lecturas del día (ej. las de mediodía) no entran en la línea,
+// aunque sí siguen en la tabla y en las cifras de la estadística.
+function lecturaDeLas7PorDia(rows) {
+  const porDia = new Map();
+  rows.filter(tieneNivel).forEach((r) => {
+    const d = toDate(r.fecha);
+    if (!d || isNaN(d.getTime())) return;
+    const k = d.toLocaleDateString("en-CA");
+    if (!porDia.has(k)) porDia.set(k, []);
+    porDia.get(k).push({ r, ms: d.getTime(), min: d.getHours() * 60 + d.getMinutes() });
+  });
+  return [...porDia.values()].map((delDia) => {
+    const cercanas = delDia.filter((x) => x.min >= 360 && x.min < 540);
+    if (cercanas.length) return cercanas.reduce((m, x) => (Math.abs(x.min - 420) < Math.abs(m.min - 420) ? x : m)).r;
+    return delDia.reduce((m, x) => (x.ms < m.ms ? x : m)).r;
+  });
+}
+
+/** Línea del nivel en el tiempo (una lectura por día, la de las 7 a. m.), con las líneas de advertencia/alerta y los puntos coloreados por estado. */
 function graficoNivelSVG(rows) {
-  const pts = rows
-    .filter(tieneNivel)
+  const pts = lecturaDeLas7PorDia(rows)
     .map((r) => ({ t: toDate(r.fecha).getTime(), v: nivelDe(r) }))
     .filter((p) => !isNaN(p.t))
     .sort((a, b) => a.t - b.t);
@@ -684,7 +704,7 @@ function graficoNivelSVG(rows) {
     const ms = tMin + ((tMax - tMin) * i) / (cantTicks - 1);
     return { x: X(ms), texto: fechaDM(ms) };
   });
-  return marcoSVG("Tendencia del nivel en el período", { ticks: ticksEnteros(yMax), y: Y }, umbrales + linea + puntos, ticksX);
+  return marcoSVG("Tendencia del nivel en el período (una lectura por día: la de las 7:00 a. m.)", { ticks: ticksEnteros(yMax), y: Y }, umbrales + linea + puntos, ticksX);
 }
 
 /** Barras de lluvia por día (para Pluviometría). */
