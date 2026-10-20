@@ -117,12 +117,40 @@ function lecturasDelRioAscConVariacion() {
     .slice()
     .sort((a, b) => toDate(a.fecha).getTime() - toDate(b.fecha).getTime());
   let anterior = null;
-  return asc.map((l) => {
+  const conVariacion = asc.map((l) => {
     const nivel = nivelDe(l);
     const variacion = anterior !== null && nivel !== null ? Math.round((nivel - anterior) * 100) / 100 : null;
     if (nivel !== null) anterior = nivel;
     return { ...l, variacion };
   });
+  return fusionarLluviaDelDia(conVariacion);
+}
+
+// Si en un mismo día hay anotaciones de SOLO lluvia (sin nivel) y alguna
+// lectura de nivel con la casilla de lluvia vacía, la lluvia se muestra en
+// esa casilla y la fila de solo lluvia deja de aparecer aparte — así el día
+// se ve como una sola fila. Es solo de visualización: los registros guardados
+// no se tocan (por eso la fila fusionada recuerda los documentos absorbidos,
+// que se borran juntos si se elimina la fila). Una casilla que ya tiene lluvia
+// (aunque sea 0) nunca se sobrescribe.
+function fusionarLluviaDelDia(filasAsc) {
+  const porDia = new Map();
+  filasAsc.forEach((r) => {
+    const k = toDate(r.fecha)?.toLocaleDateString("en-CA") || "";
+    if (!porDia.has(k)) porDia.set(k, []);
+    porDia.get(k).push(r);
+  });
+  const absorbidas = new Set();
+  porDia.forEach((delDia) => {
+    const lluviaVacia = (r) => r.lluvia === null || r.lluvia === undefined || r.lluvia === "";
+    const soloLluvia = delDia.filter((r) => !tieneNivel(r) && !lluviaVacia(r) && !isNaN(Number(r.lluvia)));
+    const destino = delDia.find((r) => tieneNivel(r) && lluviaVacia(r));
+    if (!soloLluvia.length || !destino) return;
+    destino.lluvia = Math.round(soloLluvia.reduce((s, r) => s + Number(r.lluvia), 0) * 100) / 100;
+    destino.lluviaFusionada = soloLluvia.map((r) => ({ id: r.id, createdBy: r.createdBy }));
+    soloLluvia.forEach((r) => absorbidas.add(r));
+  });
+  return filasAsc.filter((r) => !absorbidas.has(r));
 }
 function lecturasDelRioConVariacion() {
   return lecturasDelRioAscConVariacion().slice().reverse(); // más reciente primero, para la tabla
@@ -655,16 +683,22 @@ function construirHistorialFluvio() {
     // histórica), pero SÍ se pueden eliminar: el administrador borra
     // cualquiera; el rol Hidro solo las que él mismo cargó (coincide con
     // firestore.rules del lado del servidor).
-    canDelete: (row) => isAdmin() || (isHidro() && row.createdBy === getCurrentUser()?.uid),
+    canDelete: (row) => {
+      const miUid = getCurrentUser()?.uid;
+      const propias = [row, ...(row.lluviaFusionada || [])].every((r) => r.createdBy === miUid);
+      return isAdmin() || (isHidro() && propias);
+    },
     onDelete: async (row) => {
       if (!row) return;
+      const absorbidas = row.lluviaFusionada || [];
       const ok = await confirmDialog({
         title: "Eliminar lectura",
-        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (${nivelDe(row) !== null ? `nivel ${nivelDe(row)}` : `solo lluvia ${row.lluvia ?? ""} mm/m²`}). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
+        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (${nivelDe(row) !== null ? `nivel ${nivelDe(row)}` : `solo lluvia ${row.lluvia ?? ""} mm/m²`})${absorbidas.length ? ` junto con la lluvia que se anotó aparte ese mismo día (${absorbidas.length} registro${absorbidas.length > 1 ? "s" : ""}), porque aquí se muestran como una sola fila` : ""}. Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
       });
       if (!ok) return;
       try {
         await deleteDoc(doc(db, COLLECTIONS.HIDRO_LECTURAS, row.id));
+        for (const a of absorbidas) await deleteDoc(doc(db, COLLECTIONS.HIDRO_LECTURAS, a.id));
         toast("Lectura eliminada.", "success");
       } catch (err) {
         console.error("Error eliminando lectura de Fluviometría:", err);
