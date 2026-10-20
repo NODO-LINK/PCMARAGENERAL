@@ -64,6 +64,43 @@ export function confirmDialog({ title = "Confirmar", message, confirmText = "Con
   });
 }
 
+/**
+ * Modal con un campo de texto. Resuelve con el texto escrito (ya sin espacios
+ * sobrantes) o con null si se cancela. `message` admite HTML.
+ */
+export function promptDialog({ title = "Escriba un valor", message = "", label = "", value = "", placeholder = "", confirmText = "Guardar" }) {
+  return new Promise((resolve) => {
+    const modalRoot = document.getElementById("modal-root");
+    modalRoot.innerHTML = `
+      <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+        <form id="prompt-form" class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h3 class="text-lg font-semibold text-slate-800 mb-2">${title}</h3>
+          ${message ? `<p class="text-sm text-slate-600 mb-4">${message}</p>` : ""}
+          ${label ? `<label class="form-label">${label}</label>` : ""}
+          <input id="prompt-input" type="text" class="form-input mb-6" autocomplete="off" placeholder="${escapeHTML(placeholder)}" />
+          <div class="flex justify-end gap-3">
+            <button type="button" id="prompt-cancel" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Cancelar</button>
+            <button type="submit" class="px-4 py-2 text-sm rounded-md text-white bg-navy-700 hover:bg-navy-800">${confirmText}</button>
+          </div>
+        </form>
+      </div>`;
+    const input = modalRoot.querySelector("#prompt-input");
+    input.value = value;
+    input.focus();
+    input.select();
+    modalRoot.querySelector("#prompt-cancel").onclick = () => {
+      modalRoot.innerHTML = "";
+      resolve(null);
+    };
+    modalRoot.querySelector("#prompt-form").onsubmit = (e) => {
+      e.preventDefault();
+      const texto = input.value.trim();
+      modalRoot.innerHTML = "";
+      resolve(texto);
+    };
+  });
+}
+
 /* ---------------------------------------------------------------------- */
 /* Formato de fechas                                                       */
 /* ---------------------------------------------------------------------- */

@@ -14,8 +14,10 @@
  */
 import { COLLECTIONS, CATEGORIAS_INSTITUCIONES } from "./config.js";
 import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
-import { toast, confirmDialog } from "./ui.js";
-import { isAdmin } from "./auth.js";
+import { toast, confirmDialog, promptDialog } from "./ui.js";
+import { isAdmin, getCurrentUser } from "./auth.js";
+import { db, doc, writeBatch, serverTimestamp } from "./firebase.js";
+import { normalizarBusqueda } from "./busqueda.js";
 
 let instituciones = [];
 let categoriasInsumos = [];
@@ -135,7 +137,8 @@ function renderInstitucionesTable() {
         <td class="px-4 py-2">
           ${
             admin
-              ? `<button data-id="${i.id}" data-act="toggle" class="text-navy-700 hover:underline mr-3">${i.activo === false ? "Activar" : "Desactivar"}</button>
+              ? `<button data-id="${i.id}" data-act="rename" class="text-navy-700 hover:underline mr-3">Renombrar</button>
+                 <button data-id="${i.id}" data-act="toggle" class="text-navy-700 hover:underline mr-3">${i.activo === false ? "Activar" : "Desactivar"}</button>
                  <button data-id="${i.id}" data-act="del" class="text-red-700 hover:underline">Eliminar</button>`
               : "—"
           }
@@ -156,6 +159,9 @@ function renderInstitucionesTable() {
         }
       });
     });
+    tbody.querySelectorAll('[data-act="rename"]').forEach((btn) => {
+      btn.onclick = () => renombrarInstitucion(btn.dataset.id);
+    });
     tbody.querySelectorAll('[data-act="toggle"]').forEach((btn) => {
       btn.onclick = () => {
         const inst = instituciones.find((i) => i.id === btn.dataset.id);
@@ -168,6 +174,64 @@ function renderInstitucionesTable() {
         if (ok) deleteRecord(COLLECTIONS.INSTITUCIONES, btn.dataset.id);
       };
     });
+  }
+}
+
+/**
+ * Cambia el nombre de una institución del catálogo Y el de todos los
+ * registros que la usan. Cada despacho de combustible y cada traslado guarda
+ * una copia del nombre (institucionNombre) además del enlace (institucionId),
+ * así que renombrar solo el catálogo dejaría los registros con el nombre
+ * viejo. Todo se escribe en lotes; el cambio del catálogo va en el primero.
+ */
+async function renombrarInstitucion(id) {
+  const inst = instituciones.find((i) => i.id === id);
+  if (!inst) return;
+  const afectadosCombustible = despachosCombustible.filter((d) => d.institucionId === id);
+  const afectadosTraslados = trasladosInstitucion.filter((t) => t.institucionId === id);
+
+  const nuevo = await promptDialog({
+    title: "Renombrar institución",
+    message: `Se cambiará el nombre en el catálogo y <strong>automáticamente</strong> en los registros que la usan: ${afectadosCombustible.length} despacho(s) de combustible y ${afectadosTraslados.length} traslado(s).`,
+    label: "Nuevo nombre",
+    value: inst.nombre,
+    confirmText: "Renombrar",
+  });
+  if (nuevo === null || nuevo === inst.nombre) return;
+  if (!nuevo) {
+    toast("Escriba el nuevo nombre.", "error");
+    return;
+  }
+  const clave = normalizarBusqueda(nuevo).trim();
+  const repetida = instituciones.find((i) => i.id !== id && normalizarBusqueda(i.nombre).trim() === clave);
+  if (repetida) {
+    toast(`Ya existe "${repetida.nombre}" en el catálogo. Para unir dos instituciones use Corregir nombres.`, "error");
+    return;
+  }
+
+  const usuario = getCurrentUser();
+  const auditoria = { updatedAt: serverTimestamp(), updatedBy: usuario?.uid || null };
+  const viejoClave = normalizarBusqueda(inst.nombre).trim();
+  const operaciones = [{ ref: doc(db, COLLECTIONS.INSTITUCIONES, id), datos: { nombre: nuevo, ...auditoria } }];
+  afectadosCombustible.forEach((d) => operaciones.push({ ref: doc(db, COLLECTIONS.DESPACHOS_COMBUSTIBLE, d.id), datos: { institucionNombre: nuevo, ...auditoria } }));
+  afectadosTraslados.forEach((t) => {
+    const datos = { institucionNombre: nuevo, ...auditoria };
+    // El texto original del traslado (centroDestino) solo se cambia si era
+    // el nombre viejo tal cual; si era otra forma de escribirlo se respeta.
+    if (t.centroDestino && normalizarBusqueda(t.centroDestino).trim() === viejoClave) datos.centroDestino = nuevo;
+    operaciones.push({ ref: doc(db, COLLECTIONS.TRASLADOS, t.id), datos });
+  });
+
+  try {
+    for (let i = 0; i < operaciones.length; i += 400) {
+      const lote = writeBatch(db);
+      operaciones.slice(i, i + 400).forEach((op) => lote.update(op.ref, op.datos));
+      await lote.commit();
+    }
+    toast(`"${nuevo}": renombrada (${operaciones.length - 1} registro(s) actualizados).`, "success");
+  } catch (err) {
+    console.error(err);
+    toast("No se pudo completar el cambio de nombre. Intente de nuevo.", "error");
   }
 }
 

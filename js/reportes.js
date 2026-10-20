@@ -58,7 +58,7 @@ const REPORTS = {
       { key: "tipo", label: "Tipo" },
       { key: "nombrePaciente", label: "Paciente" },
       { key: "cedulaPaciente", label: "Cédula" },
-      { key: "centroDestino", label: "Centro destino" },
+      { key: "centroDestino", label: "Centro destino", format: (r) => r.institucionNombre || r.centroDestino || "—" },
       { key: "unidad", label: "Unidad" },
       { key: "responsable", label: "Responsable" },
     ],
