@@ -116,7 +116,7 @@
     </div>
   </header>
 
-  <div class="flex flex-1 min-h-0">
+  <div class="flex flex-col md:flex-row flex-1 min-h-0">
     <!-- Sidebar -->
     <nav class="no-print w-56 shrink-0 bg-navy-900 text-navy-100 hidden md:flex md:flex-col py-4 overflow-y-auto">
       <button class="nav-link" data-view="dashboard"><span class="icon" data-icon="dashboard"></span>Dashboard</button>
@@ -136,18 +136,18 @@
     </nav>
 
     <!-- Mobile nav -->
-    <nav class="no-print md:hidden w-full bg-navy-900 text-navy-100 flex overflow-x-auto text-xs">
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="dashboard"><span class="icon" data-icon="dashboard"></span>Dashboard</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="emergencias"><span class="icon" data-icon="emergencia"></span>Emergencias</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="guardias"><span class="icon" data-icon="escudo"></span>Guardias</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="combustible"><span class="icon" data-icon="combustible"></span>Combustible</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="hidro"><span class="icon" data-icon="ola"></span>Hidrometeorología</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="educacion"><span class="icon" data-icon="graduacion"></span>Educación</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="inspeccion"><span class="icon" data-icon="buscar"></span>Gestión de Riesgo</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="inventario"><span class="icon" data-icon="caja"></span>Inventario</button>
-      <button class="nav-link !py-2 !px-3 whitespace-nowrap" data-view="reportes"><span class="icon" data-icon="impresora"></span>Reportes</button>
-      <button class="nav-link nav-admin-only hidden !py-2 !px-3 whitespace-nowrap" data-view="catalogos"><span class="icon" data-icon="carpeta"></span>Catálogos</button>
-      <button class="nav-link nav-admin-only hidden !py-2 !px-3 whitespace-nowrap" data-view="usuarios"><span class="icon" data-icon="usuario"></span>Usuarios</button>
+    <nav class="no-print md:hidden w-full shrink-0 bg-navy-900 text-navy-100 flex overflow-x-auto text-xs">
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="dashboard"><span class="icon" data-icon="dashboard"></span>Dashboard</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="emergencias"><span class="icon" data-icon="emergencia"></span>Emergencias</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="guardias"><span class="icon" data-icon="escudo"></span>Guardias</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="combustible"><span class="icon" data-icon="combustible"></span>Combustible</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="hidro"><span class="icon" data-icon="ola"></span>Hidrometeorología</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="educacion"><span class="icon" data-icon="graduacion"></span>Educación</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="inspeccion"><span class="icon" data-icon="buscar"></span>Gestión de Riesgo</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="inventario"><span class="icon" data-icon="caja"></span>Inventario</button>
+      <button class="nav-link !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="reportes"><span class="icon" data-icon="impresora"></span>Reportes</button>
+      <button class="nav-link nav-admin-only hidden !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="catalogos"><span class="icon" data-icon="carpeta"></span>Catálogos</button>
+      <button class="nav-link nav-admin-only hidden !w-auto shrink-0 !py-2 !px-3 whitespace-nowrap" data-view="usuarios"><span class="icon" data-icon="usuario"></span>Usuarios</button>
     </nav>
 
     <!-- Main content -->
