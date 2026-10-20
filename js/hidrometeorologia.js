@@ -581,7 +581,7 @@ const fmtNum = (n) => String(Math.round(n * 100) / 100);
 
 // Tabla compacta de pares "concepto — valor" en dos columnas, para la hoja
 // impresa (estilos en línea: la hoja se arma fuera de la pantalla normal).
-function tablaEstadistica(titulo, pares) {
+function tablaEstadistica(titulo, pares, graficoHTML = "") {
   const celda = "border:1px solid #cbd5e1;padding:4px 8px;";
   const filas = [];
   for (let i = 0; i < pares.length; i += 2) {
@@ -594,6 +594,7 @@ function tablaEstadistica(titulo, pares) {
   }
   return `<div style="margin:16px 0 6px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
     <div style="font-weight:bold;font-size:12px;margin-bottom:4px;">${escapeHTML(titulo)}</div>
+    ${graficoHTML}
     <table style="width:100%;border-collapse:collapse;font-size:11px;"><tbody>${filas.join("")}</tbody></table>
   </div>`;
 }
@@ -610,6 +611,108 @@ function lluviaPorDia(rows) {
   return porDia;
 }
 const fechaCorta = (clave) => (clave ? clave.split("-").reverse().join("/") : "—");
+
+// ---- Gráficos vectoriales (SVG) para la hoja impresa ----
+// Se dibujan como SVG y no con Chart.js porque la hoja se arma fuera de la
+// pantalla normal y un SVG sale nítido en papel sin convertir nada a imagen.
+const SVG_W = 720;
+const SVG_H = 220;
+const SVG_M = { l: 40, r: 16, t: 16, b: 32 };
+const fechaDM = (ms) => {
+  const d = new Date(ms);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+function marcoSVG(titulo, ejeY, contenido, ticksX) {
+  const { l, r, t, b } = SVG_M;
+  const rejilla = ejeY.ticks
+    .map((v) => {
+      const y = ejeY.y(v);
+      return `<line x1="${l}" y1="${y}" x2="${SVG_W - r}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/><text x="${l - 6}" y="${y + 3}" font-size="9" text-anchor="end" fill="#64748b">${v}</text>`;
+    })
+    .join("");
+  const etiquetasX = ticksX.map(({ x, texto }) => `<text x="${x}" y="${SVG_H - b + 14}" font-size="9" text-anchor="middle" fill="#64748b">${texto}</text>`).join("");
+  return `<div style="margin:2px 0 8px;">
+    <div style="font-size:10px;color:#475569;margin-bottom:2px;">${escapeHTML(titulo)}</div>
+    <svg viewBox="0 0 ${SVG_W} ${SVG_H}" width="100%" style="display:block;background:#fff;border:1px solid #cbd5e1;" xmlns="http://www.w3.org/2000/svg" font-family="Arial,Helvetica,sans-serif">
+      ${rejilla}
+      <line x1="${l}" y1="${SVG_H - b}" x2="${SVG_W - r}" y2="${SVG_H - b}" stroke="#94a3b8"/>
+      <line x1="${l}" y1="${t}" x2="${l}" y2="${SVG_H - b}" stroke="#94a3b8"/>
+      ${contenido}
+      ${etiquetasX}
+    </svg>
+  </div>`;
+}
+
+const ticksEnteros = (max) => {
+  const paso = max > 12 ? Math.ceil(max / 6) : max > 6 ? 2 : 1;
+  const v = [];
+  for (let i = 0; i <= max; i += paso) v.push(i);
+  return v;
+};
+
+/** Línea del nivel en el tiempo, con las líneas de advertencia/alerta y los puntos coloreados por estado. */
+function graficoNivelSVG(rows) {
+  const pts = rows
+    .filter(tieneNivel)
+    .map((r) => ({ t: toDate(r.fecha).getTime(), v: nivelDe(r) }))
+    .filter((p) => !isNaN(p.t))
+    .sort((a, b) => a.t - b.t);
+  if (!pts.length) return "";
+  const { l, r, t, b } = SVG_M;
+  const u = umbralesRioActual();
+  const maxV = Math.max(...pts.map((p) => p.v));
+  const yMax = Math.max(Math.ceil(maxV) + 1, 3);
+  let tMin = pts[0].t;
+  let tMax = pts[pts.length - 1].t;
+  if (tMax === tMin) tMax = tMin + 864e5;
+  const X = (ms) => l + ((ms - tMin) / (tMax - tMin)) * (SVG_W - l - r);
+  const Y = (v) => SVG_H - b - (v / yMax) * (SVG_H - t - b);
+
+  const umbrales = [
+    [u.advertencia, "#d97706", "Advertencia"],
+    [u.alerta, "#dc2626", "Alerta roja"],
+  ]
+    .filter(([v]) => v <= yMax)
+    .map(([v, color, nombre]) => `<line x1="${l}" y1="${Y(v)}" x2="${SVG_W - r}" y2="${Y(v)}" stroke="${color}" stroke-width="1" stroke-dasharray="5 3"/><text x="${SVG_W - r - 2}" y="${Y(v) - 3}" font-size="8" text-anchor="end" fill="${color}">${nombre} (${v})</text>`)
+    .join("");
+  const linea = pts.length > 1 ? `<polyline points="${pts.map((p) => `${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ")}" fill="none" stroke="#13315C" stroke-width="1.6" stroke-linejoin="round"/>` : "";
+  const puntos = pts.map((p) => `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.6" fill="${COLOR_HEX_ESTADO[calcularEstado(p.v).color] || "#13315C"}" stroke="#fff" stroke-width="0.6"/>`).join("");
+
+  const cantTicks = Math.min(8, Math.max(2, pts.length));
+  const ticksX = Array.from({ length: cantTicks }, (_, i) => {
+    const ms = tMin + ((tMax - tMin) * i) / (cantTicks - 1);
+    return { x: X(ms), texto: fechaDM(ms) };
+  });
+  return marcoSVG("Tendencia del nivel en el período", { ticks: ticksEnteros(yMax), y: Y }, umbrales + linea + puntos, ticksX);
+}
+
+/** Barras de lluvia por día (para Pluviometría). */
+function graficoLluviaSVG(porDia) {
+  const dias = [...porDia.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  if (!dias.length) return "";
+  const { l, r, t, b } = SVG_M;
+  const maxV = Math.max(...dias.map(([, v]) => v), 1);
+  const yMax = Math.ceil(maxV);
+  const Y = (v) => SVG_H - b - (v / yMax) * (SVG_H - t - b);
+  const ancho = (SVG_W - l - r) / dias.length;
+  const barra = Math.min(ancho * 0.7, 26);
+  const barras = dias
+    .map(([, v], i) => {
+      const x = l + ancho * i + (ancho - barra) / 2;
+      return `<rect x="${x.toFixed(1)}" y="${Y(v).toFixed(1)}" width="${barra.toFixed(1)}" height="${(SVG_H - b - Y(v)).toFixed(1)}" fill="#0ea5e9"/>`;
+    })
+    .join("");
+  const paso = Math.max(1, Math.ceil(dias.length / 10));
+  const ticksX = dias
+    .map(([clave], i) => ({ i, clave }))
+    .filter(({ i }) => i % paso === 0)
+    .map(({ i, clave }) => ({ x: l + ancho * i + ancho / 2, texto: fechaCorta(clave).slice(0, 5) }));
+  const paso2 = yMax > 12 ? Math.ceil(yMax / 6) : yMax > 6 ? 2 : 1;
+  const ticks = [];
+  for (let i = 0; i <= yMax; i += paso2) ticks.push(i);
+  return marcoSVG("Lluvia por día en el período (mm/m²)", { ticks, y: Y }, barras, ticksX);
+}
 
 function estadisticaFluvio(rows) {
   const conNivel = rows.filter(tieneNivel);
@@ -642,7 +745,7 @@ function estadisticaFluvio(rows) {
     pares.push(["Días con lluvia", String([...porDia.values()].filter((v) => v > 0).length)]);
     pares.push(["Mayor lluvia en un día", `${fmtNum(valMax)} (${fechaCorta(diaMax)})`]);
   }
-  return tablaEstadistica("Estadística del período", pares);
+  return tablaEstadistica("Estadística del período", pares, graficoNivelSVG(rows));
 }
 
 function estadisticaPluvio(rows) {
@@ -655,7 +758,7 @@ function estadisticaPluvio(rows) {
     pares.push(["Mayor lluvia en un día", `${fmtNum(valMax)} (${fechaCorta(diaMax)})`]);
     pares.push(["Promedio por día con lluvia", fmtNum(total / conLluvia.length)]);
   }
-  return tablaEstadistica("Estadística del período", pares);
+  return tablaEstadistica("Estadística del período", pares, graficoLluviaSVG(porDia));
 }
 
 /* -------------------------------- Historial ------------------------------ */
