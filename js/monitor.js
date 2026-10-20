@@ -447,6 +447,8 @@
       var r = state.hidro[i];
       if (r.rioId && r.rioId !== "limon") continue;
       var d = toDate(r.fecha);
+      // Una lectura de solo lluvia trae nivel null (y Number(null) es 0).
+      if (r.nivel === null || r.nivel === undefined || r.nivel === "") continue;
       var nivel = Number(r.nivel);
       if (!d || isNaN(nivel)) continue;
       var mes = d.getMonth() + 1;

@@ -94,6 +94,18 @@ function lecturasDelRio() {
   return lecturas.filter((l) => rioIdDeLectura(l) === rioSeleccionadoId);
 }
 
+// Una lectura puede traer solo lluvia (sin nivel): se guarda con nivel null.
+// Ojo: Number(null) es 0, no NaN — por eso todo lo que trabaja con niveles
+// pasa por nivelDe() en vez de convertir directo, para que una lectura de
+// solo lluvia no cuente como "nivel 0".
+function nivelDe(l) {
+  const v = l?.nivel;
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+const tieneNivel = (l) => nivelDe(l) !== null;
+
 // Variación = diferencia con la lectura INMEDIATAMENTE anterior de ese
 // mismo río (en la práctica, con una lectura diaria a las 7am como marca
 // la planilla, esto equivale a la variación de 24 horas; con varias
@@ -106,9 +118,9 @@ function lecturasDelRioAscConVariacion() {
     .sort((a, b) => toDate(a.fecha).getTime() - toDate(b.fecha).getTime());
   let anterior = null;
   return asc.map((l) => {
-    const nivel = Number(l.nivel);
-    const variacion = anterior !== null && !isNaN(nivel) ? Math.round((nivel - anterior) * 100) / 100 : null;
-    if (!isNaN(nivel)) anterior = nivel;
+    const nivel = nivelDe(l);
+    const variacion = anterior !== null && nivel !== null ? Math.round((nivel - anterior) * 100) / 100 : null;
+    if (nivel !== null) anterior = nivel;
     return { ...l, variacion };
   });
 }
@@ -117,14 +129,15 @@ function lecturasDelRioConVariacion() {
 }
 
 async function registrarLectura(rioId, rioNombre, nivel, lluvia, fecha) {
-  const estado = calcularEstado(nivel, umbralesRioActual());
+  const sinNivel = nivel === null || nivel === undefined || isNaN(nivel);
+  const estado = sinNivel ? null : calcularEstado(nivel, umbralesRioActual());
   await createRecord(COLLECTIONS.HIDRO_LECTURAS, {
     rioId,
     rioNombre,
     fecha,
-    nivel,
+    nivel: sinNivel ? null : nivel,
     lluvia: lluvia === null || lluvia === undefined || isNaN(lluvia) ? null : lluvia,
-    estado: estado.label,
+    estado: estado ? estado.label : null,
     responsable: getResponsableLabel(),
   });
 }
@@ -249,9 +262,9 @@ function setupRioSelector() {
 /* ------------------------------- Dashboard ------------------------------ */
 
 function renderDashboard() {
-  const deEsteRio = lecturasDelRio();
+  const deEsteRio = lecturasDelRio().filter(tieneNivel);
   const ultima = [...deEsteRio].sort((a, b) => toDate(b.fecha).getTime() - toDate(a.fecha).getTime())[0];
-  const nivel = ultima ? Number(ultima.nivel) : null;
+  const nivel = ultima ? nivelDe(ultima) : null;
   const estado = calcularEstado(nivel);
 
   const nivelEl = document.getElementById("hidro-nivel-actual");
@@ -287,8 +300,8 @@ function picosPorMes(lecturasTodas) {
   const porMes = new Map();
   lecturasTodas.forEach((l) => {
     const d = toDate(l.fecha);
-    const nivel = Number(l.nivel);
-    if (!d || isNaN(d.getTime()) || isNaN(nivel)) return;
+    const nivel = nivelDe(l);
+    if (!d || isNaN(d.getTime()) || nivel === null) return;
     const clave = claveMes(d);
     const actual = porMes.get(clave);
     if (!actual || nivel > actual.nivel) porMes.set(clave, { fecha: d, nivel });
@@ -299,8 +312,8 @@ function promediosPorMes(lecturasTodas) {
   const porMes = new Map();
   lecturasTodas.forEach((l) => {
     const d = toDate(l.fecha);
-    const nivel = Number(l.nivel);
-    if (!d || isNaN(d.getTime()) || isNaN(nivel)) return;
+    const nivel = nivelDe(l);
+    if (!d || isNaN(d.getTime()) || nivel === null) return;
     const clave = claveMes(d);
     const actual = porMes.get(clave);
     if (actual) {
@@ -360,7 +373,7 @@ function renderChart() {
   if (selectorEl) selectorEl.classList.toggle("hidden", chartModo !== "especifico");
   if (resumenEl) resumenEl.classList.toggle("hidden", chartModo !== "especifico");
 
-  const lecturasRio = lecturasDelRio();
+  const lecturasRio = lecturasDelRio().filter(tieneNivel);
 
   let labels, data, coloresPuntos, datasetLabel, fechasCompletas;
   if (chartModo === "especifico") {
@@ -506,7 +519,7 @@ function imprimirMesFluviometria() {
       const d = toDate(l.fecha);
       const variacionTxt = l.variacion === null || l.variacion === undefined ? "—" : l.variacion > 0 ? `+${l.variacion}` : `${l.variacion}`;
       const lluviaTxt = l.lluvia === null || l.lluvia === undefined || l.lluvia === "" ? "—" : l.lluvia;
-      return `<tr><td style="${cellStyle}">${d.getDate()}</td><td style="${cellStyle}">${l.nivel}</td><td style="${cellStyle}">${variacionTxt}</td><td style="${cellStyle}">${lluviaTxt}</td></tr>`;
+      return `<tr><td style="${cellStyle}">${d.getDate()}</td><td style="${cellStyle}">${nivelDe(l) ?? "—"}</td><td style="${cellStyle}">${variacionTxt}</td><td style="${cellStyle}">${lluviaTxt}</td></tr>`;
     })
     .join("");
   const lluviaTotal = Math.round(delMes.reduce((s, l) => s + (Number(l.lluvia) || 0), 0) * 100) / 100;
@@ -542,10 +555,10 @@ function construirHistorialFluvio() {
     title: `Historial de Lecturas — ${nombreRio}`,
     columns: [
       { key: "fecha", label: "Fecha y hora", format: (r) => formatDate(r.fecha, true) },
-      { key: "nivel", label: "Nivel" },
+      { key: "nivel", label: "Nivel", format: (r) => nivelDe(r) ?? "—" },
       { key: "variacion", label: "Variación", format: (r) => (r.variacion === null || r.variacion === undefined ? "—" : r.variacion > 0 ? `+${r.variacion}` : `${r.variacion}`) },
       { key: "lluvia", label: "Lluvia (mm/m²)", format: (r) => (r.lluvia === null || r.lluvia === undefined || r.lluvia === "" ? "—" : r.lluvia) },
-      { key: "estado", label: "Estado" },
+      { key: "estado", label: "Estado", format: (r) => r.estado || "—" },
       { key: "responsable", label: "Responsable" },
     ],
     dateField: "fecha",
@@ -562,7 +575,7 @@ function construirHistorialFluvio() {
       if (!row) return;
       const ok = await confirmDialog({
         title: "Eliminar lectura",
-        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (nivel ${row.nivel}). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
+        message: `Se eliminará la lectura de ${formatDate(row.fecha, true)} (${nivelDe(row) !== null ? `nivel ${nivelDe(row)}` : `solo lluvia ${row.lluvia ?? ""} mm/m²`}). Esta acción es permanente y no se puede deshacer. ¿Desea continuar?`,
       });
       if (!ok) return;
       try {
@@ -598,10 +611,16 @@ function setupLecturaForm() {
       toast("Seleccione un río primero.", "error");
       return;
     }
-    const nivel = Number(lecturaForm.elements["nivel"].value);
+    const nivelStr = lecturaForm.elements["nivel"].value.trim();
     const fechaStr = lecturaForm.elements["fecha"].value;
-    const lluviaStr = lecturaForm.elements["lluvia"]?.value;
-    if (isNaN(nivel) || nivel < NIVEL_HIDRO_MIN || nivel > NIVEL_HIDRO_MAX) {
+    const lluviaStr = (lecturaForm.elements["lluvia"]?.value ?? "").trim();
+    // Se puede registrar solo el nivel, solo la lluvia, o ambos; no vacío.
+    if (nivelStr === "" && lluviaStr === "") {
+      toast("Ingrese el nivel, la lluvia, o ambos.", "error");
+      return;
+    }
+    const nivel = nivelStr === "" ? null : Number(nivelStr);
+    if (nivel !== null && (isNaN(nivel) || nivel < NIVEL_HIDRO_MIN || nivel > NIVEL_HIDRO_MAX)) {
       toast(`Ingrese un nivel válido entre ${NIVEL_HIDRO_MIN} y ${NIVEL_HIDRO_MAX}.`, "error");
       return;
     }
@@ -610,7 +629,11 @@ function setupLecturaForm() {
       toast("Ingrese una fecha válida.", "error");
       return;
     }
-    const lluvia = lluviaStr === "" || lluviaStr === undefined ? null : Number(lluviaStr);
+    const lluvia = lluviaStr === "" ? null : Number(lluviaStr);
+    if (lluvia !== null && (isNaN(lluvia) || lluvia < 0)) {
+      toast("Ingrese una cantidad de lluvia válida (0 o más).", "error");
+      return;
+    }
     try {
       await registrarLectura(rioSeleccionadoId, rioActual()?.nombre || "", nivel, lluvia, fecha);
       toast("Lectura registrada correctamente.", "success");
@@ -784,16 +807,20 @@ function parsearGridFluviometria(grid) {
           continue;
         }
         const nivelValor = filaDatos[colDia + 1];
-        const nivel = Number(nivelValor);
-        if (nivelValor === "" || isNaN(nivel)) continue;
+        const nivelNum = Number(nivelValor);
+        const tieneNivelFila = nivelValor !== "" && !isNaN(nivelNum);
         const lluviaValor = filaDatos[colDia + 3];
         const lluvia = Number(lluviaValor);
+        const tieneLluviaFila = lluviaValor !== "" && !isNaN(lluvia);
+        // Un día con solo lluvia (sin nivel) también se importa; un día sin
+        // ninguno de los dos se omite.
+        if (!tieneNivelFila && !tieneLluviaFila) continue;
         filas.push({
           rioId: rio.id,
           rioNombre: rio.nombre,
           fecha: new Date(anioActual, mesActual - 1, dia),
-          nivel,
-          lluvia: lluviaValor === "" || isNaN(lluvia) ? null : lluvia,
+          nivel: tieneNivelFila ? nivelNum : null,
+          lluvia: tieneLluviaFila ? lluvia : null,
         });
       }
     });
@@ -844,7 +871,7 @@ function renderPreviewImportacionFluvio(resultado) {
           <tr class="border-t border-slate-100">
             <td class="px-2 py-1.5">${escapeHTML(f.rioNombre)}</td>
             <td class="px-2 py-1.5">${escapeHTML(formatDate(f.fecha))}</td>
-            <td class="px-2 py-1.5">${f.nivel}</td>
+            <td class="px-2 py-1.5">${f.nivel ?? "—"}</td>
             <td class="px-2 py-1.5">${f.lluvia ?? "—"}</td>
           </tr>`
             )

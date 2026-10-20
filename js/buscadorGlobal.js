@@ -50,7 +50,7 @@ const FUENTES = [
   { col: COLLECTIONS.INSPECCIONES, orden: "fecha", modulo: "Gestión de Riesgo", vista: "inspeccion",
     titulo: (r) => unir(r.codigoInspeccion, r.institucion) || "Inspección", detalle: (r) => unir(f(r.fecha), r.solicitante, r.observacion) },
   { col: COLLECTIONS.HIDRO_LECTURAS, orden: "fecha", modulo: "Fluviometría", vista: "hidro", subtab: "fluviometria",
-    titulo: (r) => `${r.rioNombre || "Río"} — nivel ${r.nivel}`, detalle: (r) => unir(f(r.fecha, true), r.lluvia ? `${r.lluvia} mm/m²` : "", r.responsable) },
+    titulo: (r) => `${r.rioNombre || "Río"} — ${r.nivel !== null && r.nivel !== undefined && r.nivel !== "" ? `nivel ${r.nivel}` : `solo lluvia ${r.lluvia ?? ""} mm/m²`}`, detalle: (r) => unir(f(r.fecha, true), r.lluvia ? `${r.lluvia} mm/m²` : "", r.responsable) },
   { col: COLLECTIONS.PLUVIOMETRIA_LECTURAS, orden: "fecha", modulo: "Pluviometría", vista: "hidro", subtab: "pluviometria",
     titulo: (r) => `${r.estacionNombre || "Estación"} — ${r.lluvia} mm/m²`, detalle: (r) => unir(f(r.fecha), r.responsable) },
   { col: COLLECTIONS.INSUMOS, orden: "nombre", modulo: "Catálogo de Insumos", vista: "inventario", subtab: "catalogo", campoBusqueda: "insumos-catalogo-buscar",

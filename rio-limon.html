@@ -207,10 +207,10 @@
           <h3 class="font-semibold text-slate-700 mb-2">Registrar lectura del nivel</h3>
           <div class="form-grid !grid-cols-3">
             <div><label class="form-label">Fecha y hora</label><input required type="datetime-local" name="fecha" class="form-input" /></div>
-            <div><label class="form-label">Nivel</label><input required type="number" step="any" min="0" max="9" name="nivel" class="form-input" /></div>
-            <div><label class="form-label">Lluvia (mm/m², opcional)</label><input type="number" step="any" min="0" name="lluvia" class="form-input" /></div>
+            <div><label class="form-label">Nivel (vacío si solo anota lluvia)</label><input type="number" step="any" min="0" max="9" name="nivel" class="form-input" /></div>
+            <div><label class="form-label">Lluvia (mm/m²) (vacío si solo anota nivel)</label><input type="number" step="any" min="0" name="lluvia" class="form-input" /></div>
           </div>
-          <p class="text-xs text-slate-400 mt-1">La variación se calcula sola, comparando con la lectura anterior de este mismo río.</p>
+          <p class="text-xs text-slate-400 mt-1">Anote el nivel, la lluvia, o ambos. La variación se calcula sola, comparando con la lectura de nivel anterior de este mismo río.</p>
           <div class="form-actions"><button type="submit" class="btn-primary">Registrar lectura</button></div>
         </form>
 
