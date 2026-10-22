@@ -104,7 +104,7 @@ const REPORTS = {
       { key: "responsable", label: "Responsable" },
     ],
     totals: ["litros"],
-    firmas: ["Jefe de Departamento", "Director"],
+    firmas: ["Despachador", "Director"],
   },
   educacion: {
     label: "Educación",
