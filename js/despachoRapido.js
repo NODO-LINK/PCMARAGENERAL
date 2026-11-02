@@ -28,6 +28,7 @@ import { normalizarBusqueda } from "./busqueda.js";
 
 const DESTINO_POR_DEFECTO = "Módulo";
 const ORIGEN_POR_DEFECTO = "Oficina";
+const ORIGENES = ["Oficina", "Depósito"]; // el despacho solo sale de estos almacenes
 
 /* ------------------------------- Intérprete ------------------------------ */
 
@@ -152,7 +153,7 @@ function origenSugerido(linea) {
   if (!linea.insumoId || !linea.cantidad) return { origen: base, nota: "" };
   if (existenciaDe(linea.insumoId, base) >= linea.cantidad) return { origen: base, nota: "" };
   if (!linea.origen) {
-    const otro = ALMACENES.find((a) => a === "Depósito");
+    const otro = "Depósito";
     if (otro && existenciaDe(linea.insumoId, otro) >= linea.cantidad) return { origen: otro, nota: `${base} no alcanza; se propone ${otro}` };
   }
   return { origen: base, nota: "" };
@@ -163,7 +164,7 @@ function lineasDelUltimoDespacho(destino) {
   const hoy = new Date().toLocaleDateString("en-CA");
   const porDia = new Map();
   getTransferencias()
-    .filter((t) => t.stockDestino === destino)
+    .filter((t) => t.stockDestino === destino && ORIGENES.includes(t.stockOrigen))
     .forEach((t) => {
       const d = toDate(t.fecha);
       if (!d) return;
@@ -240,13 +241,13 @@ export function initDespachoRapido() {
           <tbody>
             ${lineas
               .map((l, i) => {
-                const disp = l.insumoId ? ALMACENES.filter((a) => existenciaDe(l.insumoId, a) > 0).map((a) => `${a}: ${existenciaDe(l.insumoId, a)}`).join(" · ") || "sin existencia" : "—";
+                const disp = l.insumoId ? ORIGENES.map((a) => `${a}: ${existenciaDe(l.insumoId, a)}`).join(" · ") : "—";
                 const falta = l.insumoId && l.cantidad && existenciaDe(l.insumoId, l.origen) < l.cantidad;
                 return `<tr class="border-t border-slate-100 ${l.dudoso && !l.insumoId ? "bg-red-50" : l.dudoso ? "bg-amber-50" : ""}" data-i="${i}">
                   <td class="px-2 py-1.5 text-xs text-slate-500 max-w-[10rem] truncate" title="${escapeHTML(l.original)}">${escapeHTML(l.original)}</td>
                   <td class="px-2 py-1.5"><select data-campo="insumo" class="form-input !py-1 min-w-[12rem]">${opcionesInsumo(l.insumoId)}</select></td>
                   <td class="px-2 py-1.5"><input data-campo="cantidad" type="number" min="0" step="any" class="form-input !py-1" value="${l.cantidad ?? ""}" /></td>
-                  <td class="px-2 py-1.5"><select data-campo="origen" class="form-input !py-1">${opcionesAlmacen(l.origen)}</select>${l.nota ? `<div class="text-[11px] text-amber-700">${escapeHTML(l.nota)}</div>` : ""}</td>
+                  <td class="px-2 py-1.5"><select data-campo="origen" class="form-input !py-1">${ORIGENES.map((a) => `<option value="${escapeHTML(a)}" ${a === l.origen ? "selected" : ""}>${escapeHTML(a)}</option>`).join("")}</select>${l.nota ? `<div class="text-[11px] text-amber-700">${escapeHTML(l.nota)}</div>` : ""}</td>
                   <td class="px-2 py-1.5 text-xs ${falta ? "text-red-700 font-semibold" : "text-slate-500"}">${escapeHTML(disp)}${falta ? " — no alcanza" : ""}</td>
                   <td class="px-2 py-1.5"><button type="button" data-campo="quitar" class="text-red-700 hover:underline text-xs">Quitar</button></td>
                 </tr>`;
