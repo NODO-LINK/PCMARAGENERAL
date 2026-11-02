@@ -28,6 +28,7 @@ import { initBuscadorGlobal } from "./buscadorGlobal.js";
 import { initCorrecciones } from "./correcciones.js";
 import { initDespachoRapido } from "./despachoRapido.js";
 import { initDebitoRapido } from "./debitoRapido.js";
+import { initUnificarInsumos } from "./unificarInsumos.js";
 
 let modulesStarted = false;
 
@@ -47,6 +48,7 @@ function startModules() {
     initInventario();
     initDespachoRapido();
     initDebitoRapido();
+    initUnificarInsumos();
   });
   arrancar("emergencias", initEmergencias);
   arrancar("guardias", initGuardias);

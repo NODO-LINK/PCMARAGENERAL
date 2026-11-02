@@ -71,6 +71,9 @@ export function getStock() {
 export function getDebitos() {
   return debitos;
 }
+export function getEntradas() {
+  return entradas;
+}
 export function getTransferencias() {
   return transferencias;
 }
