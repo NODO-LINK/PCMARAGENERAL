@@ -26,6 +26,7 @@ import { initReportes } from "./reportes.js";
 import { initUsuarios } from "./usuarios.js";
 import { initBuscadorGlobal } from "./buscadorGlobal.js";
 import { initCorrecciones } from "./correcciones.js";
+import { initDespachoRapido } from "./despachoRapido.js";
 
 let modulesStarted = false;
 
@@ -41,7 +42,10 @@ function startModules() {
   // El orden importa: catálogos e inventario deben inicializarse antes que
   // los módulos que dependen de sus <select> (combustible → instituciones).
   arrancar("catalogos", initCatalogos);
-  arrancar("inventario", initInventario);
+  arrancar("inventario", () => {
+    initInventario();
+    initDespachoRapido();
+  });
   arrancar("emergencias", initEmergencias);
   arrancar("guardias", initGuardias);
   arrancar("combustible", initCombustible);

@@ -68,6 +68,9 @@ export function getInsumos() {
 export function getStock() {
   return stock;
 }
+export function getTransferencias() {
+  return transferencias;
+}
 
 export function initInventario() {
   // Tabs internos.
@@ -1482,7 +1485,7 @@ function setupTransferenciaForm() {
   return { startEdit };
 }
 
-async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha }) {
+export async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha }) {
   const origenId = stockDocId(insumoId, origen);
   const destinoId = stockDocId(insumoId, destino);
   const insumo = insumos.find((i) => i.id === insumoId);
