@@ -65,6 +65,54 @@ export function confirmDialog({ title = "Confirmar", message, confirmText = "Con
 }
 
 /**
+ * Modal con buscador + lista desplegable. Resuelve con el `value` elegido o
+ * null si se cancela. `message` admite HTML.
+ */
+export function selectDialog({ title = "Elegir", message = "", label = "", options = [], confirmText = "Aceptar" }) {
+  return new Promise((resolve) => {
+    const modalRoot = document.getElementById("modal-root");
+    modalRoot.innerHTML = `
+      <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+        <form id="select-form" class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h3 class="text-lg font-semibold text-slate-800 mb-2">${title}</h3>
+          ${message ? `<p class="text-sm text-slate-600 mb-4">${message}</p>` : ""}
+          ${label ? `<label class="form-label">${label}</label>` : ""}
+          <input id="select-buscar" type="text" class="form-input input-search mb-1" placeholder="Buscar..." autocomplete="off" />
+          <select id="select-lista" class="form-input mb-6" size="8"></select>
+          <div class="flex justify-end gap-3">
+            <button type="button" id="select-cancel" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Cancelar</button>
+            <button type="submit" class="px-4 py-2 text-sm rounded-md text-white bg-navy-700 hover:bg-navy-800">${confirmText}</button>
+          </div>
+        </form>
+      </div>`;
+    const lista = modalRoot.querySelector("#select-lista");
+    const buscar = modalRoot.querySelector("#select-buscar");
+    const pintar = () => {
+      const q = buscar.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      lista.innerHTML = options
+        .filter((o) => !q || q.split(/\s+/).every((t) => o.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(t)))
+        .map((o) => `<option value="${escapeHTML(String(o.value))}">${escapeHTML(o.label)}</option>`)
+        .join("");
+      if (lista.options.length) lista.selectedIndex = 0;
+    };
+    buscar.oninput = pintar;
+    pintar();
+    buscar.focus();
+    modalRoot.querySelector("#select-cancel").onclick = () => {
+      modalRoot.innerHTML = "";
+      resolve(null);
+    };
+    modalRoot.querySelector("#select-form").onsubmit = (e) => {
+      e.preventDefault();
+      const v = lista.value || null;
+      if (!v) return;
+      modalRoot.innerHTML = "";
+      resolve(v);
+    };
+  });
+}
+
+/**
  * Modal con un campo de texto. Resuelve con el texto escrito (ya sin espacios
  * sobrantes) o con null si se cancela. `message` admite HTML.
  */
@@ -156,6 +204,7 @@ export function formatDate(value, withTime = false) {
  * @param {string} opts.dateField - nombre del campo fecha usado para filtrar.
  * @param {Function} opts.isAdmin - () => boolean.
  * @param {Function} [opts.onEdit] - (row) => void. Siempre requiere isAdmin().
+ * @param {Function} [opts.onFixItem] - (row) => void. Botón "Corregir insumo" (solo admin).
  * @param {Function} [opts.onDelete] - (row) => void.
  * @param {Function} [opts.canDelete] - (row) => boolean. Controla, POR FILA, si se muestra "Eliminar" — útil para permitir borrar solo registros propios a un rol no-admin. Si se omite, se usa isAdmin() para todas las filas (comportamiento de antes).
  * @param {string} [opts.exportFileName] - nombre base para exportaciones.
@@ -164,7 +213,7 @@ export function formatDate(value, withTime = false) {
  * Cada columna puede traer `noPrint: true` para que no salga en la hoja impresa (sí en pantalla y en Excel/PDF).
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio, resumenImpresion } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onFixItem, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio, resumenImpresion } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -348,6 +397,7 @@ export function createHistorial(opts) {
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
           ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
+          ${admin && onFixItem ? `<button data-act="fix" data-id="${row.id}" class="text-amber-700 hover:underline mr-3">Corregir insumo</button>` : ""}
           ${onDelete && (canDelete ? canDelete(row) : admin) ? `<button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>` : ""}
         </td>
       </tr>`
@@ -417,6 +467,11 @@ export function createHistorial(opts) {
       .querySelectorAll('[data-act="edit"]')
       .forEach((btn) => {
         btn.onclick = () => onEdit && onEdit(rows.find((r) => r.id === btn.dataset.id));
+      });
+    el(`#${uid}-body`)
+      .querySelectorAll('[data-act="fix"]')
+      .forEach((btn) => {
+        btn.onclick = () => onFixItem && onFixItem(rows.find((r) => r.id === btn.dataset.id));
       });
     el(`#${uid}-body`)
       .querySelectorAll('[data-act="del"]')

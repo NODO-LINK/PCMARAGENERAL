@@ -46,7 +46,7 @@ import {
 import { COLLECTIONS, ALMACENES, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
 import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js";
-import { toast, confirmDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, printAdHoc } from "./ui.js";
+import { toast, confirmDialog, selectDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, printAdHoc } from "./ui.js";
 import { getIcon } from "./icons.js";
 import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
@@ -175,6 +175,7 @@ export function initInventario() {
     isAdmin,
     exportFileName: "Transferencias_Inventario",
     onEdit: (row) => transferenciaFormApi?.startEdit(row),
+    onFixItem: (row) => corregirInsumoTransferencia(row),
     onDelete: (row) => deleteTransferencia(row),
   });
 
@@ -195,6 +196,7 @@ export function initInventario() {
     isAdmin,
     exportFileName: "Debitos_Inventario",
     onEdit: (row) => debitoFormApi?.startEdit(row),
+    onFixItem: (row) => corregirInsumoDebito(row),
     onDelete: (row) => deleteDebito(row),
   });
 
@@ -1669,6 +1671,87 @@ async function editarTransferencia(row, { origen, destino, cantidad, responsable
     responsable,
     fecha: fecha ? parseLocalDate(fecha) : new Date(),
   });
+}
+
+/** Pide el insumo correcto (solo los que tienen existencia en `almacen`, más el actual). */
+async function pedirInsumoCorrecto(row, almacen) {
+  const opciones = insumos
+    .filter((i) => i.activo !== false && i.id !== row.insumoId && (stock.find((s) => s.insumoId === i.id && s.almacen === almacen)?.existencia || 0) >= Number(row.cantidad))
+    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"))
+    .map((i) => ({ value: i.id, label: i.nombre }));
+  if (!opciones.length) {
+    toast(`No hay otro insumo con existencia suficiente (${row.cantidad}) en ${almacen}.`, "error");
+    return null;
+  }
+  const id = await selectDialog({
+    title: "Corregir insumo",
+    message: `Registrado: <strong>${escapeHTML(row.cantidad)}</strong> × <strong>${escapeHTML(row.insumoNombre)}</strong>. Elija el insumo correcto: se devuelve el movimiento al insumo equivocado y se aplica al correcto. Solo aparecen los que tienen existencia suficiente en ${escapeHTML(almacen)}.`,
+    label: "Insumo correcto",
+    options: opciones,
+    confirmText: "Corregir",
+  });
+  return id ? insumos.find((i) => i.id === id) : null;
+}
+
+const datosStockNuevo = (insumo, almacen, existencia, minimo) => ({
+  insumoId: insumo.id,
+  insumoNombre: insumo.nombre,
+  categoriaId: insumo.categoriaId || "",
+  categoriaNombre: insumo.categoriaNombre || "",
+  almacen,
+  existencia,
+  minimo: minimo ?? 0,
+  updatedAt: serverTimestamp(),
+});
+
+async function corregirInsumoTransferencia(row) {
+  if (!row) return;
+  const nuevo = await pedirInsumoCorrecto(row, row.stockOrigen);
+  if (!nuevo) return;
+  const cant = Number(row.cantidad);
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = (id, alm) => doc(db, COLLECTIONS.INSUMO_STOCK, stockDocId(id, alm));
+      const refs = { vOrig: ref(row.insumoId, row.stockOrigen), vDest: ref(row.insumoId, row.stockDestino), nOrig: ref(nuevo.id, row.stockOrigen), nDest: ref(nuevo.id, row.stockDestino) };
+      const [vOrig, vDest, nOrig, nDest] = await Promise.all(Object.values(refs).map((r) => tx.get(r)));
+      const ex = (snap) => (snap.exists() ? Number(snap.data().existencia) || 0 : 0);
+      if (ex(nOrig) < cant) throw new Error(`Existencia insuficiente de "${nuevo.nombre}" en ${row.stockOrigen}. Disponible: ${ex(nOrig)}.`);
+      // 1) devolver el movimiento al insumo equivocado
+      tx.set(refs.vOrig, { existencia: ex(vOrig) + cant, updatedAt: serverTimestamp() }, { merge: true });
+      tx.set(refs.vDest, { existencia: Math.max(0, ex(vDest) - cant), updatedAt: serverTimestamp() }, { merge: true });
+      // 2) aplicarlo al insumo correcto
+      tx.update(refs.nOrig, { existencia: ex(nOrig) - cant, updatedAt: serverTimestamp() });
+      tx.set(refs.nDest, datosStockNuevo(nuevo, row.stockDestino, ex(nDest) + cant, nDest.exists() ? nDest.data().minimo : 0), { merge: true });
+      tx.update(doc(db, COLLECTIONS.TRANSFERENCIAS_INVENTARIO, row.id), { insumoId: nuevo.id, insumoNombre: nuevo.nombre });
+    });
+    toast(`Insumo corregido: ahora es "${nuevo.nombre}". Existencias ajustadas.`, "success");
+  } catch (err) {
+    console.error(err);
+    toast(err.message || "No se pudo corregir el insumo.", "error");
+  }
+}
+
+async function corregirInsumoDebito(row) {
+  if (!row) return;
+  const nuevo = await pedirInsumoCorrecto(row, row.almacenOrigen);
+  if (!nuevo) return;
+  const cant = Number(row.cantidad);
+  try {
+    await runTransaction(db, async (tx) => {
+      const refV = doc(db, COLLECTIONS.INSUMO_STOCK, stockDocId(row.insumoId, row.almacenOrigen));
+      const refN = doc(db, COLLECTIONS.INSUMO_STOCK, stockDocId(nuevo.id, row.almacenOrigen));
+      const [sV, sN] = await Promise.all([tx.get(refV), tx.get(refN)]);
+      const ex = (snap) => (snap.exists() ? Number(snap.data().existencia) || 0 : 0);
+      if (ex(sN) < cant) throw new Error(`Existencia insuficiente de "${nuevo.nombre}" en ${row.almacenOrigen}. Disponible: ${ex(sN)}.`);
+      tx.set(refV, { existencia: ex(sV) + cant, updatedAt: serverTimestamp() }, { merge: true });
+      tx.update(refN, { existencia: ex(sN) - cant, updatedAt: serverTimestamp() });
+      tx.update(doc(db, COLLECTIONS.DEBITOS_INVENTARIO, row.id), { insumoId: nuevo.id, insumoNombre: nuevo.nombre });
+    });
+    toast(`Insumo corregido: ahora es "${nuevo.nombre}". Existencias ajustadas.`, "success");
+  } catch (err) {
+    console.error(err);
+    toast(err.message || "No se pudo corregir el insumo.", "error");
+  }
 }
 
 async function deleteTransferencia(row) {
