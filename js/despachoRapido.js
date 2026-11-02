@@ -19,11 +19,11 @@
  * teléfono (Agregar a pantalla de inicio).
  * -----------------------------------------------------------------------
  */
-import { ALMACENES } from "./config.js";
+import { ALMACENES, INSTITUCION } from "./config.js";
 import { getInsumos, getStock, getTransferencias, registrarTransferencia } from "./inventario.js";
 import { getResponsableLabel, puedeVerVista } from "./auth.js";
 import { navigateTo } from "./router.js";
-import { toast, escapeHTML, toDate } from "./ui.js";
+import { toast, escapeHTML, toDate, printAdHoc } from "./ui.js";
 import { normalizarBusqueda } from "./busqueda.js";
 
 const DESTINO_POR_DEFECTO = "Módulo";
@@ -192,7 +192,7 @@ function origenSugerido(linea) {
 }
 
 /** Líneas del último despacho al destino hecho ANTES de hoy. */
-function lineasDelUltimoDespacho(destino) {
+function lineasDelUltimoDespacho(destino, incluirHoy = false) {
   const hoy = new Date().toLocaleDateString("en-CA");
   const porDia = new Map();
   getTransferencias()
@@ -201,7 +201,7 @@ function lineasDelUltimoDespacho(destino) {
       const d = toDate(t.fecha);
       if (!d) return;
       const k = d.toLocaleDateString("en-CA");
-      if (k >= hoy) return;
+      if (!incluirHoy && k >= hoy) return;
       if (!porDia.has(k)) porDia.set(k, []);
       porDia.get(k).push(t);
     });
@@ -212,9 +212,50 @@ function lineasDelUltimoDespacho(destino) {
     const k = `${t.insumoId}__${t.stockOrigen}`;
     const previa = agrupadas.get(k);
     if (previa) previa.cantidad += Number(t.cantidad) || 0;
-    else agrupadas.set(k, { original: t.insumoNombre, cantidad: Number(t.cantidad) || 0, insumoId: t.insumoId, origen: t.stockOrigen, dudoso: false });
+    else agrupadas.set(k, { original: t.insumoNombre, cantidad: Number(t.cantidad) || 0, insumoId: t.insumoId, origen: t.stockOrigen, dudoso: false, responsable: t.responsable });
   });
   return { fecha: dia, lineas: [...agrupadas.values()] };
+}
+
+/* -------------------------------- Recibo --------------------------------- */
+
+const fechaLarga = (iso) => {
+  const [y, m, d] = String(iso).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : String(iso);
+};
+
+/** Texto listo para pegar en WhatsApp (el *asterisco* da negrita allí). */
+function textoRecibo({ fecha, destino, responsable, items }) {
+  const mezcla = new Set(items.map((i) => i.origen)).size > 1;
+  const total = items.reduce((a, i) => a + i.cantidad, 0);
+  return [
+    `*RECIBO DE DESPACHO DE INSUMOS*`,
+    `${INSTITUCION.nombre}`,
+    ``,
+    `📅 Fecha: ${fechaLarga(fecha)}`,
+    `📦 Destino: ${destino}`,
+    `👤 Despachó: ${responsable}`,
+    ``,
+    ...items.map((i) => `• ${i.cantidad} – ${i.nombre}${mezcla ? ` (${i.origen})` : ""}`),
+    ``,
+    `Total: ${items.length} insumo(s), ${total} unidad(es).`,
+    `Favor confirmar recepción. ✅`,
+  ].join("\n");
+}
+
+function imprimirRecibo(r) {
+  const celda = "border:1px solid #94a3b8;padding:4px 8px;font-size:12px;";
+  const cuerpo = `
+    <div style="padding:12px 16px;font-size:13px;">
+      <h2 style="text-align:center;font-size:16px;font-weight:800;margin:6px 0 12px;color:#0b2545;">RECIBO DE DESPACHO DE INSUMOS</h2>
+      <p style="margin:2px 0;"><strong>Fecha:</strong> ${escapeHTML(fechaLarga(r.fecha))} &nbsp;&nbsp; <strong>Destino:</strong> ${escapeHTML(r.destino)} &nbsp;&nbsp; <strong>Despachó:</strong> ${escapeHTML(r.responsable)}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <thead><tr style="background:#f1f5f9;"><th style="${celda}text-align:left;">Insumo</th><th style="${celda}width:70px;">Cantidad</th><th style="${celda}width:90px;">Sale de</th></tr></thead>
+        <tbody>${r.items.map((i) => `<tr><td style="${celda}">${escapeHTML(i.nombre)}</td><td style="${celda}text-align:center;">${i.cantidad}</td><td style="${celda}text-align:center;">${escapeHTML(i.origen)}</td></tr>`).join("")}</tbody>
+      </table>
+      <p style="margin-top:8px;font-size:12px;">Total: ${r.items.length} insumo(s), ${r.items.reduce((a, i) => a + i.cantidad, 0)} unidad(es).</p>
+    </div>`;
+  printAdHoc(`Recibo de despacho — ${fechaLarga(r.fecha)}`, cuerpo, ["Despachó", "Recibió"], 4);
 }
 
 /* ---------------------------------- UI ----------------------------------- */
@@ -238,9 +279,11 @@ export function initDespachoRapido() {
         <button type="button" id="dr-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
         <button type="button" id="dr-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
         <button type="button" id="dr-repetir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Repetir el último despacho</button>
+        <button type="button" id="dr-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último despacho</button>
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="dr-aviso" class="text-xs text-slate-500 mt-2"></div>
+      <div id="dr-recibo" class="mt-3"></div>
       <div id="dr-alias" class="mt-2"></div>
       <div id="dr-vista" class="mt-3"></div>
     </div>`;
@@ -340,12 +383,14 @@ export function initDespachoRapido() {
     boton.disabled = true;
     boton.textContent = "Registrando...";
     const pendientes = [];
+    const registradas = [];
     let hechas = 0;
     for (const l of lineas) {
       const insumo = getInsumos().find((i) => i.id === l.insumoId);
       try {
         await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha });
         hechas++;
+        registradas.push({ nombre: insumo?.nombre || l.original, cantidad: l.cantidad, origen: l.origen });
         if (l.clave && (l.corregido || l.dudoso)) {
           const a = leerAlias();
           a[l.clave] = l.insumoId;
@@ -357,6 +402,7 @@ export function initDespachoRapido() {
       }
     }
     pintarAlias();
+    if (registradas.length) mostrarRecibo({ fecha, destino, responsable, items: registradas });
     lineas = pendientes;
     if (pendientes.length) {
       toast(`${hechas} registrada(s); ${pendientes.length} con error (siguen en la lista, vea el detalle).`, "error");
@@ -375,6 +421,7 @@ export function initDespachoRapido() {
       toast("El catálogo de insumos todavía está cargando. Intente de nuevo en un momento.", "warning");
       return;
     }
+    mostrarRecibo(null);
     lineas = interpretarDespacho(texto, getInsumos(), leerAlias()).map((l) => ({ ...l, ...origenSugeridoPara(l) }));
     aviso(lineas.length ? `${lineas.length} línea(s) interpretada(s). Revise antes de registrar.` : "No se reconoció ningún insumo en el texto. Escriba, por ejemplo: 20 gasas, 5 guantes.");
     pintar();
@@ -383,6 +430,36 @@ export function initDespachoRapido() {
     const { origen, nota } = origenSugerido(l);
     return { origen, nota };
   };
+
+  function mostrarRecibo(r) {
+    const cont = el("#dr-recibo");
+    if (!r) {
+      cont.innerHTML = "";
+      return;
+    }
+    cont.innerHTML = `
+      <div class="border border-emerald-200 bg-emerald-50 rounded-md p-3">
+        <div class="font-semibold text-emerald-900 text-sm mb-1">Recibo del despacho — listo para enviar al grupo</div>
+        <textarea id="dr-recibo-texto" rows="${Math.min(16, r.items.length + 9)}" class="form-input font-mono text-xs" readonly>${escapeHTML(textoRecibo(r))}</textarea>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button type="button" id="dr-copiar" class="btn-primary">Copiar para WhatsApp</button>
+          <button type="button" id="dr-imprimir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50">Imprimir / guardar PDF</button>
+          <button type="button" id="dr-cerrar-recibo" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Cerrar</button>
+        </div>
+      </div>`;
+    el("#dr-copiar").onclick = async () => {
+      const ta = el("#dr-recibo-texto");
+      try {
+        await navigator.clipboard.writeText(ta.value);
+      } catch {
+        ta.select();
+        document.execCommand("copy");
+      }
+      toast("Recibo copiado. Péguelo en el grupo de WhatsApp (Ctrl+V).", "success");
+    };
+    el("#dr-imprimir").onclick = () => imprimirRecibo(r);
+    el("#dr-cerrar-recibo").onclick = () => mostrarRecibo(null);
+  }
 
   function pintarAlias() {
     const a = leerAlias();
@@ -419,13 +496,21 @@ export function initDespachoRapido() {
       el("#dr-texto").focus();
     }
   };
+  el("#dr-ver-recibo").onclick = () => {
+    const { fecha, lineas: previas } = lineasDelUltimoDespacho(DESTINO_POR_DEFECTO, true);
+    if (!previas.length) return toast(`Aún no hay despachos al ${DESTINO_POR_DEFECTO}.`, "warning");
+    const nombreDe = (l) => getInsumos().find((i) => i.id === l.insumoId)?.nombre || l.original;
+    mostrarRecibo({ fecha, destino: DESTINO_POR_DEFECTO, responsable: previas.find((l) => l.responsable)?.responsable || getResponsableLabel(), items: previas.map((l) => ({ nombre: nombreDe(l), cantidad: l.cantidad, origen: l.origen })) });
+  };
   el("#dr-limpiar").onclick = () => {
+    mostrarRecibo(null);
     lineas = [];
     el("#dr-texto").value = "";
     aviso("");
     pintar();
   };
   el("#dr-repetir").onclick = () => {
+    mostrarRecibo(null);
     const { fecha, lineas: previas } = lineasDelUltimoDespacho(DESTINO_POR_DEFECTO);
     if (!previas.length) {
       toast(`No hay un despacho anterior al ${DESTINO_POR_DEFECTO} para repetir.`, "warning");
