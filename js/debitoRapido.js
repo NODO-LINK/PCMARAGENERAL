@@ -119,7 +119,7 @@ export function initDebitoRapido() {
       return;
     }
     const activos = getInsumos().filter((i) => i.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    const opcionesInsumo = (sel) => `<option value="">— elegir insumo —</option>` + activos.map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
+    const opcionesInsumo = (sel) => `<option value="">— elegir insumo —</option>` + activos.filter((i) => i.id === sel || existenciaDe(i.id, almacenActual) > 0).map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
     const prevFecha = el("#db-fecha")?.value || hoy();
     const prevResp = respForzado ?? el("#db-responsable")?.value ?? getResponsableLabel();
     respForzado = null;
@@ -155,7 +155,7 @@ export function initDebitoRapido() {
         </table>
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
-        <p class="text-xs text-slate-500">Revise las filas en amarillo (coincidencia dudosa) o rojo (sin insumo) antes de confirmar.</p>
+        <p class="text-xs text-slate-500">Revise las filas en amarillo (coincidencia dudosa) o rojo (sin insumo) antes de confirmar. La lista de insumos solo muestra los que tienen existencia en el almacén elegido.</p>
         <button type="button" id="db-confirmar" class="btn-primary">Registrar débito (${lineas.length})</button>
       </div>`;
     el("#db-almacen").onchange = (e) => {

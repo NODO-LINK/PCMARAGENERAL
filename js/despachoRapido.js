@@ -392,7 +392,8 @@ export function initDespachoRapido() {
       return;
     }
     const activos = getInsumos().filter((i) => i.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    const opcionesInsumo = (sel) => `<option value="">— elegir insumo —</option>` + activos.map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
+    // Solo insumos con existencia en el almacén de origen de la fila (más el ya elegido).
+    const opcionesInsumo = (sel, origen) => `<option value="">— elegir insumo —</option>` + activos.filter((i) => i.id === sel || existenciaDe(i.id, origen) > 0).map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
     vista.innerHTML = `
       <div class="grid gap-3 md:grid-cols-4 mb-3">
         <div><label class="form-label">Fecha</label><input id="dr-fecha" type="date" class="form-input" value="${form.fecha}" /></div>
@@ -414,7 +415,7 @@ export function initDespachoRapido() {
                 const falta = l.insumoId && l.cantidad && existenciaDe(l.insumoId, l.origen) < l.cantidad;
                 return `<tr class="border-t border-slate-100 ${l.dudoso && !l.insumoId ? "bg-red-50" : l.dudoso ? "bg-amber-50" : ""}" data-i="${i}">
                   <td class="px-2 py-1.5 text-xs text-slate-500 max-w-[10rem] truncate" title="${escapeHTML(l.original)}">${escapeHTML(l.original)}</td>
-                  <td class="px-2 py-1.5"><select data-campo="insumo" class="form-input !py-1 min-w-[12rem]">${opcionesInsumo(l.insumoId)}</select></td>
+                  <td class="px-2 py-1.5"><select data-campo="insumo" class="form-input !py-1 min-w-[12rem]">${opcionesInsumo(l.insumoId, l.origen)}</select></td>
                   <td class="px-2 py-1.5"><input data-campo="cantidad" type="number" min="0" step="any" class="form-input !py-1" value="${l.cantidad ?? ""}" /></td>
                   <td class="px-2 py-1.5"><select data-campo="origen" class="form-input !py-1">${ORIGENES.map((a) => `<option value="${escapeHTML(a)}" ${a === l.origen ? "selected" : ""}>${escapeHTML(a)}</option>`).join("")}</select>${l.nota ? `<div class="text-[11px] text-amber-700">${escapeHTML(l.nota)}</div>` : ""}</td>
                   <td class="px-2 py-1.5 text-xs ${falta ? "text-red-700 font-semibold" : "text-slate-500"}">${escapeHTML(disp)}${falta ? " — no alcanza" : ""}</td>
@@ -426,7 +427,7 @@ export function initDespachoRapido() {
         </table>
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
-        <p class="text-xs text-slate-500">Revise las filas en amarillo (coincidencia dudosa) o rojo (sin insumo) antes de confirmar.</p>
+        <p class="text-xs text-slate-500">Revise las filas en amarillo (coincidencia dudosa) o rojo (sin insumo) antes de confirmar. La lista de insumos de cada fila solo muestra los que tienen existencia en "Sale de": cambie el origen para ver los del otro almacén.</p>
         <button type="button" id="dr-confirmar" class="btn-primary">Registrar despacho (${lineas.length})</button>
       </div>`;
 
