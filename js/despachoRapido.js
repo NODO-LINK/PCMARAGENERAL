@@ -25,6 +25,7 @@ import { getResponsableLabel, puedeVerVista } from "./auth.js";
 import { navigateTo } from "./router.js";
 import { toast, escapeHTML, toDate, printAdHoc } from "./ui.js";
 import { normalizarBusqueda } from "./busqueda.js";
+import { montarLotes } from "./lotesRapidos.js";
 
 const DESTINO_POR_DEFECTO = "Módulo";
 const ORIGEN_POR_DEFECTO = "Oficina";
@@ -372,11 +373,12 @@ export function initDespachoRapido() {
         <button type="button" id="dr-repetir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Repetir el último despacho</button>
         <button type="button" id="dr-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje de pedido</button>
         <button type="button" id="dr-plantilla-despacho" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje de despacho</button>
-        <button type="button" id="dr-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último despacho</button>
+        <button type="button" id="dr-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Despachos anteriores</button>
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="dr-aviso" class="text-xs text-slate-500 mt-2"></div>
       <div id="dr-plantilla-caja" class="mt-3"></div>
+      <div id="dr-lotes" class="mt-3"></div>
       <div id="dr-recibo" class="mt-3"></div>
       <div id="dr-alias" class="mt-2"></div>
       <div id="dr-vista" class="mt-3"></div>
@@ -488,11 +490,12 @@ export function initDespachoRapido() {
     boton.textContent = "Registrando...";
     const pendientes = [];
     const registradas = [];
+    const loteId = `L${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     let hechas = 0;
     for (const l of lineas) {
       const insumo = getInsumos().find((i) => i.id === l.insumoId);
       try {
-        await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha, observaciones });
+        await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha, observaciones, loteId });
         hechas++;
         registradas.push({ nombre: insumo?.nombre || l.original, cantidad: l.cantidad, origen: l.origen });
         if (l.clave && (l.corregido || l.dudoso)) {
@@ -605,10 +608,18 @@ export function initDespachoRapido() {
     }
   };
   el("#dr-ver-recibo").onclick = () => {
-    const { fecha, lineas: previas } = lineasDelUltimoDespacho(DESTINO_POR_DEFECTO, true);
-    if (!previas.length) return toast(`Aún no hay despachos al ${DESTINO_POR_DEFECTO}.`, "warning");
-    const nombreDe = (l) => getInsumos().find((i) => i.id === l.insumoId)?.nombre || l.original;
-    mostrarRecibo({ fecha, destino: DESTINO_POR_DEFECTO, responsable: previas.find((l) => l.responsable)?.responsable || getResponsableLabel(), items: previas.map((l) => ({ nombre: nombreDe(l), cantidad: l.cantidad, origen: l.origen })) });
+    mostrarRecibo(null);
+    montarLotes(el("#dr-lotes"), "despacho", (g) => {
+      const f = g.filas;
+      mostrarRecibo({
+        fecha: g.fecha,
+        destino: f[0].stockDestino,
+        responsable: g.responsable,
+        observaciones: f.find((x) => x.observaciones)?.observaciones || "",
+        items: f.map((x) => ({ nombre: x.insumoNombre, cantidad: Number(x.cantidad) || 0, origen: x.stockOrigen })),
+      });
+      el("#dr-recibo").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   };
   const filasDespacho = () => getTransferencias().filter((t) => t.stockDestino === DESTINO_POR_DEFECTO && ORIGENES.includes(t.stockOrigen));
   el("#dr-plantilla").onclick = () => {

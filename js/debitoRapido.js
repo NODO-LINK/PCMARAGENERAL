@@ -11,7 +11,8 @@
 import { INSTITUCION, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { getInsumos, getDebitos, registrarDebito } from "./inventario.js";
 import { getResponsableLabel } from "./auth.js";
-import { toast, escapeHTML, toDate, printAdHoc } from "./ui.js";
+import { toast, escapeHTML, printAdHoc } from "./ui.js";
+import { montarLotes } from "./lotesRapidos.js";
 import { interpretarDespacho, leerAlias, guardarAlias, fechaLarga, existenciaDe, extraerDatos, plantillaMensaje, mostrarPlantilla } from "./despachoRapido.js";
 
 const ALMACENES_DEBITO = ["Módulo", "Ambulancia"];
@@ -51,30 +52,6 @@ function imprimirRecibo(r) {
   printAdHoc(`Insumos utilizados — ${fechaLarga(r.fecha)}`, cuerpo, ["Responsable", "Director"], 4);
 }
 
-/** Último día con débitos en el almacén (incluye hoy). */
-function ultimoDebito(almacen) {
-  const porDia = new Map();
-  getDebitos()
-    .filter((d) => d.almacenOrigen === almacen)
-    .forEach((d) => {
-      const f = toDate(d.fecha);
-      if (!f) return;
-      const k = f.toLocaleDateString("en-CA");
-      if (!porDia.has(k)) porDia.set(k, []);
-      porDia.get(k).push(d);
-    });
-  if (!porDia.size) return null;
-  const dia = [...porDia.keys()].sort().pop();
-  const filas = porDia.get(dia);
-  const agrupadas = new Map();
-  filas.forEach((d) => {
-    const previa = agrupadas.get(d.insumoId);
-    if (previa) previa.cantidad += Number(d.cantidad) || 0;
-    else agrupadas.set(d.insumoId, { nombre: d.insumoNombre, cantidad: Number(d.cantidad) || 0 });
-  });
-  return { fecha: dia, almacen, motivo: filas[0].motivo || MOTIVO_POR_DEFECTO, responsable: filas.find((d) => d.responsable)?.responsable || getResponsableLabel(), observaciones: "", items: [...agrupadas.values()] };
-}
-
 let lineas = [];
 
 export function initDebitoRapido() {
@@ -95,11 +72,12 @@ export function initDebitoRapido() {
         <button type="button" id="db-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
         <button type="button" id="db-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje Módulo</button>
         <button type="button" id="db-plantilla-amb" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje Ambulancia</button>
-        <button type="button" id="db-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último débito</button>
+        <button type="button" id="db-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Débitos anteriores</button>
         <button type="button" id="db-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="db-aviso" class="text-xs text-slate-500 mt-2"></div>
       <div id="db-plantilla-caja" class="mt-3"></div>
+      <div id="db-lotes" class="mt-3"></div>
       <div id="db-recibo" class="mt-3"></div>
       <div id="db-vista" class="mt-3"></div>
     </div>`;
@@ -198,10 +176,11 @@ export function initDebitoRapido() {
     boton.textContent = "Registrando...";
     const pendientes = [];
     const registradas = [];
+    const loteId = `L${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     for (const l of lineas) {
       const insumo = getInsumos().find((i) => i.id === l.insumoId);
       try {
-        await registrarDebito({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, almacen, cantidad: l.cantidad, motivo, responsable, observaciones, fecha });
+        await registrarDebito({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, almacen, cantidad: l.cantidad, motivo, responsable, observaciones, fecha, loteId });
         registradas.push({ nombre: insumo?.nombre || l.original, cantidad: l.cantidad });
         if (l.clave && (l.corregido || l.dudoso)) {
           const a = leerAlias();
@@ -282,9 +261,19 @@ export function initDebitoRapido() {
     }
   };
   el("#db-ver-recibo").onclick = () => {
-    const r = ultimoDebito(almacenActual) || ultimoDebito(ALMACENES_DEBITO.find((a) => ultimoDebito(a)) || "");
-    if (!r) return toast("Aún no hay débitos del Módulo o la Ambulancia.", "warning");
-    mostrarRecibo(r);
+    mostrarRecibo(null);
+    montarLotes(el("#db-lotes"), "debito", (g) => {
+      const f = g.filas;
+      mostrarRecibo({
+        fecha: g.fecha,
+        almacen: f[0].almacenOrigen,
+        motivo: f[0].motivo || MOTIVO_POR_DEFECTO,
+        responsable: g.responsable,
+        observaciones: f.find((x) => x.observaciones)?.observaciones || "",
+        items: f.map((x) => ({ nombre: x.insumoNombre, cantidad: Number(x.cantidad) || 0 })),
+      });
+      el("#db-recibo").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   };
   const plantillaDebito = (almacen) => {
     const esAmb = almacen === "Ambulancia";

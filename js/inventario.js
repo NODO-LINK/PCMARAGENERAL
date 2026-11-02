@@ -1558,7 +1558,7 @@ function setupTransferenciaForm() {
   return { startEdit };
 }
 
-export async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha, observaciones }) {
+export async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha, observaciones, loteId }) {
   const origenId = stockDocId(insumoId, origen);
   const destinoId = stockDocId(insumoId, destino);
   const insumo = insumos.find((i) => i.id === insumoId);
@@ -1600,6 +1600,7 @@ export async function registrarTransferencia({ insumoId, insumoNombre, origen, d
     cantidad,
     responsable,
     ...(observaciones ? { observaciones } : {}),
+    ...(loteId ? { loteId } : {}),
     fecha: fecha ? parseLocalDate(fecha) : new Date(),
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
@@ -1616,7 +1617,7 @@ export async function registrarTransferencia({ insumoId, insumoNombre, origen, d
  * transacción — revierte el movimiento viejo y aplica el nuevo a la vez,
  * sin dejar el stock a medio actualizar si algo falla.
  */
-async function editarTransferencia(row, { origen, destino, cantidad, responsable, fecha }) {
+export async function editarTransferencia(row, { origen, destino, cantidad, responsable, fecha }) {
   if (origen === destino) throw new Error("El stock de origen y destino no pueden ser el mismo.");
   const insumoId = row.insumoId;
   const insumoNombre = row.insumoNombre;
@@ -1707,7 +1708,7 @@ const datosStockNuevo = (insumo, almacen, existencia, minimo) => ({
   updatedAt: serverTimestamp(),
 });
 
-async function corregirInsumoTransferencia(row) {
+export async function corregirInsumoTransferencia(row) {
   if (!row) return;
   const nuevo = await pedirInsumoCorrecto(row, row.stockOrigen);
   if (!nuevo) return;
@@ -1734,7 +1735,7 @@ async function corregirInsumoTransferencia(row) {
   }
 }
 
-async function corregirInsumoDebito(row) {
+export async function corregirInsumoDebito(row) {
   if (!row) return;
   const nuevo = await pedirInsumoCorrecto(row, row.almacenOrigen);
   if (!nuevo) return;
@@ -1757,7 +1758,7 @@ async function corregirInsumoDebito(row) {
   }
 }
 
-async function deleteTransferencia(row) {
+export async function deleteTransferencia(row) {
   if (!row) return;
   const ok = await confirmDialog({
     title: "Eliminar transferencia",
@@ -2102,7 +2103,7 @@ function setupDebitoForm() {
 // Exportado para que otros módulos (p. ej. la Lista Diaria de Pacientes en
 // emergencias.js, "Insumos utilizados el día de hoy") puedan generar un
 // débito de inventario sin duplicar la lógica de transacción atómica.
-export async function registrarDebito({ insumoId, insumoNombre, almacen, cantidad, motivo, responsable, observaciones, fecha }) {
+export async function registrarDebito({ insumoId, insumoNombre, almacen, cantidad, motivo, responsable, observaciones, fecha, loteId }) {
   const stockId = stockDocId(insumoId, almacen);
 
   await runTransaction(db, async (tx) => {
@@ -2124,6 +2125,7 @@ export async function registrarDebito({ insumoId, insumoNombre, almacen, cantida
     motivo,
     responsable,
     observaciones,
+    ...(loteId ? { loteId } : {}),
     fecha: fecha ? parseLocalDate(fecha) : new Date(),
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,
@@ -2136,7 +2138,7 @@ export async function registrarDebito({ insumoId, insumoNombre, almacen, cantida
  * motivo, responsable, observaciones y fecha sí. Revierte el efecto viejo
  * sobre `insumoStock` y aplica el nuevo en la misma transacción.
  */
-async function editarDebito(row, { almacen, cantidad, motivo, responsable, observaciones, fecha }) {
+export async function editarDebito(row, { almacen, cantidad, motivo, responsable, observaciones, fecha }) {
   const insumoId = row.insumoId;
   const stockIdViejo = stockDocId(insumoId, row.almacenOrigen);
   const stockIdNuevo = stockDocId(insumoId, almacen);
