@@ -100,6 +100,9 @@ function limpiarMensaje(texto) {
         .replace(/^\s*\[?\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}[,\s]+\d{1,2}:\d{2}[^\]\-:]*[\]\-]\s*[^:]{1,40}:\s*/, "")
         .replace(/^\s*\[\d{1,2}:\d{2}[^\]]*\]\s*[^:]{1,40}:\s*/, "")
         .replace(/[*_~`•✅✔️☑️▪️●]/g, " ")
+        .replace(/^\s*[(\[]\s*(\d+(?:[.,]\d+)?)\s*[)\]]\s*/, "$1 ") // "(04) lancetas" → "04 lancetas"
+        .replace(/[(\[]\s*(\d+(?:[.,]\d+)?)\s*[)\]]/g, " $1 ") // "lancetas (04)" → "lancetas 04"
+        .replace(/^\s*(\d+(?:[.,]\d+)?)\s*[).\-–:]\s+/, "$1 ") // "04) lancetas", "04. lancetas", "04 - lancetas"
         .replace(/^\s*[-–—]\s+/, "")
     )
     .join("\n");
