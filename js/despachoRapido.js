@@ -75,7 +75,9 @@ function puntuar(tokensLinea, insumo) {
  * Interpreta el texto y devuelve las líneas del despacho:
  * [{ original, cantidad (número o null), insumoId (o null), origen (o null), dudoso }]
  */
-export function interpretarDespacho(texto, insumosCatalogo) {
+export const claveAlias = (tokens) => [...new Set(tokens.map(singular))].sort().join(" ");
+
+export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
   const activos = insumosCatalogo.filter((i) => i.activo !== false);
   const fragmentos = limpiarMensaje(texto)
     .split(/\n|;|,\s|\sy\s/i)
@@ -100,6 +102,12 @@ export function interpretarDespacho(texto, insumosCatalogo) {
       if (origen) origenGlobal = origen;
       return;
     }
+    const clave = claveAlias(tokens);
+    const aprendido = alias[clave] && activos.find((i) => i.id === alias[clave]);
+    if (aprendido) {
+      lineas.push({ original: frag, cantidad, insumoId: aprendido.id, origen, dudoso: false, clave, aprendido: true });
+      return;
+    }
     let mejor = null;
     let mejorPuntaje = 0;
     activos.forEach((i) => {
@@ -110,11 +118,29 @@ export function interpretarDespacho(texto, insumosCatalogo) {
       }
     });
     const acepta = mejor && mejorPuntaje >= 0.5;
-    lineas.push({ original: frag, cantidad, insumoId: acepta ? mejor.id : null, origen, dudoso: !acepta || mejorPuntaje < 1 });
+    lineas.push({ original: frag, cantidad, insumoId: acepta ? mejor.id : null, origen, dudoso: !acepta || mejorPuntaje < 1, clave });
   });
   if (origenGlobal) lineas.forEach((l) => (l.origen = l.origen || origenGlobal));
   return lineas;
 }
+
+/* ---------------- Equivalencias aprendidas (nombre informal → insumo) ---------------- */
+// Se guardan en este navegador (no requieren cambios en las reglas de Firebase).
+const CLAVE_ALIAS = "pc_despacho_alias";
+const leerAlias = () => {
+  try {
+    return JSON.parse(localStorage.getItem(CLAVE_ALIAS) || "{}") || {};
+  } catch {
+    return {};
+  }
+};
+const guardarAlias = (a) => {
+  try {
+    localStorage.setItem(CLAVE_ALIAS, JSON.stringify(a));
+  } catch {
+    /* sin almacenamiento: simplemente no se recuerda */
+  }
+};
 
 /* --------------------------- Datos de apoyo ------------------------------ */
 
@@ -182,6 +208,7 @@ export function initDespachoRapido() {
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="dr-aviso" class="text-xs text-slate-500 mt-2"></div>
+      <div id="dr-alias" class="mt-2"></div>
       <div id="dr-vista" class="mt-3"></div>
     </div>`;
 
@@ -238,6 +265,7 @@ export function initDespachoRapido() {
       tr.querySelector('[data-campo="insumo"]').onchange = (e) => {
         lineas[i].insumoId = e.target.value || null;
         lineas[i].dudoso = false;
+        lineas[i].corregido = true;
         Object.assign(lineas[i], { origen: lineas[i].origen || ORIGEN_POR_DEFECTO });
         pintar(infoFecha);
       };
@@ -285,11 +313,17 @@ export function initDespachoRapido() {
       try {
         await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha });
         hechas++;
+        if (l.clave && (l.corregido || l.dudoso)) {
+          const a = leerAlias();
+          a[l.clave] = l.insumoId;
+          guardarAlias(a);
+        }
       } catch (err) {
         console.error(err);
         pendientes.push({ ...l, nota: err.message || "No se pudo registrar" });
       }
     }
+    pintarAlias();
     lineas = pendientes;
     if (pendientes.length) {
       toast(`${hechas} registrada(s); ${pendientes.length} con error (siguen en la lista, vea el detalle).`, "error");
@@ -308,7 +342,7 @@ export function initDespachoRapido() {
       toast("El catálogo de insumos todavía está cargando. Intente de nuevo en un momento.", "warning");
       return;
     }
-    lineas = interpretarDespacho(texto, getInsumos()).map((l) => ({ ...l, ...origenSugeridoPara(l) }));
+    lineas = interpretarDespacho(texto, getInsumos(), leerAlias()).map((l) => ({ ...l, ...origenSugeridoPara(l) }));
     aviso(lineas.length ? `${lineas.length} línea(s) interpretada(s). Revise antes de registrar.` : "No se reconoció ningún insumo en el texto. Escriba, por ejemplo: 20 gasas, 5 guantes.");
     pintar();
   }
@@ -317,6 +351,28 @@ export function initDespachoRapido() {
     return { origen, nota };
   };
 
+  function pintarAlias() {
+    const a = leerAlias();
+    const claves = Object.keys(a);
+    const cont = el("#dr-alias");
+    if (!claves.length) {
+      cont.innerHTML = "";
+      return;
+    }
+    cont.innerHTML = `<details class="text-xs text-slate-600"><summary class="cursor-pointer">Equivalencias aprendidas (${claves.length}) — nombres que usted escribe y a qué insumo corresponden</summary>
+      <ul class="mt-1 space-y-1">${claves
+        .map((k) => `<li class="flex items-center gap-2"><span>"${escapeHTML(k)}" → <strong>${escapeHTML(getInsumos().find((i) => i.id === a[k])?.nombre || "(insumo eliminado)")}</strong></span><button type="button" data-k="${escapeHTML(k)}" class="text-red-700 hover:underline">Olvidar</button></li>`)
+        .join("")}</ul></details>`;
+    cont.querySelectorAll("button[data-k]").forEach((b) => {
+      b.onclick = () => {
+        const x = leerAlias();
+        delete x[b.dataset.k];
+        guardarAlias(x);
+        pintarAlias();
+      };
+    });
+  }
+  pintarAlias();
   el("#dr-interpretar").onclick = () => interpretar(el("#dr-texto").value);
   el("#dr-texto").addEventListener("paste", () => setTimeout(() => interpretar(el("#dr-texto").value), 0));
   el("#dr-pegar").onclick = async () => {
