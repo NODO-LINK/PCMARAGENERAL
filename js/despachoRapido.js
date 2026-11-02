@@ -171,12 +171,13 @@ export function initDespachoRapido() {
     <div class="form-card">
       <h3 class="font-semibold text-slate-700 mb-1">Despacho rápido</h3>
       <p class="text-xs text-slate-500 mb-3 max-w-3xl">
-        Pegue aquí el mensaje del despacho (por ejemplo copiado de WhatsApp: "20 gasas, 5 guantes, suero x3") o repita el último. Se muestra una vista previa y
+        Copie el mensaje del despacho en WhatsApp Web/Escritorio (clic derecho → Copiar, o Ctrl+C) y pulse "Pegar del portapapeles e interpretar" (o pegue con Ctrl+V en la caja: se interpreta solo). También puede repetir el último. Se muestra una vista previa y
         <strong>no se descuenta nada hasta que confirme</strong>. Sale de Oficina; si Oficina no alcanza y Depósito sí, se propone Depósito.
       </p>
       <textarea id="dr-texto" rows="4" class="form-input" placeholder="Pegue el mensaje del despacho aquí..."></textarea>
       <div class="flex flex-wrap gap-2 mt-2">
-        <button type="button" id="dr-interpretar" class="btn-primary">Interpretar mensaje</button>
+        <button type="button" id="dr-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
+        <button type="button" id="dr-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
         <button type="button" id="dr-repetir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Repetir el último despacho</button>
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
@@ -317,6 +318,18 @@ export function initDespachoRapido() {
   };
 
   el("#dr-interpretar").onclick = () => interpretar(el("#dr-texto").value);
+  el("#dr-texto").addEventListener("paste", () => setTimeout(() => interpretar(el("#dr-texto").value), 0));
+  el("#dr-pegar").onclick = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t.trim()) return toast("El portapapeles está vacío. Copie primero el mensaje de WhatsApp.", "warning");
+      el("#dr-texto").value = t;
+      interpretar(t);
+    } catch {
+      toast("El navegador no permitió leer el portapapeles. Pegue el texto en la caja con Ctrl+V.", "warning");
+      el("#dr-texto").focus();
+    }
+  };
   el("#dr-limpiar").onclick = () => {
     lineas = [];
     el("#dr-texto").value = "";
