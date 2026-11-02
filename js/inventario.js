@@ -102,6 +102,7 @@ export function initInventario() {
   document.getElementById("stock-solo-deficit")?.addEventListener("change", renderStockTable);
   document.getElementById("stock-deficit-umbral")?.addEventListener("input", renderStockTable);
   document.getElementById("btn-imprimir-deficit")?.addEventListener("click", imprimirListaDeficit);
+  document.getElementById("btn-imprimir-revision")?.addEventListener("click", imprimirListasPorStock);
   document.getElementById("insumos-catalogo-buscar")?.addEventListener("input", renderInsumosTable);
   setupVaciarAlmacen();
 
@@ -648,6 +649,68 @@ function imprimirListaDeficit() {
     </div>`;
 
   printAdHoc(`Insumos en Déficit (menos de ${umbral})`, bodyHTML);
+}
+
+/**
+ * Lista de revisión de nombres: una hoja (o más) por almacén con todos sus
+ * insumos y una columna en blanco para que los médicos escriban el nombre
+ * correcto. Si el filtro de almacén está puesto, imprime solo ese almacén.
+ * Al final, los insumos del catálogo que no tienen existencias en ningún
+ * almacén (para que también se revisen sus nombres).
+ */
+function imprimirListasPorStock() {
+  const filtro = document.getElementById("stock-filtro-almacen")?.value || "";
+  const almacenes = filtro ? [filtro] : ALMACENES;
+  const porNombre = (a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es");
+  const nombreDe = (s) => insumos.find((i) => i.id === s.insumoId)?.nombre || s.insumoNombre || "";
+  const catDe = (s) => insumos.find((i) => i.id === s.insumoId)?.categoriaNombre || s.categoriaNombre || "";
+  const th = (t, w) => `<th style="${headStylePrint}${w ? `width:${w};` : ""}">${t}</th>`;
+  const fila = (n, nombre, cat, exist) => `
+      <tr style="height:32px;">
+        <td style="${cellStylePrint}text-align:center;">${n}</td>
+        <td style="${cellStylePrint}">${escapeHTML(nombre)}</td>
+        <td style="${cellStylePrint}">${escapeHTML(cat)}</td>
+        <td style="${cellStylePrint}text-align:center;">${exist}</td>
+        <td style="${cellStylePrint}"></td>
+      </tr>`;
+  const tabla = (filas) => `
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr>${th("N°", "6%")}${th("Insumo (como está en el sistema)", "34%")}${th("Categoría", "16%")}${th("Exist.", "8%")}${th("Nombre correcto / observación", "36%")}</tr></thead>
+        <tbody>${filas}</tbody>
+      </table>`;
+
+  const secciones = [];
+  almacenes.forEach((almacen) => {
+    const items = stock
+      .filter((s) => s.almacen === almacen)
+      .map((s) => ({ nombre: nombreDe(s), cat: catDe(s), exist: Number(s.existencia) || 0 }))
+      .sort(porNombre);
+    if (!items.length) return;
+    secciones.push(`
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">LISTA DE INSUMOS — STOCK: ${escapeHTML(almacen.toUpperCase())}</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 10px;color:#475569;">${items.length} insumo(s) — Revise los nombres y escriba el correcto en la última columna</p>
+      ${tabla(items.map((it, i) => fila(i + 1, it.nombre, it.cat, it.exist)).join(""))}`);
+  });
+
+  if (!filtro) {
+    const conStock = new Set(stock.map((s) => s.insumoId));
+    const sin = insumos.filter((i) => i.activo !== false && !conStock.has(i.id)).sort(porNombre);
+    if (sin.length) {
+      secciones.push(`
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">INSUMOS DEL CATÁLOGO SIN EXISTENCIAS EN NINGÚN STOCK</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 10px;color:#475569;">${sin.length} insumo(s)</p>
+      ${tabla(sin.map((i, k) => fila(k + 1, i.nombre, i.categoriaNombre || "", "—")).join(""))}`);
+    }
+  }
+
+  if (!secciones.length) {
+    toast("No hay insumos con existencias para imprimir en ese almacén.", "info");
+    return;
+  }
+  const bodyHTML = secciones
+    .map((h, i) => `<div style="padding:12px 20px 4px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;${i ? "page-break-before:always;break-before:page;" : ""}">${h}</div>`)
+    .join("");
+  printAdHoc("Revisión de nombres de insumos", bodyHTML, ["Revisado por (Médico)", "Director"], 3);
 }
 
 /**
