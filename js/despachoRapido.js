@@ -132,6 +132,7 @@ export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
     .split("\n")
     .filter((l) => !esLineaEtiqueta(l))
     .join("\n")
+    .replace(/,\s*(\d+(?:[.,]\d+)?)\s*(?=$|\n|;)/gm, " $1") // "lancetas, 4" → "lancetas 4"
     .split(/\n|;|,\s|\sy\s/i)
     .map((f) => f.trim())
     .filter(Boolean);
