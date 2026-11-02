@@ -160,14 +160,14 @@ export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
 /* ---------------- Equivalencias aprendidas (nombre informal → insumo) ---------------- */
 // Se guardan en este navegador (no requieren cambios en las reglas de Firebase).
 const CLAVE_ALIAS = "pc_despacho_alias";
-const leerAlias = () => {
+export const leerAlias = () => {
   try {
     return JSON.parse(localStorage.getItem(CLAVE_ALIAS) || "{}") || {};
   } catch {
     return {};
   }
 };
-const guardarAlias = (a) => {
+export const guardarAlias = (a) => {
   try {
     localStorage.setItem(CLAVE_ALIAS, JSON.stringify(a));
   } catch {
@@ -177,7 +177,7 @@ const guardarAlias = (a) => {
 
 /* --------------------------- Datos de apoyo ------------------------------ */
 
-const existenciaDe = (insumoId, almacen) => Number(getStock().find((s) => s.insumoId === insumoId && s.almacen === almacen)?.existencia) || 0;
+export const existenciaDe = (insumoId, almacen) => Number(getStock().find((s) => s.insumoId === insumoId && s.almacen === almacen)?.existencia) || 0;
 
 /** Origen sugerido: el indicado, si no Oficina; si no alcanza y Depósito sí, Depósito. */
 function origenSugerido(linea) {
@@ -219,7 +219,7 @@ function lineasDelUltimoDespacho(destino, incluirHoy = false) {
 
 /* -------------------------------- Recibo --------------------------------- */
 
-const fechaLarga = (iso) => {
+export const fechaLarga = (iso) => {
   const [y, m, d] = String(iso).split("-");
   return y && m && d ? `${d}/${m}/${y}` : String(iso);
 };

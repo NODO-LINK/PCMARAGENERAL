@@ -68,6 +68,9 @@ export function getInsumos() {
 export function getStock() {
   return stock;
 }
+export function getDebitos() {
+  return debitos;
+}
 export function getTransferencias() {
   return transferencias;
 }

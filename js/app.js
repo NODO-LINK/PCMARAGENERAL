@@ -27,6 +27,7 @@ import { initUsuarios } from "./usuarios.js";
 import { initBuscadorGlobal } from "./buscadorGlobal.js";
 import { initCorrecciones } from "./correcciones.js";
 import { initDespachoRapido } from "./despachoRapido.js";
+import { initDebitoRapido } from "./debitoRapido.js";
 
 let modulesStarted = false;
 
@@ -45,6 +46,7 @@ function startModules() {
   arrancar("inventario", () => {
     initInventario();
     initDespachoRapido();
+    initDebitoRapido();
   });
   arrancar("emergencias", initEmergencias);
   arrancar("guardias", initGuardias);
