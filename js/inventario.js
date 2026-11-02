@@ -167,6 +167,7 @@ export function initInventario() {
       { key: "stockDestino", label: "Destino" },
       { key: "cantidad", label: "Cantidad" },
       { key: "responsable", label: "Responsable" },
+      { key: "observaciones", label: "Observaciones" },
     ],
     dateField: "fecha",
     getRows: () => transferencias,
@@ -186,6 +187,7 @@ export function initInventario() {
       { key: "cantidad", label: "Cantidad" },
       { key: "motivo", label: "Motivo" },
       { key: "responsable", label: "Responsable" },
+      { key: "observaciones", label: "Observaciones" },
     ],
     dateField: "fecha",
     getRows: () => debitos,
@@ -1488,7 +1490,7 @@ function setupTransferenciaForm() {
   return { startEdit };
 }
 
-export async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha }) {
+export async function registrarTransferencia({ insumoId, insumoNombre, origen, destino, cantidad, responsable, fecha, observaciones }) {
   const origenId = stockDocId(insumoId, origen);
   const destinoId = stockDocId(insumoId, destino);
   const insumo = insumos.find((i) => i.id === insumoId);
@@ -1529,6 +1531,7 @@ export async function registrarTransferencia({ insumoId, insumoNombre, origen, d
     stockDestino: destino,
     cantidad,
     responsable,
+    ...(observaciones ? { observaciones } : {}),
     fecha: fecha ? parseLocalDate(fecha) : new Date(),
     createdAt: serverTimestamp(),
     createdBy: user?.uid || null,

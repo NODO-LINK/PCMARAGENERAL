@@ -12,7 +12,7 @@ import { INSTITUCION, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { getInsumos, getDebitos, registrarDebito } from "./inventario.js";
 import { getResponsableLabel } from "./auth.js";
 import { toast, escapeHTML, toDate, printAdHoc } from "./ui.js";
-import { interpretarDespacho, leerAlias, guardarAlias, fechaLarga, existenciaDe, plantillaMensaje, mostrarPlantilla } from "./despachoRapido.js";
+import { interpretarDespacho, leerAlias, guardarAlias, fechaLarga, existenciaDe, extraerDatos, plantillaMensaje, mostrarPlantilla } from "./despachoRapido.js";
 
 const ALMACENES_DEBITO = ["Módulo", "Ambulancia"];
 const MOTIVO_POR_DEFECTO = "Uso operativo / Consumo";
@@ -110,6 +110,7 @@ export function initDebitoRapido() {
   let almacenActual = ALMACENES_DEBITO[0];
   let motivoActual = MOTIVO_POR_DEFECTO;
   let obsActual = "";
+  let respForzado = null; // "Responsable:" leído del mensaje
 
   function pintar() {
     const vista = el("#db-vista");
@@ -120,7 +121,8 @@ export function initDebitoRapido() {
     const activos = getInsumos().filter((i) => i.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
     const opcionesInsumo = (sel) => `<option value="">— elegir insumo —</option>` + activos.map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
     const prevFecha = el("#db-fecha")?.value || hoy();
-    const prevResp = el("#db-responsable")?.value ?? getResponsableLabel();
+    const prevResp = respForzado ?? el("#db-responsable")?.value ?? getResponsableLabel();
+    respForzado = null;
     vista.innerHTML = `
       <div class="grid gap-3 md:grid-cols-4 mb-3">
         <div><label class="form-label">Fecha</label><input id="db-fecha" type="date" class="form-input" value="${prevFecha}" /></div>
@@ -258,6 +260,9 @@ export function initDebitoRapido() {
   function interpretar(texto) {
     if (!getInsumos().length) return toast("El catálogo de insumos todavía está cargando. Intente de nuevo en un momento.", "warning");
     mostrarRecibo(null);
+    const datos = extraerDatos(texto);
+    respForzado = datos.responsable || null;
+    obsActual = [datos.observaciones, datos.turno && `Turno: ${datos.turno}`, datos.unidad && `Unidad: ${datos.unidad}`, datos.servicio && `Servicio: ${datos.servicio}`].filter(Boolean).join(" · ");
     lineas = interpretarDespacho(texto, getInsumos(), leerAlias());
     aviso(lineas.length ? `${lineas.length} línea(s) interpretada(s). Revise antes de registrar.` : "No se reconoció ningún insumo en el texto. Escriba, por ejemplo: 02 guantes, 01 yelco 18.");
     pintar();

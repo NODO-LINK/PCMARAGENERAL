@@ -70,6 +70,27 @@ const esLineaEtiqueta = (linea) => {
   return !!m && ETIQUETAS.has(m[1].trim());
 };
 
+/**
+ * Lee las líneas "Etiqueta: valor" del mensaje (Responsable, Turno, Observaciones...)
+ * para usarlas al registrar. Devuelve solo las que tienen valor escrito.
+ */
+export function extraerDatos(texto) {
+  const claves = {
+    "despachado por": "despachadoPor", "entregado por": "despachadoPor", "solicitado por": "solicitadoPor", "solicita": "solicitadoPor", "pedido por": "solicitadoPor",
+    "recibido por": "recibidoPor", "recibe": "recibidoPor", "responsable": "responsable", "registrado por": "responsable", "registro": "responsable",
+    "turno": "turno", "unidad": "unidad", "servicio": "servicio", "observaciones": "observaciones", "observacion": "observaciones", "obs": "observaciones", "nota": "observaciones", "notas": "observaciones",
+  };
+  const datos = {};
+  limpiarMensaje(texto).split("\n").forEach((linea) => {
+    const m = linea.match(/^\s*([^:]{2,25}?)\s*:\s*(.*)$/);
+    if (!m) return;
+    const clave = claves[normalizarBusqueda(m[1]).trim()];
+    const valor = m[2].replace(/[_]+/g, "").trim();
+    if (clave && valor) datos[clave] = valor;
+  });
+  return datos;
+}
+
 /** Quita lo que WhatsApp agrega al copiar un mensaje: "[10:32, 3/11/2026] Nombre:" y marcas de formato. */
 function limpiarMensaje(texto) {
   return String(texto ?? "")
@@ -290,7 +311,7 @@ export const fechaLarga = (iso) => {
 };
 
 /** Texto listo para pegar en WhatsApp (el *asterisco* da negrita allí). */
-function textoRecibo({ fecha, destino, responsable, items }) {
+function textoRecibo({ fecha, destino, responsable, items, observaciones }) {
   const mezcla = new Set(items.map((i) => i.origen)).size > 1;
   const total = items.reduce((a, i) => a + i.cantidad, 0);
   return [
@@ -304,6 +325,7 @@ function textoRecibo({ fecha, destino, responsable, items }) {
     ...items.map((i) => `• ${i.cantidad} – ${i.nombre}${mezcla ? ` (${i.origen})` : ""}`),
     ``,
     `Total: ${items.length} insumo(s), ${total} unidad(es).`,
+    ...(observaciones ? [`Obs.: ${observaciones}`] : []),
     `Favor confirmar recepción. ✅`,
   ].join("\n");
 }
@@ -318,7 +340,7 @@ function imprimirRecibo(r) {
         <thead><tr style="background:#f1f5f9;"><th style="${celda}text-align:left;">Insumo</th><th style="${celda}width:70px;">Cantidad</th><th style="${celda}width:90px;">Sale de</th></tr></thead>
         <tbody>${r.items.map((i) => `<tr><td style="${celda}">${escapeHTML(i.nombre)}</td><td style="${celda}text-align:center;">${i.cantidad}</td><td style="${celda}text-align:center;">${escapeHTML(i.origen)}</td></tr>`).join("")}</tbody>
       </table>
-      <p style="margin-top:8px;font-size:12px;">Total: ${r.items.length} insumo(s), ${r.items.reduce((a, i) => a + i.cantidad, 0)} unidad(es).</p>
+      <p style="margin-top:8px;font-size:12px;">Total: ${r.items.length} insumo(s), ${r.items.reduce((a, i) => a + i.cantidad, 0)} unidad(es).${r.observaciones ? ` Obs.: ${escapeHTML(r.observaciones)}` : ""}</p>
     </div>`;
   printAdHoc(`Recibo de despacho — ${fechaLarga(r.fecha)}`, cuerpo, ["Despachó", "Recibió"], 4);
 }
@@ -359,6 +381,9 @@ export function initDespachoRapido() {
   const el = (id) => raiz.querySelector(id);
   const aviso = (t) => (el("#dr-aviso").textContent = t || "");
   const hoy = () => new Date().toLocaleDateString("en-CA");
+  // Lo escrito en el formulario se conserva al corregir filas (antes se reiniciaba).
+  const form = { fecha: hoy(), destino: DESTINO_POR_DEFECTO, responsable: getResponsableLabel(), obs: "" };
+  const obsDe = (d) => [d.observaciones, d.solicitadoPor && `Solicitó: ${d.solicitadoPor}`, d.recibidoPor && `Recibió: ${d.recibidoPor}`, d.turno && `Turno: ${d.turno}`].filter(Boolean).join(" · ");
 
   function pintar(infoFecha) {
     const vista = el("#dr-vista");
@@ -370,9 +395,10 @@ export function initDespachoRapido() {
     const opcionesInsumo = (sel) => `<option value="">— elegir insumo —</option>` + activos.map((i) => `<option value="${i.id}" ${i.id === sel ? "selected" : ""}>${escapeHTML(i.nombre)}</option>`).join("");
     vista.innerHTML = `
       <div class="grid gap-3 md:grid-cols-4 mb-3">
-        <div><label class="form-label">Fecha</label><input id="dr-fecha" type="date" class="form-input" value="${hoy()}" /></div>
-        <div><label class="form-label">Destino</label><select id="dr-destino" class="form-input">${opcionesAlmacen(DESTINO_POR_DEFECTO)}</select></div>
-        <div class="md:col-span-2"><label class="form-label">Responsable</label><input id="dr-responsable" type="text" class="form-input" value="${escapeHTML(getResponsableLabel())}" /></div>
+        <div><label class="form-label">Fecha</label><input id="dr-fecha" type="date" class="form-input" value="${form.fecha}" /></div>
+        <div><label class="form-label">Destino</label><select id="dr-destino" class="form-input">${opcionesAlmacen(form.destino)}</select></div>
+        <div class="md:col-span-2"><label class="form-label">Responsable</label><input id="dr-responsable" type="text" class="form-input" value="${escapeHTML(form.responsable)}" /></div>
+        <div class="md:col-span-4"><label class="form-label">Observaciones (opcional)</label><input id="dr-obs" type="text" class="form-input" value="${escapeHTML(form.obs)}" /></div>
       </div>
       ${infoFecha ? `<p class="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-md p-2 mb-2">${escapeHTML(infoFecha)}</p>` : ""}
       <div class="overflow-x-auto border border-slate-200 rounded-md">
@@ -404,6 +430,10 @@ export function initDespachoRapido() {
         <button type="button" id="dr-confirmar" class="btn-primary">Registrar despacho (${lineas.length})</button>
       </div>`;
 
+    el("#dr-fecha").oninput = (e) => (form.fecha = e.target.value);
+    el("#dr-destino").onchange = (e) => (form.destino = e.target.value);
+    el("#dr-responsable").oninput = (e) => (form.responsable = e.target.value);
+    el("#dr-obs").oninput = (e) => (form.obs = e.target.value);
     vista.querySelectorAll("tr[data-i]").forEach((tr) => {
       const i = Number(tr.dataset.i);
       tr.querySelector('[data-campo="insumo"]').onchange = (e) => {
@@ -434,6 +464,7 @@ export function initDespachoRapido() {
     const fecha = el("#dr-fecha").value;
     const destino = el("#dr-destino").value;
     const responsable = el("#dr-responsable").value.trim();
+    const observaciones = el("#dr-obs").value.trim();
     if (!fecha || !responsable) {
       toast("Complete la fecha y el responsable.", "error");
       return;
@@ -456,7 +487,7 @@ export function initDespachoRapido() {
     for (const l of lineas) {
       const insumo = getInsumos().find((i) => i.id === l.insumoId);
       try {
-        await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha });
+        await registrarTransferencia({ insumoId: l.insumoId, insumoNombre: insumo?.nombre || l.original, origen: l.origen, destino, cantidad: l.cantidad, responsable, fecha, observaciones });
         hechas++;
         registradas.push({ nombre: insumo?.nombre || l.original, cantidad: l.cantidad, origen: l.origen });
         if (l.clave && (l.corregido || l.dudoso)) {
@@ -470,7 +501,7 @@ export function initDespachoRapido() {
       }
     }
     pintarAlias();
-    if (registradas.length) mostrarRecibo({ fecha, destino, responsable, items: registradas });
+    if (registradas.length) mostrarRecibo({ fecha, destino, responsable, observaciones, items: registradas });
     lineas = pendientes;
     if (pendientes.length) {
       toast(`${hechas} registrada(s); ${pendientes.length} con error (siguen en la lista, vea el detalle).`, "error");
@@ -480,6 +511,7 @@ export function initDespachoRapido() {
       toast(`Despacho registrado: ${hechas} transferencia(s) a ${destino}.`, "success");
       el("#dr-texto").value = "";
       aviso("");
+      form.obs = "";
       pintar();
     }
   }
@@ -490,6 +522,9 @@ export function initDespachoRapido() {
       return;
     }
     mostrarRecibo(null);
+    const datos = extraerDatos(texto);
+    if (datos.despachadoPor) form.responsable = datos.despachadoPor;
+    form.obs = obsDe(datos);
     lineas = interpretarDespacho(texto, getInsumos(), leerAlias()).map((l) => ({ ...l, ...origenSugeridoPara(l) }));
     aviso(lineas.length ? `${lineas.length} línea(s) interpretada(s). Revise antes de registrar.` : "No se reconoció ningún insumo en el texto. Escriba, por ejemplo: 20 gasas, 5 guantes.");
     pintar();
