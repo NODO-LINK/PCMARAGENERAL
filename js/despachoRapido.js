@@ -37,15 +37,28 @@ const PALABRAS_VACIAS = new Set([
   "despacho", "despachado", "despachados", "despachar", "modulo", "emergencia", "emergencias", "hoy", "ayer", "de", "del", "la", "el", "los", "las",
   "para", "al", "a", "y", "se", "con", "en", "un", "una", "unidad", "unidades", "und", "unds", "unid", "uds", "ud", "pza", "pzas", "pieza", "piezas",
   "entrega", "entregue", "entregamos", "salio", "salieron", "salida", "envio", "enviado", "enviados", "total", "insumos", "insumo", "favor", "buenos", "dias",
-  "buenas", "tardes", "noches", "saludos", "gracias", "x",
+  "buenas", "tardes", "noches", "saludos", "gracias", "x", "par", "pares", "no", "n",
 ]);
 
 const singular = (t) => (t.length > 4 && t.endsWith("es") ? t.slice(0, -2) : t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t);
 const tokensDe = (texto) =>
   normalizarBusqueda(texto)
     .replace(/[^a-z0-9ñ\s]/g, " ")
+    .replace(/(\d)(?=[a-zñ])/g, "$1 ")
+    .replace(/([a-zñ])(?=\d)/g, "$1 ")
     .split(/\s+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((t) => (t === "cc" || t === "mililitros" || t === "mililitro" ? "ml" : t));
+
+// Distancia de edición (para tolerar errores de tipeo: "fernobarbital" ≈ "fenobarbital").
+function distancia(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const parecidas = (a, b) => a === b || (a.length >= 6 && b.length >= 6 && distancia(a, b) <= 2);
 
 /** Quita lo que WhatsApp agrega al copiar un mensaje: "[10:32, 3/11/2026] Nombre:" y marcas de formato. */
 function limpiarMensaje(texto) {
@@ -67,7 +80,8 @@ function puntuar(tokensLinea, insumo) {
   let aciertos = 0;
   tokensLinea.forEach((t) => {
     const s = singular(t);
-    if (tokensInsumo.some((i) => i === s || (s.length >= 3 && (i.startsWith(s) || s.startsWith(i))))) aciertos++;
+    const esNumero = /^\d+$/.test(s);
+    if (tokensInsumo.some((i) => i === s || (!esNumero && ((s.length >= 2 && !/^\d/.test(i) && (i.startsWith(s) || (i.length >= 3 && s.startsWith(i)))) || parecidas(s, i))))) aciertos++;
   });
   return aciertos / tokensLinea.length;
 }
@@ -93,10 +107,28 @@ export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
     if (/\boficina\b/.test(norm)) origen = "Oficina";
     else if (/\bdeposito\b/.test(norm)) origen = "Depósito";
 
-    // cantidad: "20 gasas", "gasas x20", "gasas: 20", "gasas 20 und"
-    const m = norm.match(/(?:^|[\sx:])(\d+(?:[.,]\d+)?)(?=\s|$|[a-z])/);
-    const cantidad = m ? Number(m[1].replace(",", ".")) : null;
-    const tokens = tokensDe(frag.replace(/\d+(?:[.,]\d+)?/g, " ")).filter((t) => !PALABRAS_VACIAS.has(t) && t !== "oficina" && t !== "deposito");
+    // cantidad: al inicio ("02 jeringas"), "x20", o el último número ("gasas 20"). Los demás
+    // números forman parte del nombre (medidas: "yelco 18", "jeringa 10ml").
+    let cantidad = null;
+    let resto = frag;
+    const lider = frag.match(/^\s*(\d+(?:[.,]\d+)?)(?![\d.,]*\s*(?:ml|cc|mg|gr?|%|mm|cm|lt?)\b)\s*(.*)$/i);
+    const conX = !lider && norm.match(/(?:^|\s)x\s*(\d+(?:[.,]\d+)?)\b|\b(\d+(?:[.,]\d+)?)\s*x(?:\s|$)/);
+    if (lider) {
+      cantidad = Number(lider[1].replace(",", "."));
+      resto = lider[2];
+    } else if (conX) {
+      cantidad = Number((conX[1] || conX[2]).replace(",", "."));
+      resto = frag.replace(/\bx\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s*x\b/i, " ");
+    } else {
+      const todos = [...norm.matchAll(/(?:^|[\s:])(\d+(?:[.,]\d+)?)(?=\s|$)/g)];
+      const ult = todos.length ? todos[todos.length - 1] : null;
+      if (ult) {
+        cantidad = Number(ult[1].replace(",", "."));
+        const pos = frag.lastIndexOf(ult[1]);
+        resto = pos >= 0 ? frag.slice(0, pos) + " " + frag.slice(pos + ult[1].length) : frag;
+      }
+    }
+    const tokens = tokensDe(resto).filter((t) => !PALABRAS_VACIAS.has(t) && t !== "oficina" && t !== "deposito");
 
     if (!tokens.length) {
       // línea de encabezado tipo "de oficina": define el origen de todo el despacho
