@@ -103,6 +103,8 @@ export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
 
   fragmentos.forEach((frag) => {
     const norm = normalizarBusqueda(frag);
+    // Encabezados con fecha ("DESPACHO AL MÓDULO – 02/11/2026") no son insumos.
+    if (/\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b/.test(frag)) return;
     let origen = null;
     if (/\boficina\b/.test(norm)) origen = "Oficina";
     else if (/\bdeposito\b/.test(norm)) origen = "Depósito";
@@ -128,6 +130,8 @@ export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
         resto = pos >= 0 ? frag.slice(0, pos) + " " + frag.slice(pos + ult[1].length) : frag;
       }
     }
+    // Cantidad 0 = "no se usó / no se despachó" (así se llenan las plantillas): se omite.
+    if (cantidad === 0) return;
     const tokens = tokensDe(resto).filter((t) => !PALABRAS_VACIAS.has(t) && t !== "oficina" && t !== "deposito");
 
     if (!tokens.length) {
@@ -217,6 +221,53 @@ function lineasDelUltimoDespacho(destino, incluirHoy = false) {
   return { fecha: dia, lineas: [...agrupadas.values()] };
 }
 
+/* ------------------------- Plantillas de mensaje ------------------------- */
+
+/**
+ * Arma el mensaje "para editar": los insumos que más se usan, con cantidad 00,
+ * para que quien lo llena solo cambie los números (las líneas en 00 se
+ * ignoran al interpretar). `filas` son transferencias/débitos recientes.
+ */
+export function plantillaMensaje({ titulo, filas, almacenStock, maximo = 25 }) {
+  const hoy = new Date().toLocaleDateString("en-CA");
+  const cuenta = new Map();
+  filas.forEach((f) => cuenta.set(f.insumoId, (cuenta.get(f.insumoId) || 0) + 1));
+  const activos = new Map(getInsumos().filter((i) => i.activo !== false).map((i) => [i.id, i.nombre]));
+  let ids = [...cuenta.entries()].filter(([id]) => activos.has(id)).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+  if (ids.length < 8) {
+    getStock()
+      .filter((s) => s.almacen === almacenStock && Number(s.existencia) > 0 && activos.has(s.insumoId))
+      .forEach((s) => !ids.includes(s.insumoId) && ids.push(s.insumoId));
+  }
+  const nombres = ids.slice(0, maximo).map((id) => activos.get(id)).sort((a, b) => a.localeCompare(b));
+  return [`*${titulo}* – ${fechaLarga(hoy)}`, ``, ...nombres.map((n) => `00 ${n}`)].join("\n");
+}
+
+/** Caja con la plantilla y botón para copiarla (se reutiliza en despacho y débito). */
+export function mostrarPlantilla(cont, texto, ayuda) {
+  cont.innerHTML = `
+    <div class="border border-sky-200 bg-sky-50 rounded-md p-3">
+      <div class="font-semibold text-sky-900 text-sm mb-1">Mensaje predeterminado para editar</div>
+      <p class="text-xs text-sky-900 mb-2">${ayuda}</p>
+      <textarea class="form-input font-mono text-xs" rows="${Math.min(18, texto.split("\n").length + 1)}">${escapeHTML(texto)}</textarea>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" data-p="copiar" class="btn-primary">Copiar mensaje</button>
+        <button type="button" data-p="cerrar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Cerrar</button>
+      </div>
+    </div>`;
+  const ta = cont.querySelector("textarea");
+  cont.querySelector('[data-p="copiar"]').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(ta.value);
+    } catch {
+      ta.select();
+      document.execCommand("copy");
+    }
+    toast("Mensaje copiado. Péguelo en el grupo de WhatsApp (Ctrl+V).", "success");
+  };
+  cont.querySelector('[data-p="cerrar"]').onclick = () => (cont.innerHTML = "");
+}
+
 /* -------------------------------- Recibo --------------------------------- */
 
 export const fechaLarga = (iso) => {
@@ -279,10 +330,12 @@ export function initDespachoRapido() {
         <button type="button" id="dr-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
         <button type="button" id="dr-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
         <button type="button" id="dr-repetir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Repetir el último despacho</button>
+        <button type="button" id="dr-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje predeterminado</button>
         <button type="button" id="dr-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último despacho</button>
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="dr-aviso" class="text-xs text-slate-500 mt-2"></div>
+      <div id="dr-plantilla-caja" class="mt-3"></div>
       <div id="dr-recibo" class="mt-3"></div>
       <div id="dr-alias" class="mt-2"></div>
       <div id="dr-vista" class="mt-3"></div>
@@ -501,6 +554,14 @@ export function initDespachoRapido() {
     if (!previas.length) return toast(`Aún no hay despachos al ${DESTINO_POR_DEFECTO}.`, "warning");
     const nombreDe = (l) => getInsumos().find((i) => i.id === l.insumoId)?.nombre || l.original;
     mostrarRecibo({ fecha, destino: DESTINO_POR_DEFECTO, responsable: previas.find((l) => l.responsable)?.responsable || getResponsableLabel(), items: previas.map((l) => ({ nombre: nombreDe(l), cantidad: l.cantidad, origen: l.origen })) });
+  };
+  el("#dr-plantilla").onclick = () => {
+    const texto = plantillaMensaje({
+      titulo: "DESPACHO AL MÓDULO",
+      filas: getTransferencias().filter((t) => t.stockDestino === DESTINO_POR_DEFECTO && ORIGENES.includes(t.stockOrigen)),
+      almacenStock: "Oficina",
+    });
+    mostrarPlantilla(el("#dr-plantilla-caja"), texto, "Péguelo una vez en el grupo. Cada día solo cambian los <strong>00</strong> por la cantidad (las líneas que queden en 00 se ignoran). Pueden agregar líneas nuevas escribiendo, por ejemplo, <em>05 vendas</em>.");
   };
   el("#dr-limpiar").onclick = () => {
     mostrarRecibo(null);

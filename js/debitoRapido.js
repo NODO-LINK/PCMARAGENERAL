@@ -12,7 +12,7 @@ import { INSTITUCION, MOTIVOS_DEBITO_INVENTARIO } from "./config.js";
 import { getInsumos, getDebitos, registrarDebito } from "./inventario.js";
 import { getResponsableLabel } from "./auth.js";
 import { toast, escapeHTML, toDate, printAdHoc } from "./ui.js";
-import { interpretarDespacho, leerAlias, guardarAlias, fechaLarga, existenciaDe } from "./despachoRapido.js";
+import { interpretarDespacho, leerAlias, guardarAlias, fechaLarga, existenciaDe, plantillaMensaje, mostrarPlantilla } from "./despachoRapido.js";
 
 const ALMACENES_DEBITO = ["Módulo", "Ambulancia"];
 const MOTIVO_POR_DEFECTO = "Uso operativo / Consumo";
@@ -93,10 +93,12 @@ export function initDebitoRapido() {
       <div class="flex flex-wrap gap-2 mt-2">
         <button type="button" id="db-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
         <button type="button" id="db-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
+        <button type="button" id="db-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje predeterminado</button>
         <button type="button" id="db-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último débito</button>
         <button type="button" id="db-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
       <div id="db-aviso" class="text-xs text-slate-500 mt-2"></div>
+      <div id="db-plantilla-caja" class="mt-3"></div>
       <div id="db-recibo" class="mt-3"></div>
       <div id="db-vista" class="mt-3"></div>
     </div>`;
@@ -277,6 +279,11 @@ export function initDebitoRapido() {
     const r = ultimoDebito(almacenActual) || ultimoDebito(ALMACENES_DEBITO.find((a) => ultimoDebito(a)) || "");
     if (!r) return toast("Aún no hay débitos del Módulo o la Ambulancia.", "warning");
     mostrarRecibo(r);
+  };
+  el("#db-plantilla").onclick = () => {
+    const almacen = el("#db-almacen")?.value || almacenActual;
+    const texto = plantillaMensaje({ titulo: `INSUMOS UTILIZADOS – ${almacen.toUpperCase()}`, filas: getDebitos().filter((d) => d.almacenOrigen === almacen), almacenStock: almacen });
+    mostrarPlantilla(el("#db-plantilla-caja"), texto, `Péguelo una vez en el grupo del ${almacen}. Al terminar el turno solo cambian los <strong>00</strong> por lo que gastaron (las líneas que queden en 00 se ignoran). Pueden agregar líneas nuevas, por ejemplo <em>02 vendas</em>.`);
   };
   el("#db-limpiar").onclick = () => {
     mostrarRecibo(null);
