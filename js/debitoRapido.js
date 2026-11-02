@@ -93,7 +93,8 @@ export function initDebitoRapido() {
       <div class="flex flex-wrap gap-2 mt-2">
         <button type="button" id="db-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
         <button type="button" id="db-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
-        <button type="button" id="db-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje predeterminado</button>
+        <button type="button" id="db-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje Módulo</button>
+        <button type="button" id="db-plantilla-amb" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje Ambulancia</button>
         <button type="button" id="db-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último débito</button>
         <button type="button" id="db-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
@@ -280,11 +281,19 @@ export function initDebitoRapido() {
     if (!r) return toast("Aún no hay débitos del Módulo o la Ambulancia.", "warning");
     mostrarRecibo(r);
   };
-  el("#db-plantilla").onclick = () => {
-    const almacen = el("#db-almacen")?.value || almacenActual;
-    const texto = plantillaMensaje({ titulo: `INSUMOS UTILIZADOS – ${almacen.toUpperCase()}`, filas: getDebitos().filter((d) => d.almacenOrigen === almacen), almacenStock: almacen });
-    mostrarPlantilla(el("#db-plantilla-caja"), texto, `Péguelo una vez en el grupo del ${almacen}. Al terminar el turno solo cambian los <strong>00</strong> por lo que gastaron (las líneas que queden en 00 se ignoran). Pueden agregar líneas nuevas, por ejemplo <em>02 vendas</em>.`);
+  const plantillaDebito = (almacen) => {
+    const esAmb = almacen === "Ambulancia";
+    const texto = plantillaMensaje({
+      titulo: `INSUMOS UTILIZADOS – ${esAmb ? "AMBULANCIA" : "MÓDULO DE EMERGENCIA"}`,
+      campos: esAmb ? ["Responsable:", "Unidad:", "Servicio:", "Turno:"] : ["Responsable:", "Turno:"],
+      filas: getDebitos().filter((d) => d.almacenOrigen === almacen),
+      almacenStock: almacen,
+    });
+    mostrarPlantilla(el("#db-plantilla-caja"), texto, `Para reportar lo <strong>gastado</strong> en ${esAmb ? "la Ambulancia" : "el Módulo"}: cambian los <strong>00</strong> por las cantidades usadas y lo envían al grupo. Luego se pega aquí para descontarlo (elija el almacén ${almacen}). Las líneas en 00 y los datos de Responsable / Turno / Observaciones se ignoran.`);
+    almacenActual = almacen;
   };
+  el("#db-plantilla").onclick = () => plantillaDebito("Módulo");
+  el("#db-plantilla-amb").onclick = () => plantillaDebito("Ambulancia");
   el("#db-limpiar").onclick = () => {
     mostrarRecibo(null);
     lineas = [];

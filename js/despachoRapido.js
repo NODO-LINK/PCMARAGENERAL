@@ -60,6 +60,16 @@ function distancia(a, b) {
 }
 const parecidas = (a, b) => a === b || (a.length >= 6 && b.length >= 6 && distancia(a, b) <= 2);
 
+// Líneas "Etiqueta: valor" de las plantillas (Responsable, Turno, Observaciones...): no son insumos.
+const ETIQUETAS = new Set([
+  "responsable", "solicitado por", "solicita", "pedido por", "registrado por", "registro", "despachado por", "despacho", "recibido por", "recibe", "entregado por",
+  "turno", "fecha", "hora", "guardia", "unidad", "servicio", "observaciones", "observacion", "obs", "nota", "notas", "destino", "motivo", "almacen", "jefe de modulo", "entrega",
+]);
+const esLineaEtiqueta = (linea) => {
+  const m = normalizarBusqueda(linea).match(/^\s*([a-z ]{2,25}?)\s*:/);
+  return !!m && ETIQUETAS.has(m[1].trim());
+};
+
 /** Quita lo que WhatsApp agrega al copiar un mensaje: "[10:32, 3/11/2026] Nombre:" y marcas de formato. */
 function limpiarMensaje(texto) {
   return String(texto ?? "")
@@ -95,6 +105,9 @@ export const claveAlias = (tokens) => [...new Set(tokens.map(singular))].sort().
 export function interpretarDespacho(texto, insumosCatalogo, alias = {}) {
   const activos = insumosCatalogo.filter((i) => i.activo !== false);
   const fragmentos = limpiarMensaje(texto)
+    .split("\n")
+    .filter((l) => !esLineaEtiqueta(l))
+    .join("\n")
     .split(/\n|;|,\s|\sy\s/i)
     .map((f) => f.trim())
     .filter(Boolean);
@@ -228,7 +241,7 @@ function lineasDelUltimoDespacho(destino, incluirHoy = false) {
  * para que quien lo llena solo cambie los números (las líneas en 00 se
  * ignoran al interpretar). `filas` son transferencias/débitos recientes.
  */
-export function plantillaMensaje({ titulo, filas, almacenStock, maximo = 25 }) {
+export function plantillaMensaje({ titulo, campos = [], cierre = ["Observaciones:"], filas, almacenStock, maximo = 25 }) {
   const hoy = new Date().toLocaleDateString("en-CA");
   const cuenta = new Map();
   filas.forEach((f) => cuenta.set(f.insumoId, (cuenta.get(f.insumoId) || 0) + 1));
@@ -239,8 +252,9 @@ export function plantillaMensaje({ titulo, filas, almacenStock, maximo = 25 }) {
       .filter((s) => s.almacen === almacenStock && Number(s.existencia) > 0 && activos.has(s.insumoId))
       .forEach((s) => !ids.includes(s.insumoId) && ids.push(s.insumoId));
   }
+  if (!ids.length) [...activos.keys()].forEach((id) => ids.push(id)); // sin historial ni existencias: el catálogo
   const nombres = ids.slice(0, maximo).map((id) => activos.get(id)).sort((a, b) => a.localeCompare(b));
-  return [`*${titulo}* – ${fechaLarga(hoy)}`, ``, ...nombres.map((n) => `00 ${n}`)].join("\n");
+  return [`*${titulo}* – ${fechaLarga(hoy)}`, ...campos, ``, ...nombres.map((n) => `00 ${n}`), ``, ...cierre].join("\n");
 }
 
 /** Caja con la plantilla y botón para copiarla (se reutiliza en despacho y débito). */
@@ -330,7 +344,8 @@ export function initDespachoRapido() {
         <button type="button" id="dr-pegar" class="btn-primary">Pegar del portapapeles e interpretar</button>
         <button type="button" id="dr-interpretar" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Interpretar texto</button>
         <button type="button" id="dr-repetir" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Repetir el último despacho</button>
-        <button type="button" id="dr-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje predeterminado</button>
+        <button type="button" id="dr-plantilla" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje de pedido</button>
+        <button type="button" id="dr-plantilla-despacho" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Mensaje de despacho</button>
         <button type="button" id="dr-ver-recibo" class="px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Recibo del último despacho</button>
         <button type="button" id="dr-limpiar" class="px-4 py-2 text-sm rounded-md text-slate-500 hover:underline">Limpiar</button>
       </div>
@@ -555,13 +570,24 @@ export function initDespachoRapido() {
     const nombreDe = (l) => getInsumos().find((i) => i.id === l.insumoId)?.nombre || l.original;
     mostrarRecibo({ fecha, destino: DESTINO_POR_DEFECTO, responsable: previas.find((l) => l.responsable)?.responsable || getResponsableLabel(), items: previas.map((l) => ({ nombre: nombreDe(l), cantidad: l.cantidad, origen: l.origen })) });
   };
+  const filasDespacho = () => getTransferencias().filter((t) => t.stockDestino === DESTINO_POR_DEFECTO && ORIGENES.includes(t.stockOrigen));
   el("#dr-plantilla").onclick = () => {
     const texto = plantillaMensaje({
-      titulo: "DESPACHO AL MÓDULO",
-      filas: getTransferencias().filter((t) => t.stockDestino === DESTINO_POR_DEFECTO && ORIGENES.includes(t.stockOrigen)),
+      titulo: "PEDIDO DE INSUMOS – MÓDULO DE EMERGENCIA",
+      campos: ["Solicitado por:", "Turno:"],
+      filas: filasDespacho(),
       almacenStock: "Oficina",
     });
-    mostrarPlantilla(el("#dr-plantilla-caja"), texto, "Péguelo una vez en el grupo. Cada día solo cambian los <strong>00</strong> por la cantidad (las líneas que queden en 00 se ignoran). Pueden agregar líneas nuevas escribiendo, por ejemplo, <em>05 vendas</em>.");
+    mostrarPlantilla(el("#dr-plantilla-caja"), texto, "Lo usa el Módulo para <strong>pedir</strong> insumos: cambian los <strong>00</strong> por lo que necesitan y lo envían al grupo. Quien despacha copia el pedido, lo pega aquí (Pegar del portapapeles e interpretar) y lo registra. Las líneas en 00 y los datos de Solicitado por / Turno / Observaciones se ignoran.");
+  };
+  el("#dr-plantilla-despacho").onclick = () => {
+    const texto = plantillaMensaje({
+      titulo: "DESPACHO AL MÓDULO",
+      campos: ["Despachado por:", "Recibido por:"],
+      filas: filasDespacho(),
+      almacenStock: "Oficina",
+    });
+    mostrarPlantilla(el("#dr-plantilla-caja"), texto, "Mensaje para <strong>informar</strong> lo despachado: cambian los 00 por las cantidades. Escriba \"de depósito\" al final de una línea si ese insumo salió de Depósito. Las líneas en 00 se ignoran.");
   };
   el("#dr-limpiar").onclick = () => {
     mostrarRecibo(null);
