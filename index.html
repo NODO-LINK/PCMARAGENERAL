@@ -952,11 +952,13 @@
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h3 class="text-lg font-bold text-slate-800">Cierre Mensual General</h3>
-              <p class="text-xs text-slate-500 max-w-md">Imprime en un solo documento el cierre del mes de <strong>todos los departamentos</strong> (Emergencias, Guardias, Combustible, Hidrometeorología, Educación y Gestión de Riesgo): una hoja de resumen con las firmas del Departamento de Sistema y el Director, y cada departamento en su propia hoja con sus firmas.</p>
+              <p class="text-xs text-slate-500 max-w-md">Imprime en un solo documento el cierre del mes de <strong>todos los departamentos</strong> (Emergencias, Guardias, Combustible, Hidrometeorología, Educación y Gestión de Riesgo): una hoja de resumen con las firmas del Departamento de Sistema y el Director, y cada departamento en su propia hoja con sus firmas. También se puede descargar en Excel (una pestaña por módulo) o en PDF.</p>
             </div>
             <div class="flex flex-wrap items-end gap-2">
               <div><label class="block text-xs text-slate-500">Mes del cierre</label><input type="month" id="cierre-mes" class="border border-slate-300 rounded-md px-2 py-1 text-sm" /></div>
               <button id="btn-cierre-mensual" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900"><span class="icon" data-icon="impresora"></span>Imprimir cierre mensual (todos los departamentos)</button>
+              <button id="btn-cierre-mensual-xlsx" class="px-3 py-1.5 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800"><span class="icon" data-icon="descargar"></span>Excel</button>
+              <button id="btn-cierre-mensual-pdf" class="px-3 py-1.5 text-xs rounded-md bg-red-700 text-white hover:bg-red-800"><span class="icon" data-icon="descargar"></span>PDF</button>
             </div>
           </div>
         </div>

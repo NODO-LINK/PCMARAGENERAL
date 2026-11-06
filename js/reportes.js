@@ -18,6 +18,8 @@ import {
   exportToPDF,
   printElement,
   printAdHoc,
+  exportToExcelMulti,
+  exportToPDFMulti,
   printHeaderHTML,
   printFooterHTML,
   toast,
@@ -292,6 +294,46 @@ function tablaSeccion(cfg, filas) {
 }
 const escapeCierre = (t) => String(t ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
+/** Datos del cierre (texto plano) para Excel y PDF. */
+function datosCierreMensual(mes) {
+  const [anio, nroMes] = mes.split("-");
+  const nombreMes = `${MESES_ES[Number(nroMes) - 1].replace(/^./, (c) => c.toUpperCase())} ${anio}`;
+  const cfgDe = (k) => REPORTS[k] || SECCIONES_EXTRA[k];
+  const resumen = [];
+  const deps = DEPARTAMENTOS_CIERRE.map((dep) => {
+    const secciones = dep.secciones.map((k) => {
+      const cfg = cfgDe(k);
+      const filas = filasDelMes(cfg, mes);
+      const body = filas.map((r) => cfg.columns.map((c) => String(c.format ? c.format(r) : r[c.key] ?? "")));
+      if (filas.length && (cfg.totals || []).length) {
+        body.push(cfg.columns.map((c, i) => (cfg.totals.includes(c.key) ? String(filas.reduce((s, r) => s + (Number(r[c.key]) || 0), 0)) : i === 0 ? "TOTAL" : "")));
+      }
+      const lit = k === "combustible" ? ` — ${filas.reduce((s, r) => s + (Number(r.litros) || 0), 0)} L` : "";
+      resumen.push([dep.nombre, cfg.label, `${filas.length} registro(s)${lit}`]);
+      return { label: cfg.label, head: cfg.columns.map((c) => c.label), body, count: filas.length };
+    });
+    return { nombre: dep.nombre, firmas: (REPORTS[dep.secciones[0]] || {}).firmas || ["Jefe de Departamento", "Director"], secciones };
+  });
+  return { nombreMes, resumen, deps };
+}
+
+function descargarCierreMensual(mes, formato) {
+  if (!/^\d{4}-\d{2}$/.test(mes || "")) return toast("Elija el mes del cierre.", "error");
+  const d = datosCierreMensual(mes);
+  const archivo = `Cierre_Mensual_General_${mes}`;
+  if (formato === "xlsx") {
+    const hojas = [{ nombre: "Resumen", head: ["Departamento", "Módulo", `Total de ${d.nombreMes}`], body: d.resumen }];
+    d.deps.forEach((dep) => dep.secciones.forEach((sec) => hojas.push({ nombre: sec.label.replace(/\s*\(.*\)\s*$/, ""), head: sec.head, body: sec.body.length ? sec.body : [["Sin registros en este mes"]] })));
+    exportToExcelMulti(archivo, hojas);
+  } else {
+    const bloques = [
+      { titulo: "CIERRE MENSUAL GENERAL DE OPERACIONES", subtitulo: `${d.nombreMes} — todos los departamentos`, secciones: [{ head: ["Departamento", "Módulo", "Total del mes"], body: d.resumen }], firmas: ["Departamento de Sistema", "Director"] },
+      ...d.deps.map((dep) => ({ titulo: `DEPARTAMENTO: ${dep.nombre.toUpperCase()}`, subtitulo: `Cierre mensual — ${d.nombreMes}`, secciones: dep.secciones.map((s) => ({ titulo: `${s.label} (${s.count})`, head: s.head, body: s.body })), firmas: dep.firmas })),
+    ];
+    exportToPDFMulti(archivo, `Cierre Mensual General — ${d.nombreMes}`, bloques);
+  }
+}
+
 function imprimirCierreMensual(mes) {
   if (!/^\d{4}-\d{2}$/.test(mes || "")) return toast("Elija el mes del cierre.", "error");
   const [anio, nroMes] = mes.split("-");
@@ -334,6 +376,8 @@ function initCierreMensual() {
   if (input && !input.value) input.value = new Date().toLocaleDateString("en-CA").slice(0, 7);
   Object.values(SECCIONES_EXTRA).forEach((cfg) => ensureSubscribed(cfg.collection, cfg.dateField));
   document.getElementById("btn-cierre-mensual")?.addEventListener("click", () => imprimirCierreMensual(input?.value));
+  document.getElementById("btn-cierre-mensual-xlsx")?.addEventListener("click", () => descargarCierreMensual(input?.value, "xlsx"));
+  document.getElementById("btn-cierre-mensual-pdf")?.addEventListener("click", () => descargarCierreMensual(input?.value, "pdf"));
 }
 
 /* ---------------------------------------------------------------------- */

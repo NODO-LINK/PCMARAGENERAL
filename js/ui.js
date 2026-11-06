@@ -670,6 +670,110 @@ export function exportToExcel(filename, columns, rows) {
   window.XLSX.writeFile(wb, `${sanitizeFilename(filename)}.xlsx`);
 }
 
+/**
+ * Excel con varias hojas. sheets: [{ nombre, head: [..], body: [[..]] }]
+ */
+export function exportToExcelMulti(filename, sheets) {
+  if (!window.XLSX) {
+    toast("Librería de Excel no disponible.", "error");
+    return;
+  }
+  const wb = window.XLSX.utils.book_new();
+  const usados = new Set();
+  sheets.forEach((sh) => {
+    let nombre = String(sh.nombre || "Hoja").replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 31) || "Hoja";
+    let n = 2;
+    const base = nombre;
+    while (usados.has(nombre.toLowerCase())) nombre = `${base.slice(0, 28)} ${n++}`;
+    usados.add(nombre.toLowerCase());
+    const ws = window.XLSX.utils.aoa_to_sheet([sh.head, ...sh.body]);
+    ws["!cols"] = sh.head.map((h, i) => ({ wch: Math.min(40, Math.max(String(h).length, ...sh.body.map((r) => String(r[i] ?? "").length)) + 2) }));
+    window.XLSX.utils.book_append_sheet(wb, ws, nombre);
+  });
+  window.XLSX.writeFile(wb, `${sanitizeFilename(filename)}.xlsx`);
+}
+
+/**
+ * PDF con varias páginas. bloques: [{ titulo, subtitulo, secciones: [{ titulo, head, body }], firmas: [a, b] }]
+ * Cada bloque empieza en página nueva; las firmas van al final del bloque.
+ */
+export async function exportToPDFMulti(filename, tituloDoc, bloques) {
+  const { jsPDF } = window.jspdf || {};
+  if (!jsPDF) {
+    toast("Librería de PDF no disponible.", "error");
+    return;
+  }
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
+  const crest = await getCrestDataUrl();
+  const ancho = pdf.internal.pageSize.getWidth();
+  const alto = pdf.internal.pageSize.getHeight();
+  const cabecera = () => {
+    const x = crest ? 26 : 14;
+    if (crest) pdf.addImage(crest, "PNG", 12, 8, 14, 14);
+    pdf.setFontSize(12);
+    pdf.setFont(undefined, "bold");
+    pdf.text(INSTITUCION.nombre, x, 14);
+    pdf.setFont(undefined, "normal");
+    pdf.setFontSize(8);
+    pdf.text(`${INSTITUCION.sistema} — ${tituloDoc}`, x, 19);
+    pdf.text(`Generado: ${new Date().toLocaleString("es-VE")}`, x, 23);
+    pdf.setDrawColor(11, 37, 69);
+    pdf.line(12, 26, ancho - 12, 26);
+  };
+  bloques.forEach((b, i) => {
+    if (i > 0) pdf.addPage();
+    cabecera();
+    pdf.setFontSize(12);
+    pdf.setFont(undefined, "bold");
+    pdf.text(b.titulo, ancho / 2, 35, { align: "center" });
+    pdf.setFont(undefined, "normal");
+    pdf.setFontSize(9);
+    if (b.subtitulo) pdf.text(b.subtitulo, ancho / 2, 40, { align: "center" });
+    let y = 45;
+    b.secciones.forEach((sec) => {
+      if (sec.titulo) {
+        if (y > alto - 40) {
+          pdf.addPage();
+          y = 20;
+        }
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, "bold");
+        pdf.text(sec.titulo, 14, y);
+        pdf.setFont(undefined, "normal");
+        y += 3;
+      }
+      if (!sec.body.length) {
+        pdf.setFontSize(9);
+        pdf.text("Sin registros en este mes.", 14, y + 5);
+        y += 12;
+        return;
+      }
+      pdf.autoTable({
+        startY: y,
+        head: [sec.head],
+        body: sec.body,
+        styles: { fontSize: 7.5, cellPadding: 1.5 },
+        headStyles: { fillColor: [11, 37, 69] },
+        margin: { left: 12, right: 12, top: 20 },
+      });
+      y = pdf.lastAutoTable.finalY + 8;
+    });
+    // Firmas al final del bloque (en página nueva si no caben)
+    if (y > alto - 45) {
+      pdf.addPage();
+      y = 30;
+    }
+    const yf = Math.max(y + 18, alto - 40);
+    (b.firmas || ["Jefe de Departamento", "Director"]).forEach((f, k) => {
+      const x1 = k === 0 ? 25 : ancho / 2 + 10;
+      pdf.line(x1, yf, x1 + 75, yf);
+      pdf.setFontSize(9);
+      pdf.text(f, x1 + 37.5, yf + 5, { align: "center" });
+    });
+  });
+  pdf.save(`${sanitizeFilename(filename)}.pdf`);
+}
+
 // Carga perezosa (y en caché) del escudo institucional como data URL, para
 // poder incrustarlo en los PDF generados con jsPDF (que no soporta SVG
 // directamente, solo imágenes ráster).
