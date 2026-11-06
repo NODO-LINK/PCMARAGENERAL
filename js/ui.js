@@ -633,7 +633,7 @@ export function printElement(root, title) {
  * misma estrategia de printElement().
  * @param {string} title
  * @param {string} bodyHTML - HTML del cuerpo del documento (con estilos inline, no depende de Tailwind).
- * @param {[string,string]} [firmas]
+ * @param {[string,string]|null} [firmas] - null: sin firmas al final (el cuerpo trae las suyas).
  */
 let printScratchEl = null;
 export function printAdHoc(title, bodyHTML, firmas, espacioFirmaRem) {
@@ -646,7 +646,7 @@ export function printAdHoc(title, bodyHTML, firmas, espacioFirmaRem) {
     <div style="background:#fff;">
       <div class="print-header">${printHeaderHTML(title)}</div>
       ${bodyHTML}
-      <div class="print-footer">${printFooterHTML(firmas, espacioFirmaRem)}</div>
+      ${firmas === null ? "" : `<div class="print-footer">${printFooterHTML(firmas, espacioFirmaRem)}</div>`}
     </div>`;
   printElement(printScratchEl, title);
 }

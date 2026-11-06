@@ -132,6 +132,47 @@ const REPORTS = {
   },
 };
 
+// Secciones extra (Hidrometeorología) que no están en el selector de reportes
+// pero sí van en el Cierre Mensual General.
+const nivelTxt = (r) => (r.nivel === null || r.nivel === undefined || r.nivel === "" || isNaN(Number(r.nivel)) ? "—" : r.nivel);
+const lluviaTxt = (r) => (r.lluvia === null || r.lluvia === undefined || r.lluvia === "" ? "—" : r.lluvia);
+const SECCIONES_EXTRA = {
+  hidroFlu: {
+    label: "Fluviometría (niveles de ríos)",
+    collection: COLLECTIONS.HIDRO_LECTURAS,
+    dateField: "fecha",
+    columns: [
+      { key: "fecha", label: "Fecha y hora", format: (r) => formatDate(r.fecha, true) },
+      { key: "rioNombre", label: "Río", format: (r) => r.rioNombre || "—" },
+      { key: "nivel", label: "Nivel", format: nivelTxt },
+      { key: "lluvia", label: "Lluvia (mm/m²)", format: lluviaTxt },
+      { key: "estado", label: "Estado", format: (r) => r.estado || "—" },
+    ],
+    totals: ["lluvia"],
+  },
+  hidroPluv: {
+    label: "Pluviometría (estaciones)",
+    collection: COLLECTIONS.PLUVIOMETRIA_LECTURAS,
+    dateField: "fecha",
+    columns: [
+      { key: "fecha", label: "Fecha", format: (r) => formatDate(r.fecha) },
+      { key: "estacionNombre", label: "Estación", format: (r) => r.estacionNombre || "—" },
+      { key: "lluvia", label: "Lluvia (mm/m²)", format: lluviaTxt },
+    ],
+    totals: ["lluvia"],
+  },
+};
+
+// Departamentos del Cierre Mensual General, en el orden de impresión.
+const DEPARTAMENTOS_CIERRE = [
+  { nombre: "Emergencias", secciones: ["pacientes", "traslados", "fallecidos"] },
+  { nombre: "Guardias de Prevención", secciones: ["guardias"] },
+  { nombre: "Combustible", secciones: ["combustible"] },
+  { nombre: "Hidrometeorología", secciones: ["hidroFlu", "hidroPluv"] },
+  { nombre: "Educación", secciones: ["educacion"] },
+  { nombre: "Gestión de Riesgo", secciones: ["inspeccion"] },
+];
+
 const dataCache = {}; // collectionName -> rows[]
 let currentHistorial = null;
 let initialized = false;
@@ -219,6 +260,80 @@ function renderResumenGeneral() {
         { key: "label", label: "Módulo" },
         { key: "unidad", label: "Total del periodo" },
       ], filas);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Cierre Mensual General (todos los departamentos juntos)                  */
+/* ---------------------------------------------------------------------- */
+const MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const CELDA = "border:1px solid #94a3b8;padding:3px 6px;font-size:10px;vertical-align:top;";
+const CABECERA = "border:1px solid #94a3b8;padding:3px 6px;font-size:10px;background:#f1f5f9;text-align:left;";
+
+function filasDelMes(cfg, mes) {
+  const crudas = dataCache[cfg.collection] || [];
+  const base = cfg.mapRows ? cfg.mapRows(crudas, dataCache) : crudas;
+  return base
+    .filter((r) => {
+      const d = toDate(r[cfg.dateField]);
+      return d && d.toLocaleDateString("en-CA").startsWith(mes);
+    })
+    .sort((a, b) => toDate(a[cfg.dateField]) - toDate(b[cfg.dateField]));
+}
+
+function tablaSeccion(cfg, filas) {
+  if (!filas.length) return `<p style="font-size:11px;color:#64748b;margin:4px 0 10px;">Sin registros en este mes.</p>`;
+  const totales = (cfg.totals || []).length
+    ? `<tr style="font-weight:bold;background:#f8fafc;">${cfg.columns.map((c, i) => `<td style="${CELDA}">${cfg.totals.includes(c.key) ? filas.reduce((s, r) => s + (Number(r[c.key]) || 0), 0) : i === 0 ? "TOTAL" : ""}</td>`).join("")}</tr>`
+    : "";
+  return `<table style="width:100%;border-collapse:collapse;margin:4px 0 12px;">
+    <thead><tr>${cfg.columns.map((c) => `<th style="${CABECERA}">${escapeCierre(c.label)}</th>`).join("")}</tr></thead>
+    <tbody>${filas.map((r) => `<tr style="page-break-inside:avoid;">${cfg.columns.map((c) => `<td style="${CELDA}">${escapeCierre(c.format ? c.format(r) : r[c.key] ?? "")}</td>`).join("")}</tr>`).join("")}${totales}</tbody>
+  </table>`;
+}
+const escapeCierre = (t) => String(t ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+function imprimirCierreMensual(mes) {
+  if (!/^\d{4}-\d{2}$/.test(mes || "")) return toast("Elija el mes del cierre.", "error");
+  const [anio, nroMes] = mes.split("-");
+  const nombreMes = `${MESES_ES[Number(nroMes) - 1].replace(/^./, (c) => c.toUpperCase())} ${anio}`;
+  const cfgDe = (k) => REPORTS[k] || SECCIONES_EXTRA[k];
+
+  const resumen = [];
+  const secciones = DEPARTAMENTOS_CIERRE.map((dep) => {
+    const partes = dep.secciones.map((k) => {
+      const cfg = cfgDe(k);
+      const filas = filasDelMes(cfg, mes);
+      const lit = k === "combustible" ? ` — ${filas.reduce((s, r) => s + (Number(r.litros) || 0), 0)} L` : "";
+      resumen.push({ dep: dep.nombre, modulo: cfg.label, total: `${filas.length} registro(s)${lit}` });
+      return `<h3 style="font-size:12px;margin:10px 0 2px;color:#0b2545;">${escapeCierre(cfg.label)} <span style="font-weight:normal;color:#64748b;">(${filas.length})</span></h3>${tablaSeccion(cfg, filas)}`;
+    });
+    const firmas = (REPORTS[dep.secciones[0]] || {}).firmas;
+    return `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;page-break-before:always;break-before:page;">
+      <h2 style="text-align:center;font-size:14px;margin:6px 0 2px;">DEPARTAMENTO: ${escapeCierre(dep.nombre.toUpperCase())}</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 8px;color:#475569;">Cierre mensual — ${nombreMes}</p>
+      ${partes.join("")}
+      <div class="print-footer">${printFooterHTML(firmas || ["Jefe de Departamento", "Director"], 3)}</div>
+    </div>`;
+  });
+
+  const portada = `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+    <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">CIERRE MENSUAL GENERAL DE OPERACIONES</h2>
+    <p style="text-align:center;font-size:12px;margin:0 0 12px;color:#475569;">${nombreMes} — todos los departamentos</p>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr><th style="${CABECERA}">Departamento</th><th style="${CABECERA}">Módulo</th><th style="${CABECERA}">Total del mes</th></tr></thead>
+      <tbody>${resumen.map((f) => `<tr><td style="${CELDA}">${escapeCierre(f.dep)}</td><td style="${CELDA}">${escapeCierre(f.modulo)}</td><td style="${CELDA}font-weight:bold;">${escapeCierre(f.total)}</td></tr>`).join("")}</tbody>
+    </table>
+    <div class="print-footer">${printFooterHTML(["Departamento de Sistema", "Director"], 3)}</div>
+  </div>`;
+
+  printAdHoc(`Cierre Mensual General — ${nombreMes}`, portada + secciones.join(""), null);
+}
+
+function initCierreMensual() {
+  const input = document.getElementById("cierre-mes");
+  if (input && !input.value) input.value = new Date().toLocaleDateString("en-CA").slice(0, 7);
+  Object.values(SECCIONES_EXTRA).forEach((cfg) => ensureSubscribed(cfg.collection, cfg.dateField));
+  document.getElementById("btn-cierre-mensual")?.addEventListener("click", () => imprimirCierreMensual(input?.value));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -364,6 +479,7 @@ export function initReportes() {
     document.getElementById("resumen-desde")?.addEventListener("change", renderResumenGeneral);
     document.getElementById("resumen-hasta")?.addEventListener("change", renderResumenGeneral);
     initCierreDiario();
+    initCierreMensual();
   }
 
   renderReport(select ? select.value : "pacientes");
