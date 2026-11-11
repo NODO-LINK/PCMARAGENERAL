@@ -55,6 +55,7 @@ const num = (n) => String(Math.round(n * 100) / 100);
 
 /** Despachos del mes agrupados por institución: [{ nombre, filas, gasolina, diesel, total }] */
 function gruposDelMes(mes, soloInstitucion) {
+  if (!/^\d{4}-\d{2}$/.test(mes || "")) return []; // sin mes elegido no se imprime nada (antes salían todos los meses)
   const filas = (moduleRef?.getRows() || []).filter((r) => {
     const d = toDate(r.fecha);
     return d && d.toLocaleDateString("en-CA").startsWith(mes);
@@ -82,7 +83,9 @@ const filasTabla = (g) => g.filas.map((r) => [formatDate(r.fecha), r.tipoCombust
 const CABECERA_INST = ["Fecha", "Tipo", "Litros", "Unidad / Placa", "Responsable"];
 const resumenInst = (g) => `Gasolina: ${num(g.gasolina)} L — Diésel: ${num(g.diesel)} L — Total: ${num(g.total)} L`;
 
+const MSG_ELEGIR_MES = "Elija primero el mes del reporte.";
 function imprimirReporteMensual(mes, institucion) {
+  if (!/^\d{4}-\d{2}$/.test(mes || "")) return toast(MSG_ELEGIR_MES, "warning");
   const grupos = gruposDelMes(mes, institucion);
   if (!grupos.length) return toast("No hay despachos de combustible en ese mes" + (institucion ? " para esa institución." : "."), "warning");
   const titulo = nombreMesTxt(mes);
@@ -117,6 +120,7 @@ function imprimirReporteMensual(mes, institucion) {
 }
 
 function descargarReporteMensual(mes, institucion, formato) {
+  if (!/^\d{4}-\d{2}$/.test(mes || "")) return toast(MSG_ELEGIR_MES, "warning");
   const grupos = gruposDelMes(mes, institucion);
   if (!grupos.length) return toast("No hay despachos de combustible en ese mes" + (institucion ? " para esa institución." : "."), "warning");
   const titulo = nombreMesTxt(mes);
@@ -148,6 +152,7 @@ function setupReporteMensual() {
     if (nombres.includes(actual)) instSel.value = actual;
   };
   mesInput.addEventListener("change", llenar);
+  mesInput.addEventListener("input", llenar);
   instSel.addEventListener("focus", llenar);
   instSel.addEventListener("mousedown", llenar);
   llenar();
