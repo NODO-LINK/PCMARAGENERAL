@@ -1,6 +1,6 @@
 import { COLLECTIONS, CATEGORIAS_INSTITUCIONES } from "./config.js";
 import { createCrudModule } from "./moduleFactory.js";
-import { formatDate, escapeHTML, toast } from "./ui.js";
+import { formatDate, escapeHTML, toast, toDate, printAdHoc, printFooterHTML, exportToExcelMulti, exportToPDFMulti } from "./ui.js";
 import { createRecord, updateRecord } from "./data.js";
 import { getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila, parsearFechaLegado } from "./importUtils.js";
@@ -40,8 +40,121 @@ export function initCombustible() {
   });
 
   setupImportacionCombustible();
+  setupReporteMensual();
 
   return moduleRef;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reporte por mes e institución (imprimir / Excel / PDF)                   */
+/* ---------------------------------------------------------------------- */
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const T_CELDA = "border:1px solid #94a3b8;padding:4px 8px;font-size:11px;";
+const T_CAB = "border:1px solid #94a3b8;padding:4px 8px;font-size:11px;background:#f1f5f9;text-align:left;";
+const num = (n) => String(Math.round(n * 100) / 100);
+
+/** Despachos del mes agrupados por institución: [{ nombre, filas, gasolina, diesel, total }] */
+function gruposDelMes(mes, soloInstitucion) {
+  const filas = (moduleRef?.getRows() || []).filter((r) => {
+    const d = toDate(r.fecha);
+    return d && d.toLocaleDateString("en-CA").startsWith(mes);
+  });
+  const porInst = new Map();
+  filas.forEach((r) => {
+    const nombre = r.institucionNombre || "(sin institución)";
+    if (soloInstitucion && nombre !== soloInstitucion) return;
+    if (!porInst.has(nombre)) porInst.set(nombre, []);
+    porInst.get(nombre).push(r);
+  });
+  return [...porInst.entries()]
+    .map(([nombre, f]) => {
+      f.sort((a, b) => toDate(a.fecha) - toDate(b.fecha));
+      const suma = (tipo) => f.filter((r) => String(r.tipoCombustible || "").toLowerCase().startsWith(tipo)).reduce((s, r) => s + (Number(r.litros) || 0), 0);
+      const gasolina = suma("gasolina");
+      const diesel = suma("diesel") + suma("diésel");
+      return { nombre, filas: f, gasolina, diesel, total: f.reduce((s, r) => s + (Number(r.litros) || 0), 0) };
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
+const nombreMesTxt = (mes) => `${MESES[Number(mes.split("-")[1]) - 1]} ${mes.split("-")[0]}`;
+const filasTabla = (g) => g.filas.map((r) => [formatDate(r.fecha), r.tipoCombustible || "", num(Number(r.litros) || 0), r.unidadVehicular || "", r.responsable || ""]);
+const CABECERA_INST = ["Fecha", "Tipo", "Litros", "Unidad / Placa", "Responsable"];
+const resumenInst = (g) => `Gasolina: ${num(g.gasolina)} L — Diésel: ${num(g.diesel)} L — Total: ${num(g.total)} L`;
+
+function imprimirReporteMensual(mes, institucion) {
+  const grupos = gruposDelMes(mes, institucion);
+  if (!grupos.length) return toast("No hay despachos de combustible en ese mes" + (institucion ? " para esa institución." : "."), "warning");
+  const titulo = nombreMesTxt(mes);
+  const tabla = (g) => `<table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      <thead><tr>${CABECERA_INST.map((h) => `<th style="${T_CAB}">${h}</th>`).join("")}</tr></thead>
+      <tbody>${filasTabla(g).map((f) => `<tr style="page-break-inside:avoid;">${f.map((c) => `<td style="${T_CELDA}">${escapeHTML(c)}</td>`).join("")}</tr>`).join("")}
+      <tr style="font-weight:bold;background:#f8fafc;"><td style="${T_CELDA}" colspan="2">TOTAL (${g.filas.length} despacho(s))</td><td style="${T_CELDA}">${num(g.total)}</td><td style="${T_CELDA}" colspan="2">Gasolina ${num(g.gasolina)} L · Diésel ${num(g.diesel)} L</td></tr></tbody>
+    </table>`;
+  const seccion = (g, primera) => `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;${primera ? "" : "page-break-before:always;break-before:page;"}">
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">DESPACHO DE COMBUSTIBLE — ${escapeHTML(g.nombre.toUpperCase())}</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 6px;color:#475569;">Mes: ${titulo}</p>
+      ${tabla(g)}
+      <div class="print-footer">${printFooterHTML(["Despachador", "Director"], 3)}</div>
+    </div>`;
+
+  let cuerpo = "";
+  if (grupos.length > 1) {
+    const tg = grupos.reduce((s, g) => s + g.total, 0);
+    cuerpo += `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 6px;color:#475569;">Mes: ${titulo}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+        <thead><tr>${["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"].map((h) => `<th style="${T_CAB}">${h}</th>`).join("")}</tr></thead>
+        <tbody>${grupos.map((g) => `<tr><td style="${T_CELDA}">${escapeHTML(g.nombre)}</td><td style="${T_CELDA}">${g.filas.length}</td><td style="${T_CELDA}">${num(g.gasolina)}</td><td style="${T_CELDA}">${num(g.diesel)}</td><td style="${T_CELDA}font-weight:bold;">${num(g.total)}</td></tr>`).join("")}
+        <tr style="font-weight:bold;background:#f8fafc;"><td style="${T_CELDA}">TOTAL GENERAL</td><td style="${T_CELDA}">${grupos.reduce((s, g) => s + g.filas.length, 0)}</td><td style="${T_CELDA}">${num(grupos.reduce((s, g) => s + g.gasolina, 0))}</td><td style="${T_CELDA}">${num(grupos.reduce((s, g) => s + g.diesel, 0))}</td><td style="${T_CELDA}">${num(tg)}</td></tr></tbody>
+      </table>
+      <div class="print-footer">${printFooterHTML(["Despachador", "Director"], 3)}</div>
+    </div>`;
+  }
+  cuerpo += grupos.map((g, i) => seccion(g, grupos.length === 1 && i === 0)).join("");
+  printAdHoc(`Despacho de Combustible — ${titulo}`, cuerpo, null);
+}
+
+function descargarReporteMensual(mes, institucion, formato) {
+  const grupos = gruposDelMes(mes, institucion);
+  if (!grupos.length) return toast("No hay despachos de combustible en ese mes" + (institucion ? " para esa institución." : "."), "warning");
+  const titulo = nombreMesTxt(mes);
+  const archivo = `Combustible_${mes}${institucion ? "_" + institucion.replace(/[^\w]+/g, "_").slice(0, 30) : "_todas"}`;
+  const resumen = grupos.map((g) => [g.nombre, String(g.filas.length), num(g.gasolina), num(g.diesel), num(g.total)]);
+  if (formato === "xlsx") {
+    const hojas = [];
+    if (grupos.length > 1) hojas.push({ nombre: "Resumen", head: ["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"], body: resumen });
+    grupos.forEach((g) => hojas.push({ nombre: g.nombre, head: CABECERA_INST, body: [...filasTabla(g), ["TOTAL", "", num(g.total), `Gasolina ${num(g.gasolina)} L · Diésel ${num(g.diesel)} L`, ""]] }));
+    exportToExcelMulti(archivo, hojas);
+  } else {
+    const bloques = [];
+    if (grupos.length > 1) bloques.push({ titulo: "RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN", subtitulo: `Mes: ${titulo}`, secciones: [{ head: ["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"], body: resumen }], firmas: ["Despachador", "Director"] });
+    grupos.forEach((g) => bloques.push({ titulo: `DESPACHO DE COMBUSTIBLE — ${g.nombre.toUpperCase()}`, subtitulo: `Mes: ${titulo}`, secciones: [{ head: CABECERA_INST, body: [...filasTabla(g), ["TOTAL", "", num(g.total), resumenInst(g), ""]] }], firmas: ["Despachador", "Director"] }));
+    exportToPDFMulti(archivo, `Despacho de Combustible — ${titulo}`, bloques);
+  }
+}
+
+function setupReporteMensual() {
+  const mesInput = document.getElementById("comb-rep-mes");
+  const instSel = document.getElementById("comb-rep-inst");
+  if (!mesInput || !instSel) return;
+  if (!mesInput.value) mesInput.value = new Date().toLocaleDateString("en-CA").slice(0, 7);
+  // El selector lista las instituciones que tienen despachos en el mes elegido.
+  const llenar = () => {
+    const actual = instSel.value;
+    const nombres = gruposDelMes(mesInput.value).map((g) => g.nombre);
+    instSel.innerHTML = `<option value="">Todas las instituciones (una hoja por institución)</option>` + nombres.map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("");
+    if (nombres.includes(actual)) instSel.value = actual;
+  };
+  mesInput.addEventListener("change", llenar);
+  instSel.addEventListener("focus", llenar);
+  instSel.addEventListener("mousedown", llenar);
+  llenar();
+  setTimeout(llenar, 1500); // los despachos cargan de forma asíncrona
+  document.getElementById("comb-rep-print")?.addEventListener("click", () => imprimirReporteMensual(mesInput.value, instSel.value));
+  document.getElementById("comb-rep-xlsx")?.addEventListener("click", () => descargarReporteMensual(mesInput.value, instSel.value, "xlsx"));
+  document.getElementById("comb-rep-pdf")?.addEventListener("click", () => descargarReporteMensual(mesInput.value, instSel.value, "pdf"));
 }
 
 export function getCombustibleModule() {

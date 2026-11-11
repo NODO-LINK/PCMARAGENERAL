@@ -413,6 +413,18 @@
           </div>
         </div>
 
+        <div class="form-card no-print">
+          <h3 class="font-semibold text-slate-700 mb-1">Reporte por mes e institución</h3>
+          <p class="text-xs text-slate-500 mb-3 max-w-3xl">Imprima o descargue los despachos de un mes: de <strong>una institución</strong> o de <strong>todas</strong> (resumen general + una hoja por institución), con totales de gasolina y diésel y las firmas Despachador / Director.</p>
+          <div class="flex flex-wrap items-end gap-2">
+            <div><label class="form-label !mb-0 text-xs">Mes</label><input type="month" id="comb-rep-mes" class="form-input !py-1" /></div>
+            <div class="min-w-[16rem]"><label class="form-label !mb-0 text-xs">Institución</label><select id="comb-rep-inst" class="form-input !py-1"></select></div>
+            <button type="button" id="comb-rep-print" class="px-3 py-1.5 text-xs rounded-md bg-navy-800 text-white hover:bg-navy-900"><span class="icon" data-icon="impresora"></span>Imprimir</button>
+            <button type="button" id="comb-rep-xlsx" class="px-3 py-1.5 text-xs rounded-md bg-emerald-700 text-white hover:bg-emerald-800"><span class="icon" data-icon="descargar"></span>Excel</button>
+            <button type="button" id="comb-rep-pdf" class="px-3 py-1.5 text-xs rounded-md bg-red-700 text-white hover:bg-red-800"><span class="icon" data-icon="descargar"></span>PDF</button>
+          </div>
+        </div>
+
         <div id="historial-combustible"></div>
       </section>
 
