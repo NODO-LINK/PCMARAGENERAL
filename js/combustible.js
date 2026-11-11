@@ -101,21 +101,35 @@ function imprimirReporteMensual(mes, institucion) {
       <div class="print-footer">${printFooterHTML(["Despachador", "Director"], 3)}</div>
     </div>`;
 
-  let cuerpo = "";
-  if (grupos.length > 1) {
-    const tg = grupos.reduce((s, g) => s + g.total, 0);
-    cuerpo += `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
-      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN</h2>
-      <p style="text-align:center;font-size:11px;margin:0 0 6px;color:#475569;">Mes: ${titulo}</p>
-      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+  const hojaPorInstitucion = !!document.getElementById("comb-rep-hojas")?.checked;
+  const tg = grupos.reduce((s, g) => s + g.total, 0);
+  const resumenTabla = `<table style="width:100%;border-collapse:collapse;margin-top:8px;">
         <thead><tr>${["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"].map((h) => `<th style="${T_CAB}">${h}</th>`).join("")}</tr></thead>
         <tbody>${grupos.map((g) => `<tr><td style="${T_CELDA}">${escapeHTML(g.nombre)}</td><td style="${T_CELDA}">${g.filas.length}</td><td style="${T_CELDA}">${num(g.gasolina)}</td><td style="${T_CELDA}">${num(g.diesel)}</td><td style="${T_CELDA}font-weight:bold;">${num(g.total)}</td></tr>`).join("")}
         <tr style="font-weight:bold;background:#f8fafc;"><td style="${T_CELDA}">TOTAL GENERAL</td><td style="${T_CELDA}">${grupos.reduce((s, g) => s + g.filas.length, 0)}</td><td style="${T_CELDA}">${num(grupos.reduce((s, g) => s + g.gasolina, 0))}</td><td style="${T_CELDA}">${num(grupos.reduce((s, g) => s + g.diesel, 0))}</td><td style="${T_CELDA}">${num(tg)}</td></tr></tbody>
-      </table>
+      </table>`;
+  let cuerpo = "";
+  if (grupos.length === 1 || hojaPorInstitucion) {
+    // Una hoja por institución (con su resumen general al inicio si son varias)
+    if (grupos.length > 1) {
+      cuerpo += `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 6px;color:#475569;">Mes: ${titulo}</p>
+      ${resumenTabla}
+      <div class="print-footer">${printFooterHTML(["Despachador", "Director"], 3)}</div>
+    </div>`;
+    }
+    cuerpo += grupos.map((g, i) => seccion(g, grupos.length === 1 && i === 0)).join("");
+  } else {
+    // Compacto: todo seguido (resumen + cada institución), con una sola firma al final
+    cuerpo = `<div style="padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
+      <h2 style="text-align:center;font-size:15px;margin:6px 0 2px;">DESPACHO DE COMBUSTIBLE — ${titulo.toUpperCase()}</h2>
+      <p style="text-align:center;font-size:11px;margin:0 0 6px;color:#475569;">Todas las instituciones</p>
+      ${resumenTabla}
+      ${grupos.map((g) => `<h3 style="font-size:12px;margin:14px 0 0;color:#0b2545;page-break-after:avoid;">${escapeHTML(g.nombre)}</h3>${tabla(g)}`).join("")}
       <div class="print-footer">${printFooterHTML(["Despachador", "Director"], 3)}</div>
     </div>`;
   }
-  cuerpo += grupos.map((g, i) => seccion(g, grupos.length === 1 && i === 0)).join("");
   printAdHoc(`Despacho de Combustible — ${titulo}`, cuerpo, null);
 }
 
@@ -133,8 +147,20 @@ function descargarReporteMensual(mes, institucion, formato) {
     exportToExcelMulti(archivo, hojas);
   } else {
     const bloques = [];
-    if (grupos.length > 1) bloques.push({ titulo: "RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN", subtitulo: `Mes: ${titulo}`, secciones: [{ head: ["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"], body: resumen }], firmas: ["Despachador", "Director"] });
-    grupos.forEach((g) => bloques.push({ titulo: `DESPACHO DE COMBUSTIBLE — ${g.nombre.toUpperCase()}`, subtitulo: `Mes: ${titulo}`, secciones: [{ head: CABECERA_INST, body: [...filasTabla(g), ["TOTAL", "", num(g.total), resumenInst(g), ""]] }], firmas: ["Despachador", "Director"] }));
+    const compacto = grupos.length > 1 && !document.getElementById("comb-rep-hojas")?.checked;
+    if (compacto) {
+      bloques.push({
+        titulo: `DESPACHO DE COMBUSTIBLE — ${titulo.toUpperCase()}`,
+        subtitulo: "Todas las instituciones",
+        secciones: [
+          { titulo: "Resumen por institución", head: ["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"], body: resumen },
+          ...grupos.map((g) => ({ titulo: g.nombre, head: CABECERA_INST, body: [...filasTabla(g), ["TOTAL", "", num(g.total), resumenInst(g), ""]] })),
+        ],
+        firmas: ["Despachador", "Director"],
+      });
+    }
+    if (!compacto && grupos.length > 1) bloques.push({ titulo: "RESUMEN DE DESPACHOS DE COMBUSTIBLE POR INSTITUCIÓN", subtitulo: `Mes: ${titulo}`, secciones: [{ head: ["Institución", "Despachos", "Gasolina (L)", "Diésel (L)", "Total (L)"], body: resumen }], firmas: ["Despachador", "Director"] });
+    if (!compacto) grupos.forEach((g) => bloques.push({ titulo: `DESPACHO DE COMBUSTIBLE — ${g.nombre.toUpperCase()}`, subtitulo: `Mes: ${titulo}`, secciones: [{ head: CABECERA_INST, body: [...filasTabla(g), ["TOTAL", "", num(g.total), resumenInst(g), ""]] }], firmas: ["Despachador", "Director"] }));
     exportToPDFMulti(archivo, `Despacho de Combustible — ${titulo}`, bloques);
   }
 }
