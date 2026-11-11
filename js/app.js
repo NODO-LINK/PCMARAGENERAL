@@ -29,6 +29,7 @@ import { initCorrecciones } from "./correcciones.js";
 import { initDespachoRapido } from "./despachoRapido.js";
 import { initDebitoRapido } from "./debitoRapido.js";
 import { initUnificarInsumos } from "./unificarInsumos.js";
+import { initListaWhatsapp } from "./listaWhatsapp.js";
 
 let modulesStarted = false;
 
@@ -50,7 +51,10 @@ function startModules() {
     initDebitoRapido();
     initUnificarInsumos();
   });
-  arrancar("emergencias", initEmergencias);
+  arrancar("emergencias", () => {
+    initEmergencias();
+    initListaWhatsapp();
+  });
   arrancar("guardias", initGuardias);
   arrancar("combustible", initCombustible);
   arrancar("hidro", initHidrometeorologia);
