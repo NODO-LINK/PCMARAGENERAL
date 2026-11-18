@@ -1053,9 +1053,15 @@ function parsearGridPlano(grid) {
       }
     }
     const rioTxt = cRio !== -1 ? String(c[cRio] || "").trim() : "";
-    const rio = rioTxt ? identificarRioPorNombre(rioTxt) : rioActual();
+    // Si el nombre del río no coincide con el catálogo, se usa el río seleccionado en pantalla (con una advertencia).
+    let rio = rioTxt ? identificarRioPorNombre(rioTxt) : rioActual();
+    if (!rio && rioActual()) {
+      rio = rioActual();
+      const aviso = `El río "${rioTxt}" no coincide con el catálogo: se asignó "${rio.nombre}" (el seleccionado en pantalla).`;
+      if (!advertencias.includes(aviso)) advertencias.push(aviso);
+    }
     if (!rio) {
-      advertencias.push(`Fila ${f + 1}: río no reconocido${rioTxt ? ` ("${rioTxt}")` : ""} — agréguelo primero en "Ríos registrados".`);
+      advertencias.push(`Fila ${f + 1}: no hay ningún río registrado/seleccionado${rioTxt ? ` para "${rioTxt}"` : ""} — agréguelo primero en "Ríos registrados".`);
       continue;
     }
     const nivelNum = cNivel !== -1 && c[cNivel] !== "" ? Number(c[cNivel]) : NaN;
