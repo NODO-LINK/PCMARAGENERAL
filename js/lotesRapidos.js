@@ -11,7 +11,7 @@
  * tiempo (menos de 5 min entre uno y otro).
  * -----------------------------------------------------------------------
  */
-import { isAdmin } from "./auth.js";
+import { isAdmin, puedeEditar } from "./auth.js";
 import { toast, escapeHTML, toDate } from "./ui.js";
 import {
   getInsumos, getTransferencias, getDebitos, editarTransferencia, corregirInsumoTransferencia, deleteTransferencia, editarDebito, corregirInsumoDebito, deleteDebito,
@@ -96,7 +96,7 @@ export function montarLotes(cont, tipo, verRecibo) {
               .map(
                 (g, i) => `<div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
                   <span><strong>${escapeHTML(g.fecha.split("-").reverse().join("/"))}</strong> ${escapeHTML(g.hora)} · ${escapeHTML(g.responsable)} · ${g.filas[0][esDespacho ? "stockDestino" : "almacenOrigen"]} · ${g.filas.length} insumo(s), ${g.total} unid.</span>
-                  <button type="button" data-i="${i}" class="text-navy-700 hover:underline text-xs font-semibold">Ver${isAdmin() ? " / editar" : ""}</button>
+                  <button type="button" data-i="${i}" class="text-navy-700 hover:underline text-xs font-semibold">Ver${puedeEditar() ? " / editar" : ""}</button>
                 </div>`
               )
               .join("")}</div>
@@ -125,7 +125,8 @@ export function montarLotes(cont, tipo, verRecibo) {
       return pintarLista();
     }
     abiertoIds = g.ids;
-    const admin = isAdmin();
+    const admin = puedeEditar();
+    const puedeBorrar = isAdmin();
     const cabecera = `${g.fecha.split("-").reverse().join("/")} ${g.hora} · ${g.responsable}`;
     cont.innerHTML = `
       <div class="border border-slate-300 rounded-md p-3 bg-white">
@@ -136,7 +137,7 @@ export function montarLotes(cont, tipo, verRecibo) {
             <button type="button" data-f="volver" class="px-3 py-1.5 text-xs rounded-md text-slate-500 hover:underline">← Volver a la lista</button>
           </div>
         </div>
-        ${admin ? "" : `<p class="text-xs text-slate-500 mb-2">Solo un administrador puede corregir registros.</p>`}
+        ${admin ? "" : `<p class="text-xs text-slate-500 mb-2">Su usuario no puede corregir registros.</p>`}
         <div class="overflow-x-auto border border-slate-200 rounded-md">
           <table class="min-w-full text-sm">
             <thead class="bg-slate-50 text-slate-600"><tr>
@@ -154,7 +155,7 @@ export function montarLotes(cont, tipo, verRecibo) {
                     ${admin ? `<td class="px-2 py-1.5 whitespace-nowrap">
                       <button type="button" data-f="guardar" class="text-emerald-700 hover:underline text-xs font-semibold mr-3">Guardar</button>
                       <button type="button" data-f="insumo" class="text-amber-700 hover:underline text-xs mr-3">Cambiar insumo</button>
-                      <button type="button" data-f="eliminar" class="text-red-700 hover:underline text-xs">Eliminar</button></td>` : ""}
+                      ${puedeBorrar ? `<button type="button" data-f="eliminar" class="text-red-700 hover:underline text-xs">Eliminar</button>` : ""}</td>` : ""}
                   </tr>`;
                 })
                 .join("")}

@@ -8,8 +8,8 @@ rules_version = '2';
  *
  * Principios de RBAC aplicados (reflejan exactamente lo implementado en la
  * interfaz — js/data.js, js/auth.js):
- *   - OPERADOR: puede crear y leer registros operativos. NO puede editar
- *     ni eliminar registros históricos ya guardados.
+ *   - OPERADOR: puede crear, leer y EDITAR registros operativos (sin cambiar
+ *     su autoría). NO puede eliminar registros históricos ya guardados.
  *   - ADMINISTRADOR: control total (crear, leer, editar, eliminar) sobre
  *     todos los registros y catálogos del sistema.
  *   - HIDRO: rol restringido para personal externo al que solo se le
@@ -22,7 +22,7 @@ rules_version = '2';
  *     con acceso a uno o varios departamentos (rol 'departamentos' + lista
  *     `departamentos` en su perfil) que SOLO puede leer y crear en las
  *     colecciones de sus departamentos (más el catálogo/inventario que ese módulo necesita);
- *     igual que el Operador, no edita ni elimina registros guardados. Debe
+ *     igual que el Operador, edita pero no elimina registros guardados. Debe
  *     coincidir con DEPARTAMENTOS en js/config.js.
  *   - Los catálogos maestros (instituciones, categorías de insumos,
  *     insumos) solo pueden ser creados/editados/eliminados por el
@@ -87,6 +87,15 @@ service cloud.firestore {
       return request.resource.data.createdBy == request.auth.uid;
     }
 
+    // Editar un registro ya guardado: cualquier usuario con acceso a ese
+    // módulo (Administrador, Operador o el departamento que le corresponde),
+    // SIN poder cambiar quién lo creó (la autoría `createdBy` es inmutable).
+    // Eliminar sigue siendo solo del administrador.
+    function canEditFor(roles) {
+      return canReadFor(roles) &&
+        request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null);
+    }
+
     // Reglas comunes a todos los módulos operativos de tipo
     // "formulario + historial" (Pacientes, Traslados, Fallecidos,
     // Guardias, Combustible, Educación): Operador y Administrador pueden
@@ -121,37 +130,44 @@ service cloud.firestore {
     match /pacientes/{docId} {
       allow read: if canReadFor(['dep_emergencias']);
       allow create: if canCreateFor(['dep_emergencias']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_emergencias']);
+      allow delete: if canWriteOperational();
     }
     match /traslados/{docId} {
       allow read: if canReadFor(['dep_emergencias']);
       allow create: if canCreateFor(['dep_emergencias']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_emergencias']);
+      allow delete: if canWriteOperational();
     }
     match /fallecidos/{docId} {
       allow read: if canReadFor(['dep_emergencias']);
       allow create: if canCreateFor(['dep_emergencias']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_emergencias']);
+      allow delete: if canWriteOperational();
     }
     match /guardias/{docId} {
       allow read: if canReadFor(['dep_guardias']);
       allow create: if canCreateFor(['dep_guardias']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_guardias']);
+      allow delete: if canWriteOperational();
     }
     match /despachosCombustible/{docId} {
       allow read: if canReadFor(['dep_combustible']);
       allow create: if canCreateFor(['dep_combustible']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_combustible']);
+      allow delete: if canWriteOperational();
     }
     match /educacion/{docId} {
       allow read: if canReadFor(['dep_educacion']);
       allow create: if canCreateFor(['dep_educacion']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_educacion']);
+      allow delete: if canWriteOperational();
     }
     match /gestionRiesgoInspeccion/{docId} {
       allow read: if canReadFor(['dep_inspeccion']);
       allow create: if canCreateFor(['dep_inspeccion']);
-      allow update, delete: if canWriteOperational();
+      allow update: if canEditFor(['dep_inspeccion']);
+      allow delete: if canWriteOperational();
     }
     match /cierresDiarios/{docId} {
       // "Registrable": cualquier usuario activo puede generar un cierre;
@@ -232,21 +248,21 @@ service cloud.firestore {
       allow create: if canCreateFor(['dep_inventario']);
       // Editar o eliminar (con reversión/reajuste de insumoStock) es solo
       // para el administrador; el operador únicamente crea y consulta.
-      allow update: if isAdmin();
+      allow update: if canEditFor(['dep_inventario']);
       allow delete: if isAdmin();
     }
 
     match /transferenciasInventario/{docId} {
       allow read: if canReadFor(['dep_inventario']);
       allow create: if canCreateFor(['dep_inventario']);
-      allow update: if isAdmin();
+      allow update: if canEditFor(['dep_inventario']);
       allow delete: if isAdmin();
     }
 
     match /debitosInventario/{docId} {
       allow read: if canReadFor(['dep_emergencias', 'dep_inventario']);
       allow create: if canCreateFor(['dep_emergencias', 'dep_inventario']);
-      allow update: if isAdmin();
+      allow update: if canEditFor(['dep_emergencias', 'dep_inventario']);
       allow delete: if isAdmin();
     }
 

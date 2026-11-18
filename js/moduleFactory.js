@@ -16,7 +16,7 @@
  */
 import { subscribeCollection, createRecord, updateRecord, deleteRecord } from "./data.js";
 import { createHistorial, toast, confirmDialog, formToObject, setFormValues } from "./ui.js";
-import { isAdmin, getResponsableLabel } from "./auth.js";
+import { isAdmin, puedeEditar, getResponsableLabel } from "./auth.js";
 
 /**
  * @param {Object} cfg
@@ -139,6 +139,7 @@ export function createCrudModule(cfg) {
     dateField,
     getRows: () => rows,
     isAdmin,
+    canEdit: puedeEditar,
     exportFileName: historialTitle,
     firmas,
     firmaEspacio,

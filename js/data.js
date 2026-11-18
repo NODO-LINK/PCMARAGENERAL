@@ -25,7 +25,7 @@ import {
   orderBy,
   serverTimestamp,
 } from "./firebase.js";
-import { isAdmin, getCurrentUser, getResponsableLabel, puedeLeerColeccion } from "./auth.js";
+import { isAdmin, puedeEditar, getCurrentUser, getResponsableLabel, puedeLeerColeccion } from "./auth.js";
 import { toast } from "./ui.js";
 
 /**
@@ -66,9 +66,9 @@ export async function createRecord(collectionName, data) {
 }
 
 export async function updateRecord(collectionName, id, data) {
-  if (!isAdmin()) {
-    toast("Solo un administrador puede editar registros históricos.", "error");
-    throw new Error("Permiso denegado: se requiere rol administrador.");
+  if (!puedeEditar()) {
+    toast("Su usuario no tiene permiso para editar registros.", "error");
+    throw new Error("Permiso denegado: su usuario no puede editar registros.");
   }
   return updateDoc(doc(db, collectionName, id), {
     ...data,

@@ -48,7 +48,7 @@ import { subscribeCollection, createRecord, updateRecord, deleteRecord } from ".
 import { getCategoriasInsumos, onCategoriasInsumosChange } from "./catalogos.js";
 import { toast, confirmDialog, selectDialog, createHistorial, formatDate, parseLocalDate, toDate, escapeHTML, printAdHoc } from "./ui.js";
 import { getIcon } from "./icons.js";
-import { isAdmin, getCurrentUser, getResponsableLabel } from "./auth.js";
+import { isAdmin, puedeEditar, getCurrentUser, getResponsableLabel } from "./auth.js";
 import { quitarAcentos, leerArchivoTabular, mapearFila } from "./importUtils.js";
 import { coincideBusqueda } from "./busqueda.js";
 
@@ -156,6 +156,7 @@ export function initInventario() {
     dateField: "fecha",
     getRows: () => entradas,
     isAdmin,
+    canEdit: puedeEditar,
     exportFileName: "Entradas_Inventario",
     onEdit: (row) => entradaFormApi?.startEdit(row),
     onDelete: (row) => deleteEntrada(row),
@@ -176,6 +177,7 @@ export function initInventario() {
     dateField: "fecha",
     getRows: () => transferencias,
     isAdmin,
+    canEdit: puedeEditar,
     exportFileName: "Transferencias_Inventario",
     onEdit: (row) => transferenciaFormApi?.startEdit(row),
     onFixItem: (row) => corregirInsumoTransferencia(row),
@@ -197,6 +199,7 @@ export function initInventario() {
     dateField: "fecha",
     getRows: () => debitos,
     isAdmin,
+    canEdit: puedeEditar,
     exportFileName: "Debitos_Inventario",
     onEdit: (row) => debitoFormApi?.startEdit(row),
     onFixItem: (row) => corregirInsumoDebito(row),

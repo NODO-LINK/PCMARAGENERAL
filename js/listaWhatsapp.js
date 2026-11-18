@@ -12,7 +12,7 @@
 import { db, doc, updateDoc, serverTimestamp } from "./firebase.js";
 import { COLLECTIONS } from "./config.js";
 import { subscribeCollection, createRecord } from "./data.js";
-import { getResponsableLabel, isAdmin, isOperador, getCurrentUser } from "./auth.js";
+import { getResponsableLabel, puedeEditar, getCurrentUser } from "./auth.js";
 import { toast, escapeHTML, toDate, parseLocalDate } from "./ui.js";
 import { normalizarBusqueda } from "./busqueda.js";
 
@@ -146,7 +146,7 @@ export function initListaWhatsapp() {
   const existente = (fechaISO) => planillas.find((p) => toDate(p.fecha)?.toLocaleDateString("en-CA") === fechaISO && p.registroLegado !== "si");
   const hoy = () => new Date().toLocaleDateString("en-CA");
   const num = (v) => (v === null || v === undefined ? 0 : v);
-  const puedeActualizar = () => isAdmin() || isOperador();
+  const puedeActualizar = () => puedeEditar();
 
   function pintar() {
     const d = datos;

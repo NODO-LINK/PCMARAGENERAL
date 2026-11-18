@@ -52,6 +52,10 @@ export function isAdmin() {
 export function isOperador() {
   return currentProfile?.rol === ROLES.OPERADOR;
 }
+/** ¿Puede editar registros ya guardados? Admin, Operador y usuarios de departamento (no el rol Hidro externo). Eliminar sigue siendo solo del administrador. */
+export function puedeEditar() {
+  return !!currentProfile && currentProfile.activo !== false && currentProfile.rol !== ROLES.HIDRO;
+}
 export function isHidro() {
   return currentProfile?.rol === ROLES.HIDRO;
 }

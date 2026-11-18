@@ -203,7 +203,8 @@ export function formatDate(value, withTime = false) {
  * @param {Function} opts.getRows - () => array de datos actuales (ya cargados en memoria).
  * @param {string} opts.dateField - nombre del campo fecha usado para filtrar.
  * @param {Function} opts.isAdmin - () => boolean.
- * @param {Function} [opts.onEdit] - (row) => void. Siempre requiere isAdmin().
+ * @param {Function} [opts.canEdit] - () => boolean. Quién ve Editar / Corregir insumo (por defecto, isAdmin()).
+ * @param {Function} [opts.onEdit] - (row) => void.
  * @param {Function} [opts.onFixItem] - (row) => void. Botón "Corregir insumo" (solo admin).
  * @param {Function} [opts.onDelete] - (row) => void.
  * @param {Function} [opts.canDelete] - (row) => boolean. Controla, POR FILA, si se muestra "Eliminar" — útil para permitir borrar solo registros propios a un rol no-admin. Si se omite, se usa isAdmin() para todas las filas (comportamiento de antes).
@@ -213,7 +214,7 @@ export function formatDate(value, withTime = false) {
  * Cada columna puede traer `noPrint: true` para que no salga en la hoja impresa (sí en pantalla y en Excel/PDF).
  */
 export function createHistorial(opts) {
-  const { root, title, columns, getRows, dateField, isAdmin, onEdit, onFixItem, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio, resumenImpresion } = opts;
+  const { root, title, columns, getRows, dateField, isAdmin, canEdit, onEdit, onFixItem, onDelete, canDelete, exportFileName, firmas, totals, firmaEspacio, resumenImpresion } = opts;
   const uid = "h_" + Math.random().toString(36).slice(2, 9);
 
   root.innerHTML = `
@@ -369,6 +370,7 @@ export function createHistorial(opts) {
   function render() {
     const rows = filteredRows();
     const admin = isAdmin();
+    const editar = canEdit ? canEdit() : admin; // editar: cualquier usuario con permiso; eliminar: solo admin (o canDelete)
     const consulta = el(`#${uid}-q`).value;
     el(`#${uid}-q-clear`).classList.toggle("hidden", !consulta);
     const celdaHTML = (valor, q) => {
@@ -396,8 +398,8 @@ export function createHistorial(opts) {
         ${columns.map((c) => `<td class="px-4 py-2 align-top${c.noPrint ? " no-print" : ""}">${celdaHTML(c.format ? c.format(row) : row[c.key], consulta)}</td>`).join("")}
         <td class="px-4 py-2 no-print whitespace-nowrap">
           <button data-act="print" data-id="${row.id}" class="text-slate-600 hover:underline mr-3">Imprimir</button>
-          ${admin && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
-          ${admin && onFixItem ? `<button data-act="fix" data-id="${row.id}" class="text-amber-700 hover:underline mr-3">Corregir insumo</button>` : ""}
+          ${editar && onEdit ? `<button data-act="edit" data-id="${row.id}" class="text-navy-700 hover:underline mr-3">Editar</button>` : ""}
+          ${editar && onFixItem ? `<button data-act="fix" data-id="${row.id}" class="text-amber-700 hover:underline mr-3">Corregir insumo</button>` : ""}
           ${onDelete && (canDelete ? canDelete(row) : admin) ? `<button data-act="del" data-id="${row.id}" class="text-red-700 hover:underline">Eliminar</button>` : ""}
         </td>
       </tr>`
