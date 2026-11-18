@@ -1198,7 +1198,7 @@ function renderPreviewImportacionFluvio(resultado) {
               (f) => `
           <tr class="border-t border-slate-100">
             <td class="px-2 py-1.5">${escapeHTML(f.rioNombre)}</td>
-            <td class="px-2 py-1.5">${escapeHTML(formatDate(f.fecha, f.fecha.getHours() !== 0 || f.fecha.getMinutes() !== 0))}</td>
+            <td class="px-2 py-1.5">${escapeHTML(formatDate(f.fecha, !(f.fecha.getHours() === 7 && f.fecha.getMinutes() === 0) && !(f.fecha.getHours() === 0 && f.fecha.getMinutes() === 0)))}</td>
             <td class="px-2 py-1.5">${f.nivel ?? "—"}</td>
             <td class="px-2 py-1.5">${f.lluvia ?? "—"}</td>
           </tr>`
