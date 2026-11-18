@@ -996,7 +996,85 @@ function leerGridExcel(file) {
  * de ríos ya cargado — un río que no exista en el catálogo (nombre no
  * reconocido) se reporta como advertencia y se omite.
  */
+/**
+ * Formato PLANO (una lectura por fila): encabezados Fecha | Hora | Río | Nivel | Lluvia.
+ * Fecha como "2023-07-16", "16/07/2023" o fecha de Excel; Hora "07:00" (opcional; sin hora = 07:00).
+ * Río opcional si ya hay uno seleccionado: se usa el río mostrado en pantalla.
+ * Devuelve null si el archivo no tiene ese formato.
+ */
+function parsearGridPlano(grid) {
+  const idxEnc = grid.findIndex((fila) => {
+    const n = (fila || []).map((c) => normalizarTexto(c));
+    return n.includes("fecha") && n.some((c) => /^nivel/.test(c));
+  });
+  if (idxEnc === -1) return null;
+  const enc = grid[idxEnc].map((c) => normalizarTexto(c));
+  const col = (re) => enc.findIndex((c) => re.test(c));
+  const cFecha = col(/^fecha/);
+  const cHora = col(/^hora/);
+  const cRio = col(/^r[ií]o/);
+  const cNivel = col(/^nivel/);
+  const cLluvia = col(/^lluvia/);
+  const filas = [];
+  const advertencias = [];
+
+  const aFecha = (v) => {
+    if (typeof v === "number" && v > 20000) return new Date(Math.round((v - 25569) * 864e5) + new Date().getTimezoneOffset() * 6e4); // serial de Excel
+    const t = String(v ?? "").trim();
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return { y: +m[1], m: +m[2], d: +m[3] };
+    m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+    if (m) return { y: +m[3], m: +m[2], d: +m[1] };
+    return null;
+  };
+
+  for (let f = idxEnc + 1; f < grid.length; f++) {
+    const c = grid[f] || [];
+    if (c.every((x) => x === "" || x === null || x === undefined)) continue;
+    let fecha = aFecha(c[cFecha]);
+    if (fecha instanceof Date) fecha = { y: fecha.getFullYear(), m: fecha.getMonth() + 1, d: fecha.getDate() };
+    if (!fecha) {
+      advertencias.push(`Fila ${f + 1}: fecha no reconocida ("${c[cFecha]}"), se omite.`);
+      continue;
+    }
+    let hh = 7;
+    let mm = 0;
+    if (cHora !== -1 && c[cHora] !== "" && c[cHora] !== undefined) {
+      const h = c[cHora];
+      if (typeof h === "number" && h < 1) {
+        hh = Math.floor(h * 24 + 1e-6);
+        mm = Math.round((h * 24 - hh) * 60);
+      } else {
+        const hm = String(h).match(/(\d{1,2})\s*[:.hH]\s*(\d{2})?/);
+        if (hm) {
+          hh = Number(hm[1]);
+          mm = Number(hm[2] || 0);
+        }
+      }
+    }
+    const rioTxt = cRio !== -1 ? String(c[cRio] || "").trim() : "";
+    const rio = rioTxt ? identificarRioPorNombre(rioTxt) : rioActual();
+    if (!rio) {
+      advertencias.push(`Fila ${f + 1}: río no reconocido${rioTxt ? ` ("${rioTxt}")` : ""} — agréguelo primero en "Ríos registrados".`);
+      continue;
+    }
+    const nivelNum = cNivel !== -1 && c[cNivel] !== "" ? Number(c[cNivel]) : NaN;
+    const lluviaNum = cLluvia !== -1 && c[cLluvia] !== "" ? Number(c[cLluvia]) : NaN;
+    if (isNaN(nivelNum) && isNaN(lluviaNum)) continue;
+    filas.push({
+      rioId: rio.id,
+      rioNombre: rio.nombre,
+      fecha: new Date(fecha.y, fecha.m - 1, fecha.d, hh, mm),
+      nivel: isNaN(nivelNum) ? null : nivelNum,
+      lluvia: isNaN(lluviaNum) ? null : lluviaNum,
+    });
+  }
+  return { filas, advertencias };
+}
+
 function parsearGridFluviometria(grid) {
+  const plano = parsearGridPlano(grid);
+  if (plano) return plano;
   const filas = [];
   const advertencias = [];
   let mesActual = null;
@@ -1114,7 +1192,7 @@ function renderPreviewImportacionFluvio(resultado) {
               (f) => `
           <tr class="border-t border-slate-100">
             <td class="px-2 py-1.5">${escapeHTML(f.rioNombre)}</td>
-            <td class="px-2 py-1.5">${escapeHTML(formatDate(f.fecha))}</td>
+            <td class="px-2 py-1.5">${escapeHTML(formatDate(f.fecha, f.fecha.getHours() !== 0 || f.fecha.getMinutes() !== 0))}</td>
             <td class="px-2 py-1.5">${f.nivel ?? "—"}</td>
             <td class="px-2 py-1.5">${f.lluvia ?? "—"}</td>
           </tr>`
